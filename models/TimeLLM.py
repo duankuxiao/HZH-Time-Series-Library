@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 
 from transformers import LlamaConfig, LlamaModel, LlamaTokenizer, GPT2Config, GPT2Model, GPT2Tokenizer, BertConfig, \
-    BertModel, BertTokenizer
+    BertModel, BertTokenizer, AutoTokenizer
 from layers.Embed import PatchEmbedding
 import transformers
 from layers.StandardNorm import Normalize
@@ -67,7 +67,7 @@ class Model(nn.Module):
                     # load_in_4bit=True
                 )
             try:
-                self.tokenizer = LlamaTokenizer.from_pretrained(
+                self.tokenizer = AutoTokenizer.from_pretrained(
                     # "/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/tokenizer.model",
                     r'D:\LLM\llama',
                     trust_remote_code=True,
@@ -75,7 +75,7 @@ class Model(nn.Module):
                 )
             except EnvironmentError:  # downloads the tokenizer from HF if not already done
                 print("Local tokenizer files not found. Atempting to download them..")
-                self.tokenizer = LlamaTokenizer.from_pretrained(
+                self.tokenizer = AutoTokenizer.from_pretrained(
                     # "/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/tokenizer.model",
                     'huggyllama/llama-7b',
                     trust_remote_code=True,
