@@ -23,7 +23,7 @@ parser.add_argument('--task_name', type=str, required=True, default='long_term_f
 parser.add_argument('--is_training', type=int, default=1, help='status')
 parser.add_argument('--model_id', type=str, required=True, default='test', help='model id')
 parser.add_argument('--model_comment', type=str, default='PV', help='prefix when saving test results')
-parser.add_argument('--model', type=str, default='TimesNet',
+parser.add_argument('--model', type=str, default='Transformer',
                     help='model name, options: [Autoformer, DLinear, TimesNet, Informer, Transformer, TimeLLM]')
 
 # data loader
@@ -62,22 +62,22 @@ parser.add_argument('--distil', action='store_false',help='whether to use distil
 parser.add_argument('--enc_in', type=int, default=11, help='encoder input size')
 parser.add_argument('--dec_in', type=int, default=11, help='decoder input size')
 parser.add_argument('--c_out', type=int, default=11, help='output size')
-parser.add_argument('--d_model', type=int, default=16, help='dimension of model')
+parser.add_argument('--d_model', type=int, default=256, help='dimension of model')
 parser.add_argument('--n_heads', type=int, default=8, help='num of heads')
-parser.add_argument('--e_layers', type=int, default=2, help='num of encoder layers')
-parser.add_argument('--d_layers', type=int, default=1, help='num of decoder layers')
-parser.add_argument('--d_ff', type=int, default=32, help='dimension of fcn')
-parser.add_argument('--moving_avg', type=int, default=25, help='window size of moving average')
+parser.add_argument('--e_layers', type=int, default=4, help='num of encoder layers')
+parser.add_argument('--d_layers', type=int, default=3, help='num of decoder layers')
+parser.add_argument('--d_ff', type=int, default=256, help='dimension of fcn')
+parser.add_argument('--moving_avg', type=int, default=24, help='window size of moving average')
 parser.add_argument('--factor', type=int, default=1, help='attn factor')
-parser.add_argument('--dropout', type=float, default=0.1, help='dropout')
+parser.add_argument('--dropout', type=float, default=0.05, help='dropout')
 parser.add_argument('--embed', type=str, default='timeF', help='time features encoding, options:[timeF, fixed, learned]')
 parser.add_argument('--activation', type=str, default='gelu', help='activation')
 parser.add_argument('--output_attention', action='store_true', help='whether to output attention in encoder')
 parser.add_argument('--patch_len', type=int, default=16, help='patch length')
 parser.add_argument('--stride', type=int, default=8, help='stride')
 parser.add_argument('--prompt_domain', type=int, default=0, help='')
-parser.add_argument('--llm_model', type=str, default='LLAMA', help='LLM model')  # LLAMA, GPT2, BERT
-parser.add_argument('--llm_dim', type=int, default='4096', help='LLM model dimension')  # LLama7b:4096; GPT2-small:768; BERT-base:768
+parser.add_argument('--llm_model', type=str, default='BERT', help='LLM model')  # LLAMA, GPT2, BERT
+parser.add_argument('--llm_dim', type=int, default='768', help='LLM model dimension')  # LLama7b:4096; GPT2-small:768; BERT-base:768
 
 # optimization
 parser.add_argument('--num_workers', type=int, default=1, help='data loader num workers')
@@ -125,7 +125,7 @@ if __name__ == '__main__':
         for ii in range(args.itr):
             exp = Exp(args)
             # setting record of experiments
-            setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_eb{}_{}_{}'.format(
+            setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_ei{}_di{}_co{}_el{}_dl{}_df{}_fc{}_dropout{}_eb{}_{}_{}'.format(
                 args.task_name,
                 args.model_id,
                 args.model,
@@ -136,12 +136,18 @@ if __name__ == '__main__':
                 args.pred_len,
                 args.d_model,
                 args.n_heads,
+                args.enc_in,
+                args.dec_in,
+                args.c_out,
                 args.e_layers,
                 args.d_layers,
                 args.d_ff,
                 args.factor,
+                args.dropout,
                 args.embed,
                 args.des, ii)
+            if args.model == 'TimeLLM':
+                setting += '{}'.format(args.llm_model)
 
             print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
             exp.train(setting)
