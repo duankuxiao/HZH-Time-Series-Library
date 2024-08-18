@@ -98,7 +98,7 @@ class Exp_Forecast(Exp_Basic):
         vali_data, vali_loader = self._get_data(flag='val')
         test_data, test_loader = self._get_data(flag='test')
 
-        path = os.path.join(self.args.checkpoints, setting)
+        path = os.path.join(self.args.checkpoints, setting,'checkpoints')
         if not os.path.exists(path):
             os.makedirs(path)
 
@@ -215,12 +215,12 @@ class Exp_Forecast(Exp_Basic):
 
         if test:
             print('loading model')
-            path = os.path.join(self.args.checkpoints, setting)
+            path = os.path.join(self.args.checkpoints, setting,'checkpoints')
             self.model.load_state_dict(torch.load(os.path.join(path, 'checkpoint')))
 
         preds = []
         trues = []
-        folder_path = './test_results/' + setting + '/'
+        folder_path = os.path.join(self.args.checkpoints, setting, 'test_results')
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
@@ -256,8 +256,8 @@ class Exp_Forecast(Exp_Basic):
                     outputs = outputs[:, -self.args.pred_len:, :]
                     batch_y = batch_y[:, -self.args.pred_len:, :].to(self.device)
                 else:
-                    outputs = outputs[:, -self.args.pred_len:, f_dim :]
-                    batch_y = batch_y[:, -self.args.pred_len:, f_dim :].to(self.device)
+                    outputs = outputs[:, -self.args.pred_len:, f_dim:]
+                    batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
                 outputs = outputs.detach().cpu().numpy()
                 batch_y = batch_y.detach().cpu().numpy()
                 if test_data.scale and self.args.inverse:
@@ -292,7 +292,7 @@ class Exp_Forecast(Exp_Basic):
         print('test shape:', preds.shape, trues.shape)
 
         # result save
-        folder_path = './results/' + setting + '/'
+        folder_path = os.path.join(self.args.checkpoints, setting)
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
@@ -320,8 +320,8 @@ class Exp_Forecast(Exp_Basic):
         f.write('\n')
         f.close()
 
-        np.save(folder_path + 'metrics.npy', np.array([mae, mse, rmse, r2, corr]))
-        np.save(folder_path + 'pred.npy', preds)
-        np.save(folder_path + 'true.npy', trues)
+        np.save(os.path.join(folder_path, 'metrics.npy'), np.array([mae, mse, rmse, r2, corr]))
+        np.save(os.path.join(folder_path,'pred.npy'), preds)
+        np.save(os.path.join(folder_path, 'true.npy'), trues)
 
         return

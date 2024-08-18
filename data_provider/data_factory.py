@@ -12,7 +12,8 @@ data_dict = {
     'Traffic': Dataset_Custom,
     'Weather': Dataset_Custom,
     'm4': Dataset_M4,
-    'PV': Dataset_PV_hour
+    'PV': Dataset_PV_hour,
+    'PV7f': Dataset_PV_hour,
 }
 
 

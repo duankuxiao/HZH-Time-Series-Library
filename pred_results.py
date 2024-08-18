@@ -9,7 +9,7 @@ def res_evaluation(res_path):
     pred_output = pred.squeeze()[::24,:].reshape(-1,1)
     true_output = true.squeeze()[::24,:].reshape(-1,1)
     pred_res = pd.DataFrame({'pred':pred_output.flatten(), 'true':true_output.flatten()})
-    pred_res.loc[pred_res['true'] < 0.001, 'true'] = 0
+    pred_res.loc[pred_res['true'] < 0.01, 'true'] = 0
     pred_res.loc[pred_res['true'] == 0, 'pred'] = 0
     [mse, rmse, mae, r2,corr] = results_evaluation(pred_res['true'].values, pred_res['pred'].values)
     pred_res.to_csv(os.path.join(res_path, 'pred_results.csv'))
@@ -18,5 +18,5 @@ def res_evaluation(res_path):
     print('RMSE: {} MAE: {} R2: {}'.format(rmse,mae,r2))
 
 if __name__ == '__main__':
-    res_path = r'D:\Time-LLM-main\results\long_term_forecast_PV_Transformer_PV_ftM_sl72_ll24_pl24_dm32_nh8_el2_dl1_df128_fc3_ebtimeF_pv_0'
+    res_path = r'D:\Time-LLM-main\results\long_term_forecast_PV_TransformerX_PV_ftM_sl72_ll24_pl24_dm256_nh8_ei11_di11_co11_el4_dl3_df512_fc1_dropout0.1_ebtimeF_pv_0'
     res_evaluation(res_path)
