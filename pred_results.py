@@ -18,5 +18,5 @@ def res_evaluation(res_path):
     print('RMSE: {} MAE: {} R2: {}'.format(rmse,mae,r2))
 
 if __name__ == '__main__':
-    res_path = r'D:\Time-LLM-main\results\long_term_forecast_PV_TransformerX_PV_ftM_sl72_ll24_pl24_dm256_nh8_ei11_di11_co11_el4_dl3_df512_fc1_dropout0.1_ebtimeF_pv_0'
+    res_path = r'D:\Time-LLM-main\results\long_term_forecast_original_Transformer_PV_ftM_sl72_ll24_pl24_dm512_nh8_el4_dl3_df2048_llmd768_llmf5_fc1_dropout0.1_ebtimeF_pv_0'
     res_evaluation(res_path)

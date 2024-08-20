@@ -21,15 +21,15 @@ np.random.seed(fix_seed)
 parser.add_argument('--task_name', type=str, required=True, default='long_term_forecast',
                     help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]')
 parser.add_argument('--is_training', type=int, default=1, help='status')
-parser.add_argument('--model_id', type=str, default='test', help='model id')
+parser.add_argument('--model_id', type=str, default='forecast', help='model id')
 parser.add_argument('--model_comment', type=str, default='PV', help='prefix when saving test results')
 parser.add_argument('--model', type=str, default='TransformerX',
-                    help='model name, options: [Autoformer, TimeLLM, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerX, TransformerForecast]')
+                    help='model name, options: [Autoformer, TimeLLM, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerX]')
 
 # data loader
-parser.add_argument('--data', type=str, default='PV7f', help='dataset type')
+parser.add_argument('--data', type=str, default='PV', help='dataset type')
 parser.add_argument('--root_path', type=str, default='./dataset/PV', help='root path of the data file')
-parser.add_argument('--data_path', type=str, default='PV_hour_7f.csv', help='data file')
+parser.add_argument('--data_path', type=str, default='PV_hour.csv', help='data file')
 parser.add_argument('--features', type=str, default='M', help='forecasting task, options:[M, S, MS]; '
                          'M:multivariate predict multivariate, S: univariate predict univariate, ' 'MS:multivariate predict univariate')
 parser.add_argument('--target', type=str, default='PV', help='target feature in S or MS task')
@@ -49,6 +49,10 @@ parser.add_argument('--devices', type=str, default='0,1,2,3', help='device ids o
 parser.add_argument('--seq_len', type=int, default=72, help='input sequence length')
 parser.add_argument('--label_len', type=int, default=24, help='start token length')
 parser.add_argument('--pred_len', type=int, default=24, help='prediction sequence length')
+parser.add_argument('--seq_dim', type=int, default=11, help='input sequence length')
+parser.add_argument('--pred_dim', type=int, default=11, help='input sequence length')
+parser.add_argument('--forecast_dim', type=int, default=3, help='input sequence length')
+
 parser.add_argument('--seasonal_patterns', type=str, default='Monthly', help='subset for M4')
 parser.add_argument('--inverse', action='store_true', help='inverse output data', default=False)
 
@@ -57,16 +61,18 @@ parser.add_argument('--top_k', type=int, default=5, help='for TimesBlock')
 parser.add_argument('--num_kernels', type=int, default=6, help='for Inception')
 parser.add_argument('--distil', action='store_false',help='whether to use distilling in encoder, using this argument means not using distilling',default=True)
 
-parser.add_argument('--enc_in', type=int, default=7, help='encoder input size')
-parser.add_argument('--dec_in', type=int, default=7, help='decoder input size')
-parser.add_argument('--c_out', type=int, default=7, help='output size')
-parser.add_argument('--d_model', type=int, default=256, help='dimension of model')
+parser.add_argument('--enc_in', type=int, default=11, help='encoder input size (seq features dim)')
+parser.add_argument('--dec_in', type=int, default=11, help='decoder input size (forecast dim)')
+parser.add_argument('--c_out', type=int, default=11, help='output size (pred dim)')
+parser.add_argument('--d_model', type=int, default=512, help='dimension of model')
 parser.add_argument('--n_heads', type=int, default=8, help='num of heads')
 parser.add_argument('--e_layers', type=int, default=4, help='num of encoder layers')
 parser.add_argument('--d_layers', type=int, default=3, help='num of decoder layers')
-parser.add_argument('--d_ff', type=int, default=256, help='dimension of fcn')
+parser.add_argument('--d_ff', type=int, default=2048, help='dimension of fcn')
+parser.add_argument('--hidden_sizes', nargs='+', default=[128,128], help='output mlp layer')
+
 # Autoformer
-parser.add_argument('--moving_avg', type=int, default=23, help='window size of moving average for Autoformer')
+parser.add_argument('--moving_avg', type=int, default=24, help='window size of moving average for Autoformer')
 # TimeMixer
 parser.add_argument('--down_sampling_window', type=int, default=1, help='down sampling window size for TimeMixer')
 parser.add_argument('--down_sampling_layers', type=int, default=0, help='num of down sampling layers for TimeMixer')
@@ -87,6 +93,7 @@ parser.add_argument('--stride', type=int, default=8, help='stride')
 parser.add_argument('--prompt_domain', type=int, default=0, help='')
 parser.add_argument('--llm_model', type=str, default='BERT', help='LLM model')  # LLAMA, GPT2, BERT
 parser.add_argument('--llm_dim', type=int, default='768', help='LLM model dimension')  # LLama7b:4096; GPT2-small:768; BERT-base:768
+parser.add_argument('--llm_layers', type=int, default=5)
 
 # optimization
 parser.add_argument('--num_workers', type=int, default=1, help='data loader num workers')
@@ -101,7 +108,6 @@ parser.add_argument('--loss', type=str, default='MSE', help='loss function')
 parser.add_argument('--lradj', type=str, default='type1', help='adjust learning rate')
 parser.add_argument('--pct_start', type=float, default=0.2, help='pct_start')
 parser.add_argument('--use_amp', action='store_true', help='use automatic mixed precision training', default=False)
-parser.add_argument('--llm_layers', type=int, default=6)
 parser.add_argument('--percent', type=int, default=100)
 
 # metrics (dtw)
@@ -134,7 +140,7 @@ if __name__ == '__main__':
         for ii in range(args.itr):
             exp = Exp(args)
             # setting record of experiments
-            setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_ei{}_di{}_co{}_el{}_dl{}_df{}_fc{}_dropout{}_eb{}_{}_{}'.format(
+            setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_llmd{}_llmf{}_fc{}_dropout{}_eb{}_{}_{}'.format(
                 args.task_name,
                 args.model_id,
                 args.model,
@@ -145,12 +151,11 @@ if __name__ == '__main__':
                 args.pred_len,
                 args.d_model,
                 args.n_heads,
-                args.enc_in,
-                args.dec_in,
-                args.c_out,
                 args.e_layers,
                 args.d_layers,
                 args.d_ff,
+                args.llm_dim,
+                args.llm_layers,
                 args.factor,
                 args.dropout,
                 args.embed,

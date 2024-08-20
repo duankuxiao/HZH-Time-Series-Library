@@ -12,7 +12,8 @@ class Dataset_PV_hour(Dataset):
     def __init__(self, root_path, flag='train', size=None,
                  features='S', data_path='PV_power.csv',
                  target='PV', scale=True, timeenc=0, freq='h', percent=100,
-                 seasonal_patterns=None):
+                 seasonal_patterns=None,forecast_dim=3):
+        self.forecast_dim = forecast_dim
         if size == None:
             self.seq_len = 24 * 4 * 4
             self.label_len = 24 * 4
@@ -109,7 +110,7 @@ class Dataset_PV_hour(Dataset):
         seq_y = self.data_y[r_begin:r_end, :]
         seq_x_mark = self.data_stamp[s_begin:s_end]
         seq_y_mark = self.data_stamp[r_begin:r_end]
-        x_forecast = self.data_x[r_begin:r_end, :3]
+        x_forecast = self.data_x[r_begin:r_end, :self.forecast_dim]
 
         return seq_x, seq_y, seq_x_mark, seq_y_mark, x_forecast
 

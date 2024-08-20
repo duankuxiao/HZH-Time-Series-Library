@@ -109,8 +109,9 @@ class Dataset_PV_hour_llm(Dataset):
         seq_y = self.data_y[r_begin:r_end, feat_id:feat_id + 1] if self.set_type != 2 else self.data_y[s_begin:s_end,-1:]
         seq_x_mark = self.data_stamp[s_begin:s_end]
         seq_y_mark = self.data_stamp[r_begin:r_end]
+        x_forecast = self.data_x[r_begin:r_end, :3]
 
-        return seq_x, seq_y, seq_x_mark, seq_y_mark
+        return seq_x, seq_y, seq_x_mark, seq_y_mark, x_forecast
 
     def __len__(self):
         return (len(self.data_x) - self.seq_len - self.pred_len + 1) * self.enc_in
