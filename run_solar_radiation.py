@@ -149,8 +149,7 @@ if __name__ == '__main__':
         for ii in range(args.itr):
             exp = Exp(args)
             # setting record of experiments
-            setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_llmd{}_llmf{}_fc{}_dropout{}_eb{}_{}_{}'.format(
-                args.task_name,
+            setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_dropout{}_eb{}_{}_{}'.format(
                 args.model_id,
                 args.model,
                 args.data,
@@ -158,19 +157,21 @@ if __name__ == '__main__':
                 args.seq_len,
                 args.label_len,
                 args.pred_len,
+                args.seq_dim,
                 args.d_model,
                 args.n_heads,
                 args.e_layers,
                 args.d_layers,
                 args.d_ff,
-                args.llm_dim,
-                args.llm_layers,
                 args.factor,
                 args.dropout,
                 args.embed,
                 args.des, ii)
+
             if args.model == 'TimeLLM':
-                setting += '{}'.format(args.llm_model)
+                setting += '{}_llmd{}_llmf{}'.format(args.llm_model,args.llm_dim,args.llm_layers,)
+            if args.model == 'RNN':
+                setting += '{}_llmd{}_llmf{}'.format(args.rnn_model,args.rnn_dim,args.rnn_layers,)
 
             print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
             exp.train(setting)
