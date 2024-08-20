@@ -6,6 +6,7 @@ import numpy as np
 import os
 from exp.exp_forecasting import Exp_Forecast
 from utils.print_args import print_args
+from utils.tools import load_content
 
 os.environ['CURL_CA_BUNDLE'] = ''
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:64"
@@ -23,7 +24,7 @@ parser.add_argument('--task_name', type=str, required=True, default='long_term_f
 parser.add_argument('--is_training', type=int, default=1, help='status')
 parser.add_argument('--model_id', type=str, default='forecast', help='model id')
 parser.add_argument('--model_comment', type=str, default='PV', help='prefix when saving test results')
-parser.add_argument('--model', type=str, default='TransformerX',
+parser.add_argument('--model', type=str, default='TimeLLM',
                     help='model name, options: [Autoformer, TimeLLM, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerX]')
 
 # data loader
@@ -64,15 +65,15 @@ parser.add_argument('--distil', action='store_false',help='whether to use distil
 parser.add_argument('--enc_in', type=int, default=11, help='encoder input size (seq features dim)')
 parser.add_argument('--dec_in', type=int, default=11, help='decoder input size (forecast dim)')
 parser.add_argument('--c_out', type=int, default=11, help='output size (pred dim)')
-parser.add_argument('--d_model', type=int, default=512, help='dimension of model')
+parser.add_argument('--d_model', type=int, default=32, help='dimension of model')
 parser.add_argument('--n_heads', type=int, default=8, help='num of heads')
 parser.add_argument('--e_layers', type=int, default=4, help='num of encoder layers')
 parser.add_argument('--d_layers', type=int, default=3, help='num of decoder layers')
-parser.add_argument('--d_ff', type=int, default=2048, help='dimension of fcn')
+parser.add_argument('--d_ff', type=int, default=128, help='dimension of fcn')
 parser.add_argument('--hidden_sizes', nargs='+', default=[128,128], help='output mlp layer')
 
 # Autoformer
-parser.add_argument('--moving_avg', type=int, default=24, help='window size of moving average for Autoformer')
+parser.add_argument('--moving_avg', type=int, default=25, help='window size of moving average for Autoformer')
 # TimeMixer
 parser.add_argument('--down_sampling_window', type=int, default=1, help='down sampling window size for TimeMixer')
 parser.add_argument('--down_sampling_layers', type=int, default=0, help='num of down sampling layers for TimeMixer')
@@ -90,10 +91,15 @@ parser.add_argument('--output_attention', action='store_true', help='whether to 
 # TimeLLM
 parser.add_argument('--patch_len', type=int, default=16, help='patch length')
 parser.add_argument('--stride', type=int, default=8, help='stride')
-parser.add_argument('--prompt_domain', type=int, default=0, help='')
+parser.add_argument('--prompt_domain', type=int, default=1, help='')
 parser.add_argument('--llm_model', type=str, default='BERT', help='LLM model')  # LLAMA, GPT2, BERT
-parser.add_argument('--llm_dim', type=int, default='768', help='LLM model dimension')  # LLama7b:4096; GPT2-small:768; BERT-base:768
-parser.add_argument('--llm_layers', type=int, default=5)
+parser.add_argument('--llm_dim', type=int, default=768, help='LLM model dimension')  # LLama7b:4096; GPT2-small:768; BERT-base:768
+parser.add_argument('--llm_layers', type=int, default=6, help='bert_layers=6 llama_layers=32')
+
+# RNN
+parser.add_argument('--rnn_model', type=str, default='GRU', help='GRU')  # GRU, LSTM, seq2seq
+parser.add_argument('--rnn_dim', type=int, default=256, help='LLM model dimension')  # LLama7b:4096; GPT2-small:768; BERT-base:768
+parser.add_argument('--rnn_layers', type=int, default=2, help='bert_layers=6 llama_layers=32')
 
 # optimization
 parser.add_argument('--num_workers', type=int, default=1, help='data loader num workers')
@@ -102,7 +108,7 @@ parser.add_argument('--train_epochs', type=int, default=50, help='train epochs')
 parser.add_argument('--batch_size', type=int, default=24, help='batch size of train input data')
 parser.add_argument('--eval_batch_size', type=int, default=8, help='batch size of model evaluation')
 parser.add_argument('--patience', type=int, default=8, help='early stopping patience')
-parser.add_argument('--learning_rate', type=float, default=0.0001, help='optimizer learning rate')
+parser.add_argument('--learning_rate', type=float, default=0.0001, help='optimizer learning rate 0.0001 for other models  0.01 for LLM')
 parser.add_argument('--des', type=str, default='test', help='exp description')
 parser.add_argument('--loss', type=str, default='MSE', help='loss function')
 parser.add_argument('--lradj', type=str, default='type1', help='adjust learning rate')
@@ -135,6 +141,9 @@ if __name__ == '__main__':
     print_args(args)
 
     Exp = Exp_Forecast
+
+    if args.model == 'TimeLLM':
+        args.content = load_content(args)
 
     if args.is_training:
         for ii in range(args.itr):
