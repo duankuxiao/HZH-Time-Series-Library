@@ -1,22 +1,6 @@
 import argparse
-import torch
-
-import random
-import numpy as np
-import os
-from exp.exp_forecasting import Exp_Forecast
-from utils.print_args import print_args
-from utils.tools import load_content
-
-os.environ['CURL_CA_BUNDLE'] = ''
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:64"
 
 parser = argparse.ArgumentParser(description='Time-LLM')
-
-fix_seed = 4213
-random.seed(fix_seed)
-torch.manual_seed(fix_seed)
-np.random.seed(fix_seed)
 
 # basic config
 parser.add_argument('--task_name', type=str, required=True, default='long_term_forecast',
@@ -121,13 +105,14 @@ parser.add_argument('--use_dtw', type=bool, default=False, help='the controller 
 
 args = parser.parse_args()
 
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
-args.device = device
-
 if __name__ == '__main__':
-    # args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False
-    args.use_gpu = True if torch.cuda.is_available() else False
+    import torch
+
+    from exp.exp_forecasting import Exp_Forecast
+    from utils.print_args import print_args
+    from utils.tools import load_content
+
+    args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False
     args.inverse = True
     print(torch.cuda.is_available())
 
@@ -142,10 +127,18 @@ if __name__ == '__main__':
 
     Exp = Exp_Forecast
 
-    if args.model == 'TimeLLM':
+    if 'TimeLLM' in args.model:
         args.content = load_content(args)
-        args.d_model = 32
-        args.d_ff = 128
+        if 'LLAMA' in args.llm_model:
+            args.d_model = 16
+            args.d_ff = 32
+            args.llm_layers = 32
+        elif 'BERT' in args.llm_model:
+            args.d_model = 32
+            args.d_ff = 128
+            args.llm_layers = 6
+        else:
+            raise ValueError('Unknown llm model')
 
     if args.is_training:
         for ii in range(args.itr):

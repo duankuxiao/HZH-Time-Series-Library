@@ -314,7 +314,7 @@ class Exp_Forecast(Exp_Basic):
 
         [mse, rmse, mae, r2, corr] = results_evaluation(trues.squeeze(), preds.squeeze())
         print('mae:{}, r2:{}, dtw:{}'.format(mae, r2, dtw))
-        f = open("result_long_term_forecast.txt", 'a')
+        f = open(os.path.join('./results',"result_long_term_forecast.txt"), 'a')
         f.write(setting + "  \n")
         f.write('mae:{}, r2:{}, dtw:{}'.format(mae, r2, dtw))
         f.write('\n')
