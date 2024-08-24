@@ -1,1 +1,0 @@
-Okinawa is recorded every 1 hour for three years, which contains 11 meteorological indicators, such as air temperature, humidity, solar radiation etc.

@@ -253,7 +253,7 @@ class Exp_Forecast(Exp_Basic):
 
                 # f_dim = -1 if self.args.features == 'MS' else 0
                 f_dim = -1
-                if self.args.model == 'TimeLLM':
+                if 'TimeLLM' in self.args.model:
                     outputs = outputs[:, -self.args.pred_len:, :]
                     batch_y = batch_y[:, -self.args.pred_len:, :].to(self.device)
                 else:

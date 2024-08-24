@@ -14,15 +14,16 @@ data_dict = {
     'm4': Dataset_M4,
     'PV': Dataset_PV_hour,
     'PV7f': Dataset_PV_hour,
-    'solar_radiation':Dataset_solar_radiation
+    'Tokyo':Dataset_solar_radiation,
+    'Okinawa':Dataset_solar_radiation,
 }
 
 
 def data_provider(args, flag):
     Data = data_dict[args.data]
-    if args.model == 'TimeLLM' and args.data == 'PV':
+    if 'TimeLLM' in args.model and args.data == 'PV':
         Data = Dataset_PV_hour_llm
-    if args.model == 'TimeLLM' and args.data == 'solar_radiation':
+    if 'TimeLLM' in args.model and args.data == 'Tokyo':
         Data = Dataset_solar_radiation_llm
 
     timeenc = 0 if args.embed != 'timeF' else 1

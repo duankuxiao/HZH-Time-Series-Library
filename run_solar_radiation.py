@@ -24,16 +24,16 @@ parser.add_argument('--task_name', type=str, required=True, default='long_term_f
 parser.add_argument('--is_training', type=int, default=1, help='status')
 parser.add_argument('--model_id', type=str, default='test', help='model id')
 parser.add_argument('--model_comment', type=str, default='solar', help='prefix when saving test results')
-parser.add_argument('--model', type=str, default='TimeLLM',
-                    help='model name, options: [Autoformer, TimeLLM, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerX]')
+parser.add_argument('--model', type=str, default='TimeLLMForecast',
+                    help='model name, options: [Autoformer, TimeLLM,TimeLLMForecast, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerX, RNN]')
 
 # data loader
-parser.add_argument('--data', type=str, default='solar_radiation', help='dataset type')
+parser.add_argument('--data', type=str, default='Tokyo', help='dataset type')
 parser.add_argument('--root_path', type=str, default='./dataset/solar_radiation', help='root path of the data file')
-parser.add_argument('--data_path', type=str, default='Okinawa.csv', help='data file')
+parser.add_argument('--data_path', type=str, default='Tokyo.csv', help='data file')
 parser.add_argument('--features', type=str, default='M', help='forecasting task, options:[M, S, MS]; '
                          'M:multivariate predict multivariate, S: univariate predict univariate, ' 'MS:multivariate predict univariate')
-parser.add_argument('--target', type=str, default='Git', help='target feature in S or MS task')
+parser.add_argument('--target', type=str, default='solar_radiation', help='target feature in S or MS task')
 parser.add_argument('--loader', type=str, default='modal', help='dataset type')
 parser.add_argument('--freq', type=str, default='h', help='freq for time features encoding, '
                          'options:[s:secondly, t:minutely, h:hourly, d:daily, b:business days, w:weekly, m:monthly], '
@@ -50,26 +50,26 @@ parser.add_argument('--devices', type=str, default='0,1,2,3', help='device ids o
 parser.add_argument('--seq_len', type=int, default=72, help='input sequence length')
 parser.add_argument('--label_len', type=int, default=24, help='start token length')
 parser.add_argument('--pred_len', type=int, default=24, help='prediction sequence length')
-parser.add_argument('--seq_dim', type=int, default=12, help='input sequence length')
-parser.add_argument('--pred_dim', type=int, default=12, help='input sequence length')
+parser.add_argument('--seq_dim', type=int, default=9, help='input sequence length')
+parser.add_argument('--pred_dim', type=int, default=9, help='input sequence length')
 parser.add_argument('--forecast_dim', type=int, default=3, help='input sequence length')
 
 parser.add_argument('--seasonal_patterns', type=str, default='Monthly', help='subset for M4')
 parser.add_argument('--inverse', action='store_true', help='inverse output data', default=False)
 
 # model define
-parser.add_argument('--top_k', type=int, default=5, help='for TimesBlock')
+parser.add_argument('--top_k', type=int, default=4, help='for TimesBlock')
 parser.add_argument('--num_kernels', type=int, default=6, help='for Inception')
 parser.add_argument('--distil', action='store_false',help='whether to use distilling in encoder, using this argument means not using distilling',default=True)
 
-parser.add_argument('--enc_in', type=int, default=12, help='encoder input size (seq features dim)')
-parser.add_argument('--dec_in', type=int, default=12, help='decoder input size (forecast dim)')
-parser.add_argument('--c_out', type=int, default=12, help='output size (pred dim)')
-parser.add_argument('--d_model', type=int, default=32, help='dimension of model')
+parser.add_argument('--enc_in', type=int, default=9, help='encoder input size (seq features dim)')
+parser.add_argument('--dec_in', type=int, default=9, help='decoder input size (forecast dim)')
+parser.add_argument('--c_out', type=int, default=9, help='output size (pred dim)')
+parser.add_argument('--d_model', type=int, default=512, help='dimension of model')
 parser.add_argument('--n_heads', type=int, default=8, help='num of heads')
-parser.add_argument('--e_layers', type=int, default=4, help='num of encoder layers')
-parser.add_argument('--d_layers', type=int, default=3, help='num of decoder layers')
-parser.add_argument('--d_ff', type=int, default=128, help='dimension of fcn')
+parser.add_argument('--e_layers', type=int, default=2, help='num of encoder layers')
+parser.add_argument('--d_layers', type=int, default=1, help='num of decoder layers')
+parser.add_argument('--d_ff', type=int, default=2048, help='dimension of fcn')
 parser.add_argument('--hidden_sizes', nargs='+', default=[128,128], help='output mlp layer')
 
 # Autoformer
@@ -97,7 +97,7 @@ parser.add_argument('--llm_dim', type=int, default=768, help='LLM model dimensio
 parser.add_argument('--llm_layers', type=int, default=6, help='bert_layers=6 llama_layers=32')
 
 # RNN
-parser.add_argument('--rnn_model', type=str, default='GRU', help='GRU')  # GRU, LSTM, seq2seq
+parser.add_argument('--rnn_model', type=str, default='LSTM', help='RNN model')  # GRU, LSTM, seq2seq
 parser.add_argument('--rnn_dim', type=int, default=256, help='LLM model dimension')  # LLama7b:4096; GPT2-small:768; BERT-base:768
 parser.add_argument('--rnn_layers', type=int, default=2, help='bert_layers=6 llama_layers=32')
 
@@ -142,8 +142,10 @@ if __name__ == '__main__':
 
     Exp = Exp_Forecast
 
-    if args.model == 'TimeLLM':
+    if 'TimeLLM' in args.model:
         args.content = load_content(args)
+        args.d_model = 32
+        args.d_ff = 128
 
     if args.is_training:
         for ii in range(args.itr):
@@ -168,10 +170,10 @@ if __name__ == '__main__':
                 args.embed,
                 args.des, ii)
 
-            if args.model == 'TimeLLM':
-                setting += '{}_llmd{}_llmf{}'.format(args.llm_model,args.llm_dim,args.llm_layers,)
-            if args.model == 'RNN':
-                setting += '{}_llmd{}_llmf{}'.format(args.rnn_model,args.rnn_dim,args.rnn_layers,)
+            if 'TimeLLM' in args.model:
+                setting += '_{}_llmd{}_llmf{}'.format(args.llm_model,args.llm_dim,args.llm_layers,)
+            if 'RNN' in args.model:
+                setting += '_{}_llmd{}_llmf{}'.format(args.rnn_model,args.rnn_dim,args.rnn_layers,)
 
             print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
             exp.train(setting)

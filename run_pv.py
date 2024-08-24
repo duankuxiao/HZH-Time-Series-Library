@@ -144,6 +144,8 @@ if __name__ == '__main__':
 
     if args.model == 'TimeLLM':
         args.content = load_content(args)
+        args.d_model = 32
+        args.d_ff = 128
 
     if args.is_training:
         for ii in range(args.itr):
@@ -169,9 +171,9 @@ if __name__ == '__main__':
                 args.des, ii)
 
             if args.model == 'TimeLLM':
-                setting += '{}_llmd{}_llmf{}'.format(args.llm_model, args.llm_dim, args.llm_layers, )
+                setting += '_{}_llmd{}_llmf{}'.format(args.llm_model, args.llm_dim, args.llm_layers, )
             if args.model == 'RNN':
-                setting += '{}_llmd{}_llmf{}'.format(args.rnn_model, args.rnn_dim, args.rnn_layers, )
+                setting += '_{}_llmd{}_llmf{}'.format(args.rnn_model, args.rnn_dim, args.rnn_layers, )
 
             print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
             exp.train(setting)

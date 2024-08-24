@@ -206,8 +206,7 @@ class Model(nn.Module):
 
         self.dropout = nn.Dropout(configs.dropout)
 
-        self.patch_embedding = PatchEmbedding(
-            configs.d_model, self.patch_len, self.stride, configs.dropout)
+        self.patch_embedding = PatchEmbedding(configs.d_model, self.patch_len, self.stride, configs.dropout)
 
         self.word_embeddings = self.llm_model.get_input_embeddings().weight
         self.vocab_size = self.word_embeddings.shape[0]
@@ -241,7 +240,7 @@ class Model(nn.Module):
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
 
-        x_enc = self.normalize_layers(x_enc, 'norm')
+        x_enc = self.normalize_layers(x_enc, 'norm')  # [B, seq_len, 1]
 
         B, T, N = x_enc.size()
         x_enc = x_enc.permute(0, 2, 1).contiguous().reshape(B * N, T, 1)
@@ -252,12 +251,45 @@ class Model(nn.Module):
         lags = self.calcute_lags(x_enc)
         trends = x_enc.diff(dim=1).sum(dim=1)
 
+        first_forecast_min_values = torch.min(x_forecast[:,:,:1],dim=1)[0]
+        second_forecast_min_values = torch.min(x_forecast[:,:,1:2],dim=1)[0]
+        third_forecast_min_values = torch.min(x_forecast[:,:,2:3],dim=1)[0]
+
+        first_forecast_max_values = torch.max(x_forecast[:,:,:1],dim=1)[0]
+        second_forecast_max_values = torch.max(x_forecast[:,:,1:2],dim=1)[0]
+        third_forecast_max_values = torch.max(x_forecast[:,:,2:3],dim=1)[0]
+
+        first_forecast_medians = torch.median(x_forecast[:,:,:1], dim=1).values
+        second_forecast_medians = torch.median(x_forecast[:,:,1:2], dim=1).values
+        third_forecast_medians = torch.median(x_forecast[:,:,2:3], dim=1).values
+
+        first_forecast_lags = self.calcute_lags(x_forecast[:,:,:1])
+        second_forecast_lags = self.calcute_lags(x_forecast[:,:,1:2])
+        third_forecast_lags = self.calcute_lags(x_forecast[:,:,2:3])
+
+
         prompt = []
         for b in range(x_enc.shape[0]):
             min_values_str = str(min_values[b].tolist()[0])
             max_values_str = str(max_values[b].tolist()[0])
             median_values_str = str(medians[b].tolist()[0])
             lags_values_str = str(lags[b].tolist())
+
+            min_values_str_1st_forecast = str(first_forecast_min_values[b].tolist()[0])
+            max_values_str_1st_forecast = str(first_forecast_max_values[b].tolist()[0])
+            median_values_str_1st_forecast = str(first_forecast_medians[b].tolist()[0])
+            lags_values_str_1st_forecast = str(first_forecast_lags[b].tolist())
+
+            min_values_str_2nd_forecast = str(second_forecast_min_values[b].tolist()[0])
+            max_values_str_2nd_forecast = str(second_forecast_max_values[b].tolist()[0])
+            median_values_str_2nd_forecast = str(second_forecast_medians[b].tolist()[0])
+            lags_values_str_2nd_forecast = str(second_forecast_lags[b].tolist())
+
+            min_values_str_3rd_forecast = str(third_forecast_min_values[b].tolist()[0])
+            max_values_str_3rd_forecast = str(third_forecast_max_values[b].tolist()[0])
+            median_values_str_3rd_forecast = str(third_forecast_medians[b].tolist()[0])
+            lags_values_str_3rd_forecast = str(third_forecast_lags[b].tolist()[0])
+
             prompt_ = (
                 f"<|start_prompt|>Dataset description: {self.description}"
                 f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information; "
@@ -266,7 +298,23 @@ class Model(nn.Module):
                 f"max value {max_values_str}, "
                 f"median value {median_values_str}, "
                 f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
-                f"top 5 lags are : {lags_values_str}<|<end_prompt>|>"
+                f"top 5 lags are : {lags_values_str}"
+                "Known forecast data statistics: "
+                f"1st forecast feature min value {min_values_str_1st_forecast}, "
+                f"1st forecast feature max value {max_values_str_1st_forecast}, "
+                f"1st forecast feature median value {median_values_str_1st_forecast}, "
+                f"1st forecast feature top 5 lags are : {lags_values_str_1st_forecast}"
+                
+                f"2nd forecast feature min value {min_values_str_2nd_forecast}, "
+                f"2nd forecast feature max value {max_values_str_2nd_forecast}, "
+                f"2nd forecast feature median value {median_values_str_2nd_forecast}, "
+                f"2nd forecast feature top 5 lags are : {lags_values_str_2nd_forecast}"
+                
+                f"3rd forecast feature min value {min_values_str_3rd_forecast}, "
+                f"3rd forecast feature max value {max_values_str_3rd_forecast}, "
+                f"3rd forecast feature median value {median_values_str_3rd_forecast}, "
+                f"3rd forecast feature top 5 lags are : {lags_values_str_3rd_forecast}<|<end_prompt>|>"
+
             )
 
             prompt.append(prompt_)
@@ -285,8 +333,7 @@ class Model(nn.Module):
         dec_out = self.llm_model(inputs_embeds=llama_enc_out).last_hidden_state
         dec_out = dec_out[:, :, :self.d_ff]
 
-        dec_out = torch.reshape(
-            dec_out, (-1, n_vars, dec_out.shape[-2], dec_out.shape[-1]))
+        dec_out = torch.reshape(dec_out, (-1, n_vars, dec_out.shape[-2], dec_out.shape[-1]))
         dec_out = dec_out.permute(0, 1, 3, 2).contiguous()
 
         dec_out = self.output_projection(dec_out[:, :, :, -self.patch_nums:])

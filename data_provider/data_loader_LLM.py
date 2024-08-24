@@ -105,8 +105,8 @@ class Dataset_PV_hour_llm(Dataset):
         s_end = s_begin + self.seq_len
         r_begin = s_end - self.label_len
         r_end = r_begin + self.label_len + self.pred_len
-        seq_x = self.data_x[s_begin:s_end, feat_id:feat_id + 1] if self.set_type != 2 else self.data_x[s_begin:s_end,-1:]
-        seq_y = self.data_y[r_begin:r_end, feat_id:feat_id + 1] if self.set_type != 2 else self.data_y[s_begin:s_end,-1:]
+        seq_x = self.data_x[s_begin:s_end, feat_id:feat_id + 1] if self.set_type != 2 else self.data_x[s_begin:s_end,--1:]
+        seq_y = self.data_y[r_begin:r_end, feat_id:feat_id + 1] if self.set_type != 2 else self.data_y[s_begin:s_end,1:]
         seq_x_mark = self.data_stamp[s_begin:s_end]
         seq_y_mark = self.data_stamp[r_begin:r_end]
         x_forecast = self.data_x[r_begin:r_end, :3]
@@ -121,8 +121,8 @@ class Dataset_PV_hour_llm(Dataset):
 
 class Dataset_solar_radiation_llm(Dataset):
     def __init__(self, root_path, flag='train', size=None,
-                 features='S', data_path='Okinawa.csv',
-                 target='Git', scale=True, timeenc=0, freq='h', percent=100,
+                 features='S', data_path='Tokyo.csv',
+                 target='solar_radiation', scale=True, timeenc=0, freq='h', percent=100,
                  seasonal_patterns=None):
         if size == None:
             self.seq_len = 24 * 3

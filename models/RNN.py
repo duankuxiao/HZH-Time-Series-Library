@@ -23,7 +23,7 @@ class Model(nn.Module):
 
         self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len)
 
-        self.projection = nn.Linear(configs.lstm_hid_dim, configs.pred_dim)
+        self.projection = nn.Linear(configs.rnn_dim, configs.pred_dim)
 
         if self.task_name == 'classification' or self.task_name == 'anomaly_detection' or self.task_name == 'imputation':
             self.pred_len = configs.seq_len
@@ -36,7 +36,7 @@ class Model(nn.Module):
             self.projection = nn.Linear(configs.enc_in * configs.seq_len, configs.num_class)
 
     def encoder(self, x):
-        x = self.rnn_layer(x)
+        x,_ = self.rnn_layer(x)
         x = self.projection(x)
         x = self.linear_predict(x.permute(0, 2, 1))
         return x.permute(0, 2, 1)
