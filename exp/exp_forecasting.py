@@ -11,11 +11,10 @@ import warnings
 import numpy as np
 from utils.dtw_metric import dtw, accelerated_dtw
 from utils.augmentation import run_augmentation, run_augmentation_single
-from utils.tools import results_evaluation
+from utils.tools import results_evaluation, save_config
 from torch.optim import lr_scheduler
 
 warnings.filterwarnings('ignore')
-
 
 class Exp_Forecast(Exp_Basic):
     def __init__(self, args):
@@ -68,7 +67,7 @@ class Exp_Forecast(Exp_Basic):
                 dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
                 # encoder - decoder
                 if self.args.use_amp:
-                    with torch.cuda.amp.autocast():
+                    with torch.amp.autocast():
                         if self.args.output_attention:
                             outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark,x_forecast)[0]
                         else:
@@ -101,6 +100,7 @@ class Exp_Forecast(Exp_Basic):
         path = os.path.join(self.args.checkpoints, setting,'checkpoints')
         if not os.path.exists(path):
             os.makedirs(path)
+        save_config(self.args,os.path.join(path,'configs.pkl'))
 
         time_now = time.time()
 
@@ -133,6 +133,9 @@ class Exp_Forecast(Exp_Basic):
                 dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
                 dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
 
+                # f_dim = -1 if self.args.features == 'MS' else 0
+                f_dim = -1
+
                 # encoder - decoder
                 if self.args.use_amp:
                     with torch.cuda.amp.autocast():
@@ -141,8 +144,7 @@ class Exp_Forecast(Exp_Basic):
                         else:
                             outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark,x_forecast)
 
-                        # f_dim = -1 if self.args.features == 'MS' else 0
-                        f_dim = -1
+
                         outputs = outputs[:, -self.args.pred_len:, f_dim:]
                         batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
                         loss = criterion(outputs, batch_y)
@@ -152,9 +154,6 @@ class Exp_Forecast(Exp_Basic):
                         outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark,x_forecast)[0]
                     else:
                         outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark,x_forecast)
-
-                    # f_dim = -1 if self.args.features == 'MS' else 0
-                    f_dim = -1
 
                     outputs = outputs[:, -self.args.pred_len:, f_dim:]
                     batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
@@ -211,13 +210,16 @@ class Exp_Forecast(Exp_Basic):
 
         return self.model
 
-    def test(self, setting, test=0):
+    def test(self, setting, test=0,path=None):
         test_data, test_loader = self._get_data(flag='test')
 
         if test:
             print('loading model')
-            path = os.path.join(self.args.checkpoints, setting,'checkpoints')
-            self.model.load_state_dict(torch.load(os.path.join(path, 'checkpoint')))
+            if path is None:
+                model_path = os.path.join(self.args.checkpoints, setting,'checkpoints')
+            else:
+                model_path = os.path.join(path,'checkpoints')
+            self.model.load_state_dict(torch.load(os.path.join(model_path, 'checkpoint')))
 
         preds = []
         trues = []
@@ -239,7 +241,7 @@ class Exp_Forecast(Exp_Basic):
                 dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
                 # encoder - decoder
                 if self.args.use_amp:
-                    with torch.cuda.amp.autocast():
+                    with torch.amp.autocast():
                         if self.args.output_attention:
                             outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark,x_forecast)[0]
                         else:
@@ -253,12 +255,8 @@ class Exp_Forecast(Exp_Basic):
 
                 # f_dim = -1 if self.args.features == 'MS' else 0
                 f_dim = -1
-                if 'TimeLLM' in self.args.model:
-                    outputs = outputs[:, -self.args.pred_len:, :]
-                    batch_y = batch_y[:, -self.args.pred_len:, :].to(self.device)
-                else:
-                    outputs = outputs[:, -self.args.pred_len:, f_dim:]
-                    batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
+                outputs = outputs[:, -self.args.pred_len:, f_dim:]
+                batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
                 outputs = outputs.detach().cpu().numpy()
                 batch_y = batch_y.detach().cpu().numpy()
                 if test_data.scale and self.args.inverse:
@@ -274,7 +272,7 @@ class Exp_Forecast(Exp_Basic):
 
                 preds.append(pred)
                 trues.append(true)
-                verbose_interval = (len(test_data) // 10) if len(test_data) > 10 else 1
+                verbose_interval = (len(test_data) // 2) if len(test_data) > 2 else 1
 
                 if (i + 1) % verbose_interval == 0:
                     input = batch_x.detach().cpu().numpy()
@@ -320,9 +318,15 @@ class Exp_Forecast(Exp_Basic):
         f.write('\n')
         f.write('\n')
         f.close()
-
-        np.save(os.path.join(folder_path, 'metrics.npy'), np.array([mae, mse, rmse, r2, corr]))
-        np.save(os.path.join(folder_path,'pred.npy'), preds)
-        np.save(os.path.join(folder_path, 'true.npy'), trues)
+        if path is None:
+            np.save(os.path.join(folder_path, 'metrics.npy'), np.array([mae, mse, rmse, r2, corr]))
+            np.save(os.path.join(folder_path,'pred.npy'), preds)
+            np.save(os.path.join(folder_path, 'true.npy'), trues)
+        else:
+            np.save(os.path.join(folder_path, 'metrics_{}.npy'.format(self.args.data)), np.array([mae, mse, rmse, r2, corr]))
+            np.save(os.path.join(folder_path, 'pred_{}.npy'.format(self.args.data)), preds)
+            np.save(os.path.join(folder_path, 'true_{}.npy'.format(self.args.data)), trues)
 
         return
+
+

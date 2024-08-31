@@ -59,16 +59,17 @@ class Model(nn.Module):
                     for l in range(configs.d_layers)
                 ],
                 norm_layer=torch.nn.LayerNorm(configs.d_model),
-                projection=nn.Linear(configs.d_model, configs.c_out, bias=True)
             )
+            self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
+
         if self.task_name == 'imputation':
-            self.projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
+            self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
         if self.task_name == 'anomaly_detection':
-            self.projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
+            self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
         if self.task_name == 'classification':
             self.act = F.gelu
             self.dropout = nn.Dropout(configs.dropout)
-            self.projection = nn.Linear(configs.d_model * configs.seq_len, configs.num_class)
+            self.output_projection = nn.Linear(configs.d_model * configs.seq_len, configs.num_class)
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
         # Embedding
@@ -77,6 +78,7 @@ class Model(nn.Module):
 
         dec_out = self.dec_embedding(x_dec, x_mark_dec)
         dec_out = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None)
+        dec_out = self.output_projection(dec_out)
         return dec_out
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):

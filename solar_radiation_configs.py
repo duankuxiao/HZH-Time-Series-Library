@@ -3,7 +3,7 @@ import argparse
 parser = argparse.ArgumentParser(description='Time-LLM')
 
 # basic config
-parser.add_argument('--task_name', type=str, required=True, default='long_term_forecast',
+parser.add_argument('--task_name', type=str, default='long_term_forecast',
                     help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]')
 parser.add_argument('--is_training', type=int, default=1, help='status')
 parser.add_argument('--model_id', type=str, default='test', help='model id')
@@ -42,7 +42,7 @@ parser.add_argument('--seasonal_patterns', type=str, default='Monthly', help='su
 parser.add_argument('--inverse', action='store_true', help='inverse output data', default=False)
 
 # model define
-parser.add_argument('--top_k', type=int, default=4, help='for TimesBlock')
+parser.add_argument('--top_k', type=int, default=5, help='for TimesBlock')
 parser.add_argument('--num_kernels', type=int, default=6, help='for Inception')
 parser.add_argument('--distil', action='store_false',help='whether to use distilling in encoder, using this argument means not using distilling',default=True)
 
@@ -66,7 +66,7 @@ parser.add_argument('--channel_independence', type=int, default=1, help='0: chan
 parser.add_argument('--decomp_method', type=str, default='moving_avg', help='method of series decompsition, only support moving_avg or dft_decomp')
 parser.add_argument('--use_norm', type=int, default=1, help='whether to use normalize; True 1 False 0')
 
-parser.add_argument('--factor', type=int, default=1, help='attn factor')
+parser.add_argument('--factor', type=int, default=3, help='attn factor')
 parser.add_argument('--dropout', type=float, default=0.1, help='dropout')
 parser.add_argument('--embed', type=str, default='timeF', help='time features encoding, options:[timeF, fixed, learned]')
 parser.add_argument('--activation', type=str, default='gelu', help='activation')
@@ -122,7 +122,6 @@ if __name__ == '__main__':
         device_ids = args.devices.split(',')
         args.device_ids = [int(id_) for id_ in device_ids]
         args.gpu = args.device_ids[0]
-        args.learning_rate = 0.01
 
     print('Args in experiment:')
     print_args(args)
@@ -130,6 +129,7 @@ if __name__ == '__main__':
     Exp = Exp_Forecast
 
     if 'TimeLLM' in args.model:
+        args.learning_rate = 0.01
         args.content = load_content(args)
         if 'LLAMA' in args.llm_model:
             args.d_model = 16

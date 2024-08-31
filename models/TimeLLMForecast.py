@@ -36,7 +36,7 @@ class Model(nn.Module):
         self.pred_len = configs.pred_len
         self.seq_len = configs.seq_len
         self.d_ff = configs.d_ff
-        self.top_k = 5
+        self.top_k = configs.top_k
         self.d_llm = configs.llm_dim
         self.patch_len = configs.patch_len
         self.stride = configs.stride
@@ -216,11 +216,10 @@ class Model(nn.Module):
         self.reprogramming_layer = ReprogrammingLayer(configs.d_model, configs.n_heads, self.d_ff, self.d_llm)
 
         self.patch_nums = int((configs.seq_len - self.patch_len) / self.stride + 2)
-        self.head_nf = self.d_ff * self.patch_nums
+        self.head_nf = configs.d_ff * self.patch_nums
 
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
-            self.output_projection = FlattenHead(configs.enc_in, self.head_nf, self.pred_len,
-                                                 head_dropout=configs.dropout)
+            self.output_projection = FlattenHead(configs.seq_dim, self.head_nf, self.pred_len, head_dropout=configs.dropout)
         else:
             raise NotImplementedError
 
@@ -267,7 +266,6 @@ class Model(nn.Module):
         second_forecast_lags = self.calcute_lags(x_forecast[:,:,1:2])
         third_forecast_lags = self.calcute_lags(x_forecast[:,:,2:3])
 
-
         prompt = []
         for b in range(x_enc.shape[0]):
             min_values_str = str(min_values[b].tolist()[0])
@@ -292,29 +290,26 @@ class Model(nn.Module):
 
             prompt_ = (
                 f"<|start_prompt|>Dataset description: {self.description}"
-                f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information; "
-                "Input statistics: "
+                f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information and the three known future {str(self.pred_len)} steps information; "
+                "Input previous statistics: "
                 f"min value {min_values_str}, "
                 f"max value {max_values_str}, "
                 f"median value {median_values_str}, "
                 f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
                 f"top 5 lags are : {lags_values_str}"
-                "Known forecast data statistics: "
-                f"1st forecast feature min value {min_values_str_1st_forecast}, "
-                f"1st forecast feature max value {max_values_str_1st_forecast}, "
-                f"1st forecast feature median value {median_values_str_1st_forecast}, "
-                f"1st forecast feature top 5 lags are : {lags_values_str_1st_forecast}"
-                
-                f"2nd forecast feature min value {min_values_str_2nd_forecast}, "
-                f"2nd forecast feature max value {max_values_str_2nd_forecast}, "
-                f"2nd forecast feature median value {median_values_str_2nd_forecast}, "
-                f"2nd forecast feature top 5 lags are : {lags_values_str_2nd_forecast}"
-                
-                f"3rd forecast feature min value {min_values_str_3rd_forecast}, "
-                f"3rd forecast feature max value {max_values_str_3rd_forecast}, "
-                f"3rd forecast feature median value {median_values_str_3rd_forecast}, "
-                f"3rd forecast feature top 5 lags are : {lags_values_str_3rd_forecast}<|<end_prompt>|>"
-
+                "Input known future data statistics: "
+                f"first future feature min value {min_values_str_1st_forecast}, "
+                f"first future feature max value {max_values_str_1st_forecast}, "
+                f"first future feature median value {median_values_str_1st_forecast}, "
+                f"first future feature top {self.top_k} lags are : {lags_values_str_1st_forecast}"
+                f"second future feature min value {min_values_str_2nd_forecast}, "
+                f"second future feature max value {max_values_str_2nd_forecast}, "
+                f"second future feature median value {median_values_str_2nd_forecast}, "
+                f"second future feature top {self.top_k} lags are : {lags_values_str_2nd_forecast}"
+                f"third future feature min value {min_values_str_3rd_forecast}, "
+                f"third future feature max value {max_values_str_3rd_forecast}, "
+                f"third future feature median value {median_values_str_3rd_forecast}, "
+                f"third future feature top {self.top_k} lags are : {lags_values_str_3rd_forecast}<|<end_prompt>|>"
             )
 
             prompt.append(prompt_)

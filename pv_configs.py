@@ -3,13 +3,13 @@ import argparse
 parser = argparse.ArgumentParser(description='Time-LLM')
 
 # basic config
-parser.add_argument('--task_name', type=str, required=True, default='long_term_forecast',
+parser.add_argument('--task_name', type=str,  default='long_term_forecast',
                     help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]')
 parser.add_argument('--is_training', type=int, default=1, help='status')
 parser.add_argument('--model_id', type=str, default='forecast', help='model id')
 parser.add_argument('--model_comment', type=str, default='PV', help='prefix when saving test results')
-parser.add_argument('--model', type=str, default='TimeLLM',
-                    help='model name, options: [Autoformer, TimeLLM, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerX]')
+parser.add_argument('--model', type=str, default='TimeLLMForecast',
+                    help='model name, options: [Autoformer, TimeLLM,TimeLLMForecast, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerX, RNN]')
 
 # data loader
 parser.add_argument('--data', type=str, default='PV', help='dataset type')
@@ -42,7 +42,7 @@ parser.add_argument('--seasonal_patterns', type=str, default='Monthly', help='su
 parser.add_argument('--inverse', action='store_true', help='inverse output data', default=False)
 
 # model define
-parser.add_argument('--top_k', type=int, default=5, help='for TimesBlock')
+parser.add_argument('--top_k', type=int, default=4, help='for TimesBlock')
 parser.add_argument('--num_kernels', type=int, default=6, help='for Inception')
 parser.add_argument('--distil', action='store_false',help='whether to use distilling in encoder, using this argument means not using distilling',default=True)
 
@@ -66,7 +66,7 @@ parser.add_argument('--channel_independence', type=int, default=1, help='0: chan
 parser.add_argument('--decomp_method', type=str, default='moving_avg', help='method of series decompsition, only support moving_avg or dft_decomp')
 parser.add_argument('--use_norm', type=int, default=1, help='whether to use normalize; True 1 False 0')
 
-parser.add_argument('--factor', type=int, default=1, help='attn factor')
+parser.add_argument('--factor', type=int, default=3, help='attn factor')
 parser.add_argument('--dropout', type=float, default=0.1, help='dropout')
 parser.add_argument('--embed', type=str, default='timeF', help='time features encoding, options:[timeF, fixed, learned]')
 parser.add_argument('--activation', type=str, default='gelu', help='activation')

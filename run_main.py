@@ -14,11 +14,44 @@ random.seed(fix_seed)
 torch.manual_seed(fix_seed)
 np.random.seed(fix_seed)
 
+
+def get_setting(args):
+    setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_dropout{}_eb{}_{}_{}'.format(
+        args.model_id,
+        args.model,
+        args.data,
+        args.features,
+        args.seq_len,
+        args.label_len,
+        args.pred_len,
+        args.seq_dim,
+        args.d_model,
+        args.n_heads,
+        args.e_layers,
+        args.d_layers,
+        args.d_ff,
+        args.factor,
+        args.dropout,
+        args.embed,
+        args.des, ii)
+
+    if 'TimeLLM' in args.model:
+        setting += '_{}_llmd{}_llmf{}_tk{}'.format(args.llm_model, args.llm_dim, args.llm_layers, args.top_k)
+    if 'RNN' in args.model:
+        setting += '_{}_llmd{}_llmf{}'.format(args.rnn_model, args.rnn_dim, args.rnn_layers, )
+    return setting
+
 if __name__ == '__main__':
     # from pv_configs import args
     from solar_radiation_configs import args
 
+    args.top_k = 5
+    args.model_id = 'sr'
+    args.model = 'Transformer'  # [Autoformer, TimeLLM,TimeLLMForecast, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN]
+    args.llm_model = 'BERT'  # BERT LLAMA
+
     args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False
+    args.device = torch.device('cuda' if torch.cuda.is_available() and args.use_gpu else 'cpu')
     args.inverse = True
     print(torch.cuda.is_available())
 
@@ -27,7 +60,6 @@ if __name__ == '__main__':
         device_ids = args.devices.split(',')
         args.device_ids = [int(id_) for id_ in device_ids]
         args.gpu = args.device_ids[0]
-        args.learning_rate = 0.01
 
     print('Args in experiment:')
     print_args(args)
@@ -35,15 +67,18 @@ if __name__ == '__main__':
     Exp = Exp_Forecast
 
     if 'TimeLLM' in args.model:
+        args.learning_rate = 0.01
         args.content = load_content(args)
         if 'LLAMA' in args.llm_model:
-            args.d_model = 16
+            args.d_model = 32
             args.d_ff = 32
             args.llm_layers = 32
+            args.llm_dim = 4096
         elif 'BERT' in args.llm_model:
             args.d_model = 32
-            args.d_ff = 128
+            args.d_ff = 32  # d_ff < llm_dim
             args.llm_layers = 6
+            args.llm_dim = 768
         else:
             raise ValueError('Unknown llm model')
 
@@ -51,29 +86,7 @@ if __name__ == '__main__':
         for ii in range(args.itr):
             exp = Exp(args)
             # setting record of experiments
-            setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_dropout{}_eb{}_{}_{}'.format(
-                args.model_id,
-                args.model,
-                args.data,
-                args.features,
-                args.seq_len,
-                args.label_len,
-                args.pred_len,
-                args.seq_dim,
-                args.d_model,
-                args.n_heads,
-                args.e_layers,
-                args.d_layers,
-                args.d_ff,
-                args.factor,
-                args.dropout,
-                args.embed,
-                args.des, ii)
-
-            if 'TimeLLM' in args.model:
-                setting += '_{}_llmd{}_llmf{}'.format(args.llm_model, args.llm_dim, args.llm_layers, )
-            if 'RNN' in args.model:
-                setting += '_{}_llmd{}_llmf{}'.format(args.rnn_model, args.rnn_dim, args.rnn_layers, )
+            setting = get_setting(args)
 
             print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
             exp.train(setting)
@@ -83,23 +96,7 @@ if __name__ == '__main__':
             torch.cuda.empty_cache()
     else:
         ii = 0
-        setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_eb{}_{}_{}'.format(
-            args.task_name,
-            args.model_id,
-            args.model,
-            args.data,
-            args.features,
-            args.seq_len,
-            args.label_len,
-            args.pred_len,
-            args.d_model,
-            args.n_heads,
-            args.e_layers,
-            args.d_layers,
-            args.d_ff,
-            args.factor,
-            args.embed,
-            args.des, ii)
+        setting = get_setting(args)
 
         exp = Exp(args)  # set experiments
         print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))

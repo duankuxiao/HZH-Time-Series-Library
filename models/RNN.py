@@ -23,7 +23,7 @@ class Model(nn.Module):
 
         self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len)
 
-        self.projection = nn.Linear(configs.rnn_dim, configs.pred_dim)
+        self.output_projection = nn.Linear(configs.rnn_dim, configs.pred_dim)
 
         if self.task_name == 'classification' or self.task_name == 'anomaly_detection' or self.task_name == 'imputation':
             self.pred_len = configs.seq_len
@@ -33,13 +33,13 @@ class Model(nn.Module):
         if self.task_name == 'classification':
             self.act = F.gelu
             self.dropout = nn.Dropout(configs.dropout)
-            self.projection = nn.Linear(configs.enc_in * configs.seq_len, configs.num_class)
+            self.output_projection = nn.Linear(configs.enc_in * configs.seq_len, configs.num_class)
 
     def encoder(self, x):
         x,_ = self.rnn_layer(x)
-        x = self.projection(x)
-        x = self.linear_predict(x.permute(0, 2, 1))
-        return x.permute(0, 2, 1)
+        x = self.linear_predict(x.permute(0, 2, 1)).permute(0, 2, 1)
+        x = self.output_projection(x)
+        return x
 
     def forecast(self, x_enc):
         return self.encoder(x_enc)
