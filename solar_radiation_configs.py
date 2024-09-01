@@ -17,7 +17,7 @@ parser.add_argument('--root_path', type=str, default='./dataset/solar_radiation'
 parser.add_argument('--data_path', type=str, default='Tokyo.csv', help='data file')
 parser.add_argument('--features', type=str, default='M', help='forecasting task, options:[M, S, MS]; '
                          'M:multivariate predict multivariate, S: univariate predict univariate, ' 'MS:multivariate predict univariate')
-parser.add_argument('--target', type=str, default='solar_radiation', help='target feature in S or MS task')
+parser.add_argument('--target', type=str, default='Global_horizontal_irradiance', help='target feature in S or MS task')
 parser.add_argument('--loader', type=str, default='modal', help='dataset type')
 parser.add_argument('--freq', type=str, default='h', help='freq for time features encoding, '
                          'options:[s:secondly, t:minutely, h:hourly, d:daily, b:business days, w:weekly, m:monthly], '

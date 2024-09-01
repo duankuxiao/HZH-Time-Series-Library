@@ -15,7 +15,7 @@ data_dict = {
     'PV': Dataset_PV_hour,
     'PV7f': Dataset_PV_hour,
     'Tokyo':Dataset_solar_radiation,  # Dataset_solar_radiation
-    'Okinawa':Dataset_solar_radiation,  # Dataset_solar_radiation
+    'Naha':Dataset_solar_radiation,  # Dataset_solar_radiation
     'Sapporo': Dataset_solar_radiation,  # Dataset_solar_radiation
 }
 

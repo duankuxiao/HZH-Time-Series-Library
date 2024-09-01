@@ -1,3 +1,5 @@
+import pandas as pd
+
 from data_provider.data_factory import data_provider
 from exp.exp_basic import Exp_Basic
 from utils.tools import EarlyStopping, adjust_learning_rate, visual
@@ -327,6 +329,21 @@ class Exp_Forecast(Exp_Basic):
             np.save(os.path.join(folder_path, 'pred_{}.npy'.format(self.args.data)), preds)
             np.save(os.path.join(folder_path, 'true_{}.npy'.format(self.args.data)), trues)
 
+        self.res_evaluation(preds, trues,folder_path)
         return
 
+    def res_evaluation(self,pred,true,path):
+        pred_output = pred.squeeze()[::24,:].reshape(-1,1)
+        true_output = true.squeeze()[::24,:].reshape(-1,1)
+        pred_res = pd.DataFrame({'pred':pred_output.flatten(), 'true':true_output.flatten()})
+        pred_res.loc[pred_res['true'] < 0.01, 'true'] = 0
+        pred_res.loc[pred_res['true'] == 0, 'pred'] = 0
+        pred_res.loc[pred_res['pred'] < 0, 'pred'] = 0
 
+        [mse, rmse, mae, r2,corr] = results_evaluation(pred_res['true'].values, pred_res['pred'].values)
+
+        pred_res.to_csv(os.path.join(path, 'pred_results.csv'))
+        metrics_df = pd.DataFrame({'mae':mae,'rmse':rmse,'r2':r2},index=[0])
+        metrics_df.to_csv(os.path.join(path, 'metrics_results.csv'))
+
+        print('RMSE: {} MAE: {} R2: {}'.format(rmse,mae,r2))

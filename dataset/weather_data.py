@@ -242,7 +242,7 @@ def get_data(start_date, output=True):
 if __name__ == '__main__':
     start_date = '2020/1/1'
     end_date = '2023/12/31'
-    city = 'Naha'
+    city = 'Sendai'  # Sapporo Sendai Tokyo Osaka Fukuoka Naha
 
     jma_data = get_JMA_data(start_date, end_date, city=city)
 

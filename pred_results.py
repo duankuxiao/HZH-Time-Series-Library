@@ -31,5 +31,5 @@ def res_evaluation(res_path,data=None):
 if __name__ == '__main__':
     # data = 'Sapporo'
     data = None
-    res_path = r'D:\Time-LLM-main\results\111_Transformer_Tokyo_ftM_sl72_ll24_pl24_sd9_dm512_nh8_el2_dl1_df2048_fc3_dropout0.1_ebtimeF_test_0'
+    res_path = r'D:\Time-LLM-main\results\111_RNN_Tokyo_ftM_sl72_ll24_pl24_sd9_dm512_nh8_el2_dl1_df2048_fc3_dropout0.1_ebtimeF_test_0_LSTM_llmd256_llmf2'
     res_evaluation(res_path,data)

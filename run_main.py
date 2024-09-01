@@ -101,6 +101,6 @@ if __name__ == '__main__':
     from solar_radiation_configs import args
 
     args.model_id = '111'
-    args.model = 'TimeLLM'  # [Autoformer, TimeLLM,TimeLLMForecast, TimeLLMX, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN]
-    args.is_training = 0
+    args.model = 'Transformer'  # [Autoformer, TimeLLM,TimeLLMForecast, TimeLLMX, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN]
+    args.is_training = 1
     main(args)
