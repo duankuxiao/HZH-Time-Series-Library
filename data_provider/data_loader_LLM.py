@@ -123,7 +123,7 @@ class Dataset_solar_radiation_llm(Dataset):
     def __init__(self, root_path, flag='train', size=None,
                  features='S', data_path='Tokyo.csv',
                  target='solar_radiation', scale=True, timeenc=0, freq='h', percent=100,
-                 seasonal_patterns=None):
+                 seasonal_patterns=None,forecast_dim=2):
         if size == None:
             self.seq_len = 24 * 3
             self.label_len = 24
@@ -136,7 +136,7 @@ class Dataset_solar_radiation_llm(Dataset):
         assert flag in ['train', 'test', 'val']
         type_map = {'train': 0, 'val': 1, 'test': 2}
         self.set_type = type_map[flag]
-
+        self.forecast_dim = forecast_dim
         self.percent = percent
         self.features = features
         self.target = target
@@ -165,8 +165,10 @@ class Dataset_solar_radiation_llm(Dataset):
         cols.remove(self.target)
         cols.remove('date')
         df_raw = df_raw[['date'] + cols + [self.target]]
-        num_train = int(len(df_raw) * 0.7)
-        num_test = int(len(df_raw) * 0.2)
+        # num_train = int(len(df_raw) * 0.7)
+        # num_test = int(len(df_raw) * 0.2)
+        num_train = 8760 * 2 + 24
+        num_test = 8760
         num_vali = len(df_raw) - num_train - num_test
         border1s = [0, num_train - self.seq_len, len(df_raw) - num_test - self.seq_len]
         border2s = [num_train, num_train + num_vali, len(df_raw)]
@@ -220,7 +222,7 @@ class Dataset_solar_radiation_llm(Dataset):
         seq_y = self.data_y[r_begin:r_end, feat_id:feat_id + 1] if self.set_type != 2 else self.data_y[s_begin:s_end,-1:]
         seq_x_mark = self.data_stamp[s_begin:s_end]
         seq_y_mark = self.data_stamp[r_begin:r_end]
-        x_forecast = self.data_x[r_begin:r_end, :3]
+        x_forecast = self.data_x[r_begin:r_end, :self.forecast_dim]
 
         return seq_x, seq_y, seq_x_mark, seq_y_mark, x_forecast
 

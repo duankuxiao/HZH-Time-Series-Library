@@ -15,7 +15,7 @@ torch.manual_seed(fix_seed)
 np.random.seed(fix_seed)
 
 
-def get_setting(args):
+def get_setting(args,ii):
     setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_dropout{}_eb{}_{}_{}'.format(
         args.model_id,
         args.model,
@@ -41,15 +41,7 @@ def get_setting(args):
         setting += '_{}_llmd{}_llmf{}'.format(args.rnn_model, args.rnn_dim, args.rnn_layers, )
     return setting
 
-if __name__ == '__main__':
-    # from pv_configs import args
-    from solar_radiation_configs import args
-
-    args.top_k = 5
-    args.model_id = 'sr'
-    args.model = 'Transformer'  # [Autoformer, TimeLLM,TimeLLMForecast, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN]
-    args.llm_model = 'BERT'  # BERT LLAMA
-
+def main(args):
     args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False
     args.device = torch.device('cuda' if torch.cuda.is_available() and args.use_gpu else 'cpu')
     args.inverse = True
@@ -75,8 +67,8 @@ if __name__ == '__main__':
             args.llm_layers = 32
             args.llm_dim = 4096
         elif 'BERT' in args.llm_model:
-            args.d_model = 32
-            args.d_ff = 32  # d_ff < llm_dim
+            args.d_model = 16
+            args.d_ff = 68  # d_ff < llm_dim
             args.llm_layers = 6
             args.llm_dim = 768
         else:
@@ -86,7 +78,7 @@ if __name__ == '__main__':
         for ii in range(args.itr):
             exp = Exp(args)
             # setting record of experiments
-            setting = get_setting(args)
+            setting = get_setting(args,ii)
 
             print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
             exp.train(setting)
@@ -96,9 +88,19 @@ if __name__ == '__main__':
             torch.cuda.empty_cache()
     else:
         ii = 0
-        setting = get_setting(args)
+        setting = get_setting(args,ii)
 
         exp = Exp(args)  # set experiments
         print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
         exp.test(setting, test=1)
         torch.cuda.empty_cache()
+
+
+if __name__ == '__main__':
+    # from pv_configs import args
+    from solar_radiation_configs import args
+
+    args.model_id = '111'
+    args.model = 'TimeLLM'  # [Autoformer, TimeLLM,TimeLLMForecast, TimeLLMX, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN]
+    args.is_training = 0
+    main(args)

@@ -100,7 +100,7 @@ class Exp_Forecast(Exp_Basic):
         path = os.path.join(self.args.checkpoints, setting,'checkpoints')
         if not os.path.exists(path):
             os.makedirs(path)
-        save_config(self.args,os.path.join(path,'configs.pkl'))
+        save_config(self.args, os.path.join(path,'configs.pkl'))
 
         time_now = time.time()
 

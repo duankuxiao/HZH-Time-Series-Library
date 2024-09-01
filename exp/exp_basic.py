@@ -1,6 +1,6 @@
 import os
 import torch
-from models import Autoformer, TimeLLM, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerX, TransformerForecast, RNN,TimeLLMForecast
+from models import Autoformer, TimeLLM, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TimeLLMX, TransformerForecast, RNN,TimeLLMForecast
 
 
 class Exp_Basic(object):
@@ -16,7 +16,7 @@ class Exp_Basic(object):
             'TimeLLMForecast': TimeLLMForecast,
             'iTransformer': iTransformer,
             'TimeMixer': TimeMixer,
-            'TransformerX': TransformerX,
+            'TimeLLMX': TimeLLMX,
             'TransformerForecast':TransformerForecast,
             'RNN': RNN,
         }

@@ -36,7 +36,7 @@ parser.add_argument('--label_len', type=int, default=24, help='start token lengt
 parser.add_argument('--pred_len', type=int, default=24, help='prediction sequence length')
 parser.add_argument('--seq_dim', type=int, default=9, help='input sequence length')
 parser.add_argument('--pred_dim', type=int, default=9, help='input sequence length')
-parser.add_argument('--forecast_dim', type=int, default=3, help='input sequence length')
+parser.add_argument('--forecast_dim', type=int, default=2, help='input sequence length')
 
 parser.add_argument('--seasonal_patterns', type=str, default='Monthly', help='subset for M4')
 parser.add_argument('--inverse', action='store_true', help='inverse output data', default=False)

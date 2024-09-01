@@ -59,7 +59,7 @@ def transfer_test(args,path):
 
 
 if __name__ == '__main__':
-    path = r'D:\Time-LLM-main\results\Tokyo\sr_Transformer_Tokyo_ftM_sl72_ll24_pl24_sd9_dm512_nh8_el2_dl1_df2048_fc3_dropout0.1_ebtimeF_test_0'
+    path = r'D:\Time-LLM-main\results\111_RNN_Tokyo_ftM_sl72_ll24_pl24_sd9_dm512_nh8_el2_dl1_df2048_fc3_dropout0.1_ebtimeF_test_0_LSTM_llmd256_llmf2'
     args = load_config(os.path.join(path,'checkpoints','configs.pkl'))
 
     # args.model_id = 'tf'
@@ -69,5 +69,5 @@ if __name__ == '__main__':
 
     transfer_test(args,path)
 
-    res_path = r'D:\Time-LLM-main\results\sr_Transformer_{}_ftM_sl72_ll24_pl24_sd9_dm512_nh8_el2_dl1_df2048_fc3_dropout0.1_ebtimeF_test_0'.format(args.data)
+    res_path = r'D:\Time-LLM-main\results\111_RNN_{}_ftM_sl72_ll24_pl24_sd9_dm512_nh8_el2_dl1_df2048_fc3_dropout0.1_ebtimeF_test_0_LSTM_llmd256_llmf2'.format(args.data)
     res_evaluation(res_path,data=args.data)

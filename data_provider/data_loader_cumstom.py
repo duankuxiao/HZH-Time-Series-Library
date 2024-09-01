@@ -124,7 +124,7 @@ class Dataset_solar_radiation(Dataset):
     def __init__(self, root_path, flag='train', size=None,
                  features='S', data_path='Tokyo.csv',
                  target='solar_radiation', scale=True, timeenc=0, freq='h', percent=100,
-                 seasonal_patterns=None,forecast_dim=3):
+                 seasonal_patterns=None,forecast_dim=2):
         self.forecast_dim = forecast_dim
         if size == None:
             self.seq_len = 24 * 3
@@ -167,8 +167,10 @@ class Dataset_solar_radiation(Dataset):
         cols.remove(self.target)
         cols.remove('date')
         df_raw = df_raw[['date'] + cols + [self.target]]
-        num_train = int(len(df_raw) * 0.7)
-        num_test = int(len(df_raw) * 0.2)
+        # num_train = int(len(df_raw) * 0.7)
+        # num_test = int(len(df_raw) * 0.2)
+        num_train = 8760 * 2 + 24
+        num_test = 8760
         num_vali = len(df_raw) - num_train - num_test
         border1s = [0, num_train - self.seq_len, len(df_raw) - num_test - self.seq_len]
         border2s = [num_train, num_train + num_vali, len(df_raw)]

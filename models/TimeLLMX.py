@@ -224,6 +224,7 @@ class Model(nn.Module):
             raise NotImplementedError
 
         self.normalize_layers = Normalize(configs.enc_in, affine=False)
+        self.normalize_forecast_layers = Normalize(configs.forecast_dim, affine=False)
 
         self.llm_model.to(device=self.device)
         self.mapping_layer.to(device=self.device)
@@ -262,6 +263,9 @@ class Model(nn.Module):
         first_forecast_lags = self.calcute_lags(x_forecast[:,:,:1])
         second_forecast_lags = self.calcute_lags(x_forecast[:,:,1:2])
 
+        x_forecast = self.normalize_forecast_layers(x_forecast, 'norm')
+        B, pred_len, forecast_dim = x_forecast.size()
+        x_forecast = x_forecast.permute(0, 2, 1).contiguous().reshape(B * forecast_dim, pred_len, 1)
 
         prompt = []
         for b in range(x_enc.shape[0]):
@@ -299,10 +303,10 @@ class Model(nn.Module):
                 f"second future feature median value {median_values_str_2nd_forecast}, "
                 f"second future feature top {self.top_k} lags are : {lags_values_str_2nd_forecast}<|<end_prompt>|>"
             )
-
             prompt.append(prompt_)
 
         x_enc = x_enc.reshape(B, N, T).permute(0, 2, 1).contiguous()
+        x_forecast = x_forecast.reshape(B,forecast_dim, pred_len).permute(0, 2, 1).contiguous()
 
         prompt = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
         prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)
@@ -312,7 +316,12 @@ class Model(nn.Module):
         x_enc = x_enc.permute(0, 2, 1).contiguous()
         enc_out, n_vars = self.patch_embedding(x_enc.to(torch.bfloat16))
         enc_out = self.reprogramming_layer(enc_out, source_embeddings, source_embeddings)
-        llama_enc_out = torch.cat([prompt_embeddings, enc_out], dim=1)
+
+        x_forecast = x_forecast.permute(0, 2, 1).contiguous()
+        enc_forecast_out, n_vars = self.patch_embedding(x_forecast.to(torch.bfloat16))
+        enc_forecast_out = self.reprogramming_layer(enc_forecast_out, source_embeddings, source_embeddings)
+
+        llama_enc_out = torch.cat([prompt_embeddings, enc_out, enc_forecast_out], dim=1)
         dec_out = self.llm_model(inputs_embeds=llama_enc_out).last_hidden_state
         dec_out = dec_out[:, :, :self.d_ff]
 
