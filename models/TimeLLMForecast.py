@@ -224,6 +224,7 @@ class Model(nn.Module):
             raise NotImplementedError
 
         self.normalize_layers = Normalize(configs.enc_in, affine=False)
+        self.normalize_forecast_layers = Normalize(configs.forecast_dim, affine=False)
 
         self.llm_model.to(device=self.device)
         self.mapping_layer.to(device=self.device)
@@ -238,8 +239,9 @@ class Model(nn.Module):
         return None
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
-
+        x_forecast = x_forecast[:, -self.pred_len:, :]
         x_enc = self.normalize_layers(x_enc, 'norm')  # [B, seq_len, 1]
+        x_forecast = self.normalize_forecast_layers(x_forecast, 'norm')
 
         B, T, N = x_enc.size()
         x_enc = x_enc.permute(0, 2, 1).contiguous().reshape(B * N, T, 1)

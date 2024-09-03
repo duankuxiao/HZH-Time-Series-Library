@@ -239,8 +239,9 @@ class Model(nn.Module):
         return None
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
-
+        x_forecast = x_forecast[:, -self.pred_len:, :]
         x_enc = self.normalize_layers(x_enc, 'norm')  # [B, seq_len, 1]
+        x_forecast = self.normalize_forecast_layers(x_forecast, 'norm')
 
         B, T, N = x_enc.size()
         x_enc = x_enc.permute(0, 2, 1).contiguous().reshape(B * N, T, 1)
@@ -263,9 +264,8 @@ class Model(nn.Module):
         first_forecast_lags = self.calcute_lags(x_forecast[:,:,:1])
         second_forecast_lags = self.calcute_lags(x_forecast[:,:,1:2])
 
-        x_forecast = self.normalize_forecast_layers(x_forecast, 'norm')
         B, pred_len, forecast_dim = x_forecast.size()
-        x_forecast = x_forecast.permute(0, 2, 1).contiguous().reshape(B * forecast_dim, pred_len, 1)
+        x_forecast = x_forecast.permute(0, 2, 1).contiguous().reshape(B, pred_len*forecast_dim, 1)
 
         prompt = []
         for b in range(x_enc.shape[0]):
@@ -306,7 +306,6 @@ class Model(nn.Module):
             prompt.append(prompt_)
 
         x_enc = x_enc.reshape(B, N, T).permute(0, 2, 1).contiguous()
-        x_forecast = x_forecast.reshape(B,forecast_dim, pred_len).permute(0, 2, 1).contiguous()
 
         prompt = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
         prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)

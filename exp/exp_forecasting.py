@@ -219,15 +219,20 @@ class Exp_Forecast(Exp_Basic):
             print('loading model')
             if path is None:
                 model_path = os.path.join(self.args.checkpoints, setting,'checkpoints')
+                folder_path = os.path.join(self.args.checkpoints, setting)
+                if not os.path.exists(folder_path):
+                    os.makedirs(folder_path)
             else:
                 model_path = os.path.join(path,'checkpoints')
+                folder_path = path
             self.model.load_state_dict(torch.load(os.path.join(model_path, 'checkpoint')))
+        else:
+            folder_path = os.path.join(self.args.checkpoints, setting)
+            if not os.path.exists(folder_path):
+                os.makedirs(folder_path)
 
         preds = []
         trues = []
-        folder_path = os.path.join(self.args.checkpoints, setting, 'test_results')
-        if not os.path.exists(folder_path):
-            os.makedirs(folder_path)
 
         self.model.eval()
         with torch.no_grad():
@@ -283,7 +288,10 @@ class Exp_Forecast(Exp_Basic):
                         input = test_data.inverse_transform(input.reshape(shape[0] * shape[1], -1)).reshape(shape)
                     gt = np.concatenate((input[0, :, -1], true[0, :, -1]), axis=0)
                     pd = np.concatenate((input[0, :, -1], pred[0, :, -1]), axis=0)
-                    visual(gt, pd, os.path.join(folder_path, str(i) + '.pdf'))
+                    res_path = os.path.join(folder_path+'/test_results/')
+                    if not os.path.exists(res_path):
+                        os.makedirs(res_path)
+                    visual(gt, pd, os.path.join(res_path, str(i) + '.pdf'))
 
         preds = np.concatenate(preds, axis=0)
         trues = np.concatenate(trues, axis=0)
@@ -292,10 +300,6 @@ class Exp_Forecast(Exp_Basic):
         trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
         print('test shape:', preds.shape, trues.shape)
 
-        # result save
-        folder_path = os.path.join(self.args.checkpoints, setting)
-        if not os.path.exists(folder_path):
-            os.makedirs(folder_path)
 
         # dtw calculation
         if self.args.use_dtw:
@@ -320,15 +324,9 @@ class Exp_Forecast(Exp_Basic):
         f.write('\n')
         f.write('\n')
         f.close()
-        if path is None:
-            np.save(os.path.join(folder_path, 'metrics.npy'), np.array([mae, mse, rmse, r2, corr]))
-            np.save(os.path.join(folder_path,'pred.npy'), preds)
-            np.save(os.path.join(folder_path, 'true.npy'), trues)
-        else:
-            np.save(os.path.join(folder_path, 'metrics_{}.npy'.format(self.args.data)), np.array([mae, mse, rmse, r2, corr]))
-            np.save(os.path.join(folder_path, 'pred_{}.npy'.format(self.args.data)), preds)
-            np.save(os.path.join(folder_path, 'true_{}.npy'.format(self.args.data)), trues)
-
+        np.save(os.path.join(folder_path, 'metrics_{}.npy'.format(self.args.data)), np.array([mae, mse, rmse, r2, corr]))
+        np.save(os.path.join(folder_path, 'pred_{}.npy'.format(self.args.data)), preds)
+        np.save(os.path.join(folder_path, 'true_{}.npy'.format(self.args.data)), trues)
         self.res_evaluation(preds, trues,folder_path)
         return
 
@@ -342,8 +340,8 @@ class Exp_Forecast(Exp_Basic):
 
         [mse, rmse, mae, r2,corr] = results_evaluation(pred_res['true'].values, pred_res['pred'].values)
 
-        pred_res.to_csv(os.path.join(path, 'pred_results.csv'))
+        pred_res.to_csv(os.path.join(path, 'pred_results_{}.csv'.format(self.args.data)))
         metrics_df = pd.DataFrame({'mae':mae,'rmse':rmse,'r2':r2},index=[0])
-        metrics_df.to_csv(os.path.join(path, 'metrics_results.csv'))
+        metrics_df.to_csv(os.path.join(path, 'metrics_results_{}.csv'.format(self.args.data)))
 
         print('RMSE: {} MAE: {} R2: {}'.format(rmse,mae,r2))

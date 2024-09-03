@@ -21,9 +21,9 @@ class Model(nn.Module):
         elif configs.rnn_model == 'LSTM':
             self.rnn_layer = nn.LSTM(configs.seq_dim, configs.rnn_dim, configs.rnn_layers, batch_first=True)
 
-        self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len)
-
-        self.output_projection = nn.Linear(configs.rnn_dim, configs.pred_dim)
+        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
+            self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len)
+            self.output_projection = nn.Linear(configs.rnn_dim, configs.pred_dim)
 
         if self.task_name == 'classification' or self.task_name == 'anomaly_detection' or self.task_name == 'imputation':
             self.pred_len = configs.seq_len

@@ -100,7 +100,7 @@ if __name__ == '__main__':
     # from pv_configs import args
     from solar_radiation_configs import args
 
-    args.model_id = '111'
-    args.model = 'Transformer'  # [Autoformer, TimeLLM,TimeLLMForecast, TimeLLMX, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN]
+    args.model_id = 'sr'
+    args.model = 'RNN'  # [Autoformer, TimeLLM, TimeLLMForecast, TimeLLMX, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN,PatchTST]
     args.is_training = 1
     main(args)
