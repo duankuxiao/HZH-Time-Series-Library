@@ -14,18 +14,24 @@ data_dict = {
     'm4': Dataset_M4,
     'PV': Dataset_PV_hour,
     'PV7f': Dataset_PV_hour,
-    'Tokyo':Dataset_solar_radiation,  # Dataset_solar_radiation
-    'Naha':Dataset_solar_radiation,  # Dataset_solar_radiation
+    'Tokyo': Dataset_solar_radiation,  # Dataset_solar_radiation
+    'Naha': Dataset_solar_radiation,  # Dataset_solar_radiation
     'Sapporo': Dataset_solar_radiation,  # Dataset_solar_radiation
+    'Sendai': Dataset_solar_radiation,  # Dataset_solar_radiation
+    'Fukuoka': Dataset_solar_radiation,  # Dataset_solar_radiation
+    'Osaka': Dataset_solar_radiation,  # Dataset_solar_radiation
+
 }
 
 
 def data_provider(args, flag):
     Data = data_dict[args.data]
+
+    if 'TimeLLM' in args.model:
+        Data = Dataset_solar_radiation_llm  # Dataset_solar_radiation_llm
+
     if 'TimeLLM' in args.model and args.data == 'PV':
         Data = Dataset_PV_hour_llm  # Dataset_PV_hour_llm
-    if 'TimeLLM' in args.model and args.data == 'Tokyo':
-        Data = Dataset_solar_radiation_llm  # Dataset_solar_radiation_llm
 
     timeenc = 0 if args.embed != 'timeF' else 1
     percent = args.percent

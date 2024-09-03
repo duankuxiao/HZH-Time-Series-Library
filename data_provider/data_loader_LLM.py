@@ -120,8 +120,7 @@ class Dataset_PV_hour_llm(Dataset):
         return self.target_scaler.inverse_transform(data)
 
 class Dataset_solar_radiation_llm(Dataset):
-    def __init__(self, root_path, flag='train', size=None,
-                 features='S', data_path='Tokyo.csv',
+    def __init__(self, root_path, flag='train', size=None, features='S', data_path='Tokyo.csv',
                  target='solar_radiation', scale=True, timeenc=0, freq='h', percent=100,
                  seasonal_patterns=None,forecast_dim=2):
         if size == None:
@@ -155,8 +154,8 @@ class Dataset_solar_radiation_llm(Dataset):
         self.scaler = StandardScaler()
         self.target_scaler = StandardScaler()
 
-        df_raw = pd.read_csv(os.path.join(self.root_path,
-                                          self.data_path))
+        df_source_domain = pd.read_csv(os.path.join(self.root_path, 'Tokyo.csv'))
+        df_raw = pd.read_csv(os.path.join(self.root_path, self.data_path))
 
         '''
         df_raw.columns: ['date', ...(other features), target feature]
@@ -165,6 +164,8 @@ class Dataset_solar_radiation_llm(Dataset):
         cols.remove(self.target)
         cols.remove('date')
         df_raw = df_raw[['date'] + cols + [self.target]]
+        df_source_domain = df_source_domain[['date'] + cols + [self.target]]
+
         # num_train = int(len(df_raw) * 0.7)
         # num_test = int(len(df_raw) * 0.2)
         num_train = 8760 * 2 + 24
@@ -182,15 +183,28 @@ class Dataset_solar_radiation_llm(Dataset):
             cols_data = df_raw.columns[1:]
             df_data = df_raw[cols_data]
             df_target = df_raw[[self.target]]
+
+            cols_data_source_domain = df_source_domain.columns[1:]
+            df_data_source_domain = df_source_domain[cols_data_source_domain]
+            df_target_source_domain = df_source_domain[[self.target]]
+
         elif self.features == 'S':
             df_data = df_raw[[self.target]]
             df_target = df_raw[[self.target]]
 
+            df_data_source_domain = df_source_domain[[self.target]]
+            df_target_source_domain = df_source_domain[[self.target]]
+
         if self.scale:
-            train_data = df_data[border1s[0]:border2s[0]]
+            # train_data = df_data[border1s[0]:border2s[0]]
+            # self.scaler.fit(train_data.values)
+            # data = self.scaler.transform(df_data.values)
+            # self.target_scaler.fit(df_target.values)
+
+            train_data = df_data_source_domain[border1s[0]:border2s[0]]
             self.scaler.fit(train_data.values)
             data = self.scaler.transform(df_data.values)
-            self.target_scaler.fit(df_target.values)
+            self.target_scaler.fit(df_target_source_domain.values)
 
         else:
             data = df_data.values

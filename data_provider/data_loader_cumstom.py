@@ -157,8 +157,8 @@ class Dataset_solar_radiation(Dataset):
         self.scaler = StandardScaler()
         self.target_scaler = StandardScaler()
 
-        df_raw = pd.read_csv(os.path.join(self.root_path,
-                                          self.data_path))
+        df_source_domain = pd.read_csv(os.path.join(self.root_path, 'Tokyo.csv'))
+        df_raw = pd.read_csv(os.path.join(self.root_path, self.data_path))
 
         '''
         df_raw.columns: ['date', ...(other features), target feature]
@@ -184,19 +184,31 @@ class Dataset_solar_radiation(Dataset):
             cols_data = df_raw.columns[1:]
             df_data = df_raw[cols_data]
             df_target = df_raw[[self.target]]
+
+            cols_data_source_domain = df_source_domain.columns[1:]
+            df_data_source_domain = df_source_domain[cols_data_source_domain]
+            df_target_source_domain = df_source_domain[[self.target]]
+
         elif self.features == 'S':
             df_data = df_raw[[self.target]]
             df_target = df_raw[[self.target]]
 
+            df_data_source_domain = df_source_domain[[self.target]]
+            df_target_source_domain = df_source_domain[[self.target]]
+
         if self.scale:
-            train_data = df_data[border1s[0]:border2s[0]]
+            # train_data = df_data[border1s[0]:border2s[0]]
+            # self.scaler.fit(train_data.values)
+            # data = self.scaler.transform(df_data.values)
+            # self.target_scaler.fit(df_target.values)
+
+            train_data = df_data_source_domain[border1s[0]:border2s[0]]
             self.scaler.fit(train_data.values)
             data = self.scaler.transform(df_data.values)
-            self.target_scaler.fit(df_target.values)
-            df_target = self.target_scaler.transform(df_target.values)
+            self.target_scaler.fit(df_target_source_domain.values)
+
         else:
             data = df_data.values
-            df_target = df_target.values
 
         df_stamp = df_raw[['date']][border1:border2]
         df_stamp['date'] = pd.to_datetime(df_stamp.date)
