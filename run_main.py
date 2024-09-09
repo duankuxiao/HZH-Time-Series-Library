@@ -53,18 +53,13 @@ def main(args):
         args.device_ids = [int(id_) for id_ in device_ids]
         args.gpu = args.device_ids[0]
 
-    print('Args in experiment:')
-    print_args(args)
-
-    Exp = Exp_Forecast
-
     if 'TimeLLM' in args.model:
         args.learning_rate = 0.01
         args.content = load_content(args)
         if 'LLAMA' in args.llm_model:
-            args.d_model = 32
-            args.d_ff = 32
-            args.llm_layers = 32
+            args.d_model = 16
+            args.d_ff = 64
+            args.llm_layers = 6
             args.llm_dim = 4096
         elif 'BERT' in args.llm_model:
             args.d_model = 16
@@ -73,6 +68,16 @@ def main(args):
             args.llm_dim = 768
         else:
             raise ValueError('Unknown llm model')
+
+    if args.features == 'S':
+        args.enc_in = 1
+        args.dec_in = 1
+        args.c_out = 1
+
+    print('Args in experiment:')
+    print_args(args)
+
+    Exp = Exp_Forecast
 
     if args.is_training:
         for ii in range(args.itr):
@@ -91,16 +96,17 @@ def main(args):
         setting = get_setting(args,ii)
 
         exp = Exp(args)  # set experiments
-        print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
+        print(' >>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
         exp.test(setting, test=1)
         torch.cuda.empty_cache()
 
 
 if __name__ == '__main__':
-    # from pv_configs import args
-    from solar_radiation_configs import args
+    from pv_configs import args
+    # from solar_radiation_configs import args
 
-    args.model_id = 'sr'
-    args.model = 'RNN'  # [Autoformer, TimeLLM, TimeLLMForecast, TimeLLMX, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN,PatchTST]
+    args.model_id = 'PV'
+    args.model = 'TimeLLM'  # [Autoformer, TimeLLM, TimeLLMForecast, TimeLLMX, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN,PatchTST]
     args.is_training = 1
+    # args.features = 'S'
     main(args)

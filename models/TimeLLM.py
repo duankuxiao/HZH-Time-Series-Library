@@ -220,8 +220,7 @@ class Model(nn.Module):
         self.head_nf = self.d_ff * self.patch_nums
 
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
-            self.output_projection = FlattenHead(configs.enc_in, self.head_nf, self.pred_len,
-                                                 head_dropout=configs.dropout)
+            self.output_projection = FlattenHead(configs.enc_in, self.head_nf, self.pred_len, head_dropout=configs.dropout)
         else:
             raise NotImplementedError
 
@@ -240,7 +239,6 @@ class Model(nn.Module):
         return None
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
-
         x_enc = self.normalize_layers(x_enc, 'norm')
 
         B, T, N = x_enc.size()
@@ -281,7 +279,10 @@ class Model(nn.Module):
         x_enc = x_enc.permute(0, 2, 1).contiguous()
         enc_out, n_vars = self.patch_embedding(x_enc.to(torch.bfloat16))
         enc_out = self.reprogramming_layer(enc_out, source_embeddings, source_embeddings)
+
         llama_enc_out = torch.cat([prompt_embeddings, enc_out], dim=1)
+        # llama_enc_out = enc_out
+
         dec_out = self.llm_model(inputs_embeds=llama_enc_out).last_hidden_state
         dec_out = dec_out[:, :, :self.d_ff]
 
@@ -293,7 +294,6 @@ class Model(nn.Module):
         dec_out = dec_out.permute(0, 2, 1).contiguous()
 
         dec_out = self.normalize_layers(dec_out, 'denorm')
-
         return dec_out
 
     def calcute_lags(self, x_enc):

@@ -123,7 +123,7 @@ class Dataset_PV_hour(Dataset):
 class Dataset_solar_radiation(Dataset):
     def __init__(self, root_path, flag='train', size=None,
                  features='S', data_path='Tokyo.csv',
-                 target='solar_radiation', scale=True, timeenc=0, freq='h', percent=100,
+                 target='Global_horizontal_irradiance', scale=True, timeenc=0, freq='h', percent=100,
                  seasonal_patterns=None,forecast_dim=2):
         self.forecast_dim = forecast_dim
         if size == None:

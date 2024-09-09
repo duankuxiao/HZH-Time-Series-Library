@@ -59,10 +59,11 @@ def transfer_test(args,path):
 
 
 if __name__ == '__main__':
-    path = r'D:\Time-LLM-main\results\sr_TransformerForecast_Tokyo_ftM_sl72_ll24_pl24_sd9_dm512_nh8_el2_dl1_df2048_fc3_dropout0.1_ebtimeF_test_0'
+    path = r'D:\Time-LLM-main\results\sr_RNN_Tokyo_ftM_sl72_ll24_pl24_sd9_dm512_nh8_el8_dl1_df2048_fc3_dropout0.1_ebtimeF_test_0_LSTM_llmd256_llmf3'
     args = load_config(os.path.join(path,'checkpoints','configs.pkl'))
 
-    args.data = 'Tokyo'  # Sapporo Sendai Tokyo Osaka Fukuoka Naha
-    args.data_path = '{}.csv'.format(args.data)
+    for city in ['Sapporo','Naha']:
+        args.data = city  # Sapporo Sendai Tokyo Osaka Fukuoka Naha
+        args.data_path = '{}.csv'.format(args.data)
 
-    transfer_test(args, path)
+        transfer_test(args, path)

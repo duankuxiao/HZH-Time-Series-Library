@@ -17,13 +17,13 @@ class Model(nn.Module):
         self.task_name = configs.task_name
         self.seq_len = configs.seq_len
         if configs.rnn_model == 'GRU':
-            self.rnn_layer = nn.GRU(configs.seq_dim, configs.rnn_dim, configs.rnn_layers, batch_first=True)
+            self.rnn_layer = nn.GRU(configs.enc_in, configs.rnn_dim, configs.rnn_layers, batch_first=True)
         elif configs.rnn_model == 'LSTM':
-            self.rnn_layer = nn.LSTM(configs.seq_dim, configs.rnn_dim, configs.rnn_layers, batch_first=True)
+            self.rnn_layer = nn.LSTM(configs.enc_in, configs.rnn_dim, configs.rnn_layers, batch_first=True)
 
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len)
-            self.output_projection = nn.Linear(configs.rnn_dim, configs.pred_dim)
+            self.output_projection = nn.Linear(configs.rnn_dim, configs.c_out)
 
         if self.task_name == 'classification' or self.task_name == 'anomaly_detection' or self.task_name == 'imputation':
             self.pred_len = configs.seq_len

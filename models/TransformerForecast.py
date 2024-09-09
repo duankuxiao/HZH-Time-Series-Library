@@ -20,7 +20,7 @@ class Model(nn.Module):
         self.pred_len = configs.pred_len
         self.output_attention = configs.output_attention
         # Embedding
-        self.enc_embedding = DataEmbedding(configs.seq_dim, configs.d_model, configs.embed, configs.freq, configs.dropout)
+        self.enc_embedding = DataEmbedding(configs.enc_in, configs.d_model, configs.embed, configs.freq, configs.dropout)
         # Encoder
         self.encoder = Encoder(
             [
@@ -59,8 +59,9 @@ class Model(nn.Module):
                     for l in range(configs.d_layers)
                 ],
                 norm_layer=torch.nn.LayerNorm(configs.d_model),
-                projection=nn.Linear(configs.d_model, configs.pred_dim, bias=True)
             )
+            self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
+
         if self.task_name == 'imputation':
             self.projection = nn.Linear(configs.d_model, configs.pred_dim, bias=True)
         if self.task_name == 'anomaly_detection':
@@ -77,6 +78,7 @@ class Model(nn.Module):
 
         dec_out = self.dec_embedding(x_forecast, x_mark_dec)
         dec_out = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None)
+        dec_out = self.output_projection(dec_out)
         return dec_out
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):

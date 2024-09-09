@@ -51,7 +51,7 @@ parser.add_argument('--dec_in', type=int, default=9, help='decoder input size (f
 parser.add_argument('--c_out', type=int, default=9, help='output size (pred dim)')
 parser.add_argument('--d_model', type=int, default=512, help='dimension of model')
 parser.add_argument('--n_heads', type=int, default=8, help='num of heads')
-parser.add_argument('--e_layers', type=int, default=2, help='num of encoder layers')
+parser.add_argument('--e_layers', type=int, default=8, help='num of encoder layers')
 parser.add_argument('--d_layers', type=int, default=1, help='num of decoder layers')
 parser.add_argument('--d_ff', type=int, default=2048, help='dimension of fcn')
 parser.add_argument('--hidden_sizes', nargs='+', default=[128,128], help='output mlp layer')
@@ -82,8 +82,8 @@ parser.add_argument('--llm_layers', type=int, default=6, help='bert_layers=6 lla
 
 # RNN
 parser.add_argument('--rnn_model', type=str, default='LSTM', help='RNN model')  # GRU, LSTM, seq2seq
-parser.add_argument('--rnn_dim', type=int, default=512, help='LLM model dimension')  # LLama7b:4096; GPT2-small:768; BERT-base:768
-parser.add_argument('--rnn_layers', type=int, default=2, help='bert_layers=6 llama_layers=32')
+parser.add_argument('--rnn_dim', type=int, default=256, help='LLM model dimension')  # LLama7b:4096; GPT2-small:768; BERT-base:768
+parser.add_argument('--rnn_layers', type=int, default=3, help='bert_layers=6 llama_layers=32')
 
 # optimization
 parser.add_argument('--num_workers', type=int, default=1, help='data loader num workers')
@@ -92,7 +92,7 @@ parser.add_argument('--train_epochs', type=int, default=50, help='train epochs')
 parser.add_argument('--batch_size', type=int, default=24, help='batch size of train input data')
 parser.add_argument('--eval_batch_size', type=int, default=8, help='batch size of model evaluation')
 parser.add_argument('--patience', type=int, default=8, help='early stopping patience')
-parser.add_argument('--learning_rate', type=float, default=0.0001, help='optimizer learning rate 0.0001 for other models  0.01 for LLM')
+parser.add_argument('--learning_rate', type=float, default=0.001, help='optimizer learning rate 0.0001 for other models  0.01 for LLM')
 parser.add_argument('--des', type=str, default='test', help='exp description')
 parser.add_argument('--loss', type=str, default='MSE', help='loss function')
 parser.add_argument('--lradj', type=str, default='type1', help='adjust learning rate')
