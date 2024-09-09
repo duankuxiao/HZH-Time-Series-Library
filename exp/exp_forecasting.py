@@ -18,6 +18,7 @@ from torch.optim import lr_scheduler
 
 warnings.filterwarnings('ignore')
 
+
 class Exp_Forecast(Exp_Basic):
     def __init__(self, args):
         super(Exp_Forecast, self).__init__(args)
@@ -57,7 +58,7 @@ class Exp_Forecast(Exp_Basic):
         total_loss = []
         self.model.eval()
         with torch.no_grad():
-            for i, (batch_x, batch_y, batch_x_mark, batch_y_mark,x_forecast) in enumerate(vali_loader):
+            for i, (batch_x, batch_y, batch_x_mark, batch_y_mark, x_forecast) in enumerate(vali_loader):
                 batch_x = batch_x.float().to(self.device)
                 batch_y = batch_y.float()
 
@@ -71,15 +72,15 @@ class Exp_Forecast(Exp_Basic):
                 if self.args.use_amp:
                     with torch.amp.autocast():
                         if self.args.output_attention:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark,x_forecast)[0]
+                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)[0]
                         else:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark,x_forecast)
+                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
                 else:
                     if self.args.output_attention:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark,x_forecast)[0]
+                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)[0]
                     else:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark,x_forecast)
-                f_dim = -1 if self.args.features == 'MS' else 0
+                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
+                # f_dim = -1 if self.args.features == 'MS' else 0
                 f_dim = -1
                 outputs = outputs[:, -self.args.pred_len:, f_dim:]
                 batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
@@ -99,10 +100,10 @@ class Exp_Forecast(Exp_Basic):
         vali_data, vali_loader = self._get_data(flag='val')
         test_data, test_loader = self._get_data(flag='test')
 
-        path = os.path.join(self.args.checkpoints, setting,'checkpoints')
+        path = os.path.join(self.args.checkpoints, setting, 'checkpoints')
         if not os.path.exists(path):
             os.makedirs(path)
-        save_config(self.args, os.path.join(path,'configs.pkl'))
+        save_config(self.args, os.path.join(path, 'configs.pkl'))
 
         time_now = time.time()
 
@@ -122,7 +123,7 @@ class Exp_Forecast(Exp_Basic):
 
             self.model.train()
             epoch_time = time.time()
-            for i, (batch_x, batch_y, batch_x_mark, batch_y_mark,x_forecast) in enumerate(train_loader):
+            for i, (batch_x, batch_y, batch_x_mark, batch_y_mark, x_forecast) in enumerate(train_loader):
                 iter_count += 1
                 model_optim.zero_grad()
                 batch_x = batch_x.float().to(self.device)
@@ -142,10 +143,9 @@ class Exp_Forecast(Exp_Basic):
                 if self.args.use_amp:
                     with torch.cuda.amp.autocast():
                         if self.args.output_attention:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark,x_forecast)[0]
+                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)[0]
                         else:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark,x_forecast)
-
+                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
 
                         outputs = outputs[:, -self.args.pred_len:, f_dim:]
                         batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
@@ -153,9 +153,9 @@ class Exp_Forecast(Exp_Basic):
                         train_loss.append(loss.item())
                 else:
                     if self.args.output_attention:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark,x_forecast)[0]
+                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)[0]
                     else:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark,x_forecast)
+                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
 
                     outputs = outputs[:, -self.args.pred_len:, f_dim:]
                     batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
@@ -212,18 +212,18 @@ class Exp_Forecast(Exp_Basic):
 
         return self.model
 
-    def test(self, setting, test=0,path=None):
+    def test(self, setting, test=0, path=None):
         test_data, test_loader = self._get_data(flag='test')
 
         if test:
             print('loading model')
             if path is None:
-                model_path = os.path.join(self.args.checkpoints, setting,'checkpoints')
+                model_path = os.path.join(self.args.checkpoints, setting, 'checkpoints')
                 folder_path = os.path.join(self.args.checkpoints, setting)
                 if not os.path.exists(folder_path):
                     os.makedirs(folder_path)
             else:
-                model_path = os.path.join(path,'checkpoints')
+                model_path = os.path.join(path, 'checkpoints')
                 folder_path = path
             self.model.load_state_dict(torch.load(os.path.join(model_path, 'checkpoint')))
         else:
@@ -236,7 +236,7 @@ class Exp_Forecast(Exp_Basic):
 
         self.model.eval()
         with torch.no_grad():
-            for i, (batch_x, batch_y, batch_x_mark, batch_y_mark,x_forecast) in enumerate(test_loader):
+            for i, (batch_x, batch_y, batch_x_mark, batch_y_mark, x_forecast) in enumerate(test_loader):
                 batch_x = batch_x.float().to(self.device)
                 batch_y = batch_y.float().to(self.device)
 
@@ -250,20 +250,20 @@ class Exp_Forecast(Exp_Basic):
                 if self.args.use_amp:
                     with torch.amp.autocast():
                         if self.args.output_attention:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark,x_forecast)[0]
+                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)[0]
                         else:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark,x_forecast)
+                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
                 else:
                     if self.args.output_attention:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark,x_forecast)[0]
+                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)[0]
 
                     else:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark,x_forecast)
+                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
 
                 # f_dim = -1 if self.args.features == 'MS' else 0
                 f_dim = -1
                 outputs = outputs[:, -self.args.pred_len:, f_dim:]
-                batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
+                batch_y = batch_y[:, -self.args.pred_len:, f_dim:]  # .to(self.device)
                 outputs = outputs.detach().cpu().numpy()
                 batch_y = batch_y.detach().cpu().numpy()
                 if test_data.scale and self.args.inverse:
@@ -288,7 +288,7 @@ class Exp_Forecast(Exp_Basic):
                         input = test_data.inverse_transform(input.reshape(shape[0] * shape[1], -1)).reshape(shape)
                     gt = np.concatenate((input[0, :, -1], true[0, :, -1]), axis=0)
                     pd = np.concatenate((input[0, :, -1], pred[0, :, -1]), axis=0)
-                    res_path = os.path.join(folder_path+'/test_results/')
+                    res_path = os.path.join(folder_path + '/test_results/')
                     if not os.path.exists(res_path):
                         os.makedirs(res_path)
                     visual(gt, pd, os.path.join(res_path, str(i) + '.pdf'))
@@ -299,7 +299,6 @@ class Exp_Forecast(Exp_Basic):
         preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
         trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
         print('test shape:', preds.shape, trues.shape)
-
 
         # dtw calculation
         if self.args.use_dtw:
@@ -318,7 +317,7 @@ class Exp_Forecast(Exp_Basic):
 
         [mse, rmse, mae, r2, corr] = results_evaluation(trues.squeeze(), preds.squeeze())
         print('mae:{}, r2:{}, dtw:{}'.format(mae, r2, dtw))
-        f = open(os.path.join('./results',"result_long_term_forecast.txt"), 'a')
+        f = open(os.path.join('./results', "result_long_term_forecast.txt"), 'a')
         f.write(setting + "  \n")
         f.write('mae:{}, r2:{}, dtw:{}'.format(mae, r2, dtw))
         f.write('\n')
@@ -327,21 +326,21 @@ class Exp_Forecast(Exp_Basic):
         np.save(os.path.join(folder_path, 'metrics_{}.npy'.format(self.args.data)), np.array([mae, mse, rmse, r2, corr]))
         np.save(os.path.join(folder_path, 'pred_{}.npy'.format(self.args.data)), preds)
         np.save(os.path.join(folder_path, 'true_{}.npy'.format(self.args.data)), trues)
-        self.res_evaluation(preds, trues,folder_path)
+        self.res_evaluation(preds, trues, folder_path)
         return
 
-    def res_evaluation(self,pred,true,path):
-        pred_output = pred.squeeze()[::self.args.pred_len,:].reshape(-1,1)
-        true_output = true.squeeze()[::self.args.pred_len,:].reshape(-1,1)
-        pred_res = pd.DataFrame({'pred':pred_output.flatten(), 'true':true_output.flatten()})
+    def res_evaluation(self, pred, true, path):
+        pred_output = pred.squeeze()[::self.args.pred_len, :].reshape(-1, 1)
+        true_output = true.squeeze()[::self.args.pred_len, :].reshape(-1, 1)
+        pred_res = pd.DataFrame({'pred': pred_output.flatten(), 'true': true_output.flatten()})
         pred_res.loc[pred_res['true'] < 0.01, 'true'] = 0
         pred_res.loc[pred_res['true'] == 0, 'pred'] = 0
         pred_res.loc[pred_res['pred'] < 0, 'pred'] = 0
 
-        [mse, rmse, mae, r2,corr] = results_evaluation(pred_res['true'].values, pred_res['pred'].values)
+        [mse, rmse, mae, r2, corr] = results_evaluation(pred_res['true'].values, pred_res['pred'].values)
 
         pred_res.to_csv(os.path.join(path, 'pred_results_{}.csv'.format(self.args.data)))
-        metrics_df = pd.DataFrame({'mae':mae,'rmse':rmse,'r2':r2},index=[0])
+        metrics_df = pd.DataFrame({'mae': mae, 'rmse': rmse, 'r2': r2}, index=[0])
         metrics_df.to_csv(os.path.join(path, 'metrics_results_{}.csv'.format(self.args.data)))
 
-        print('RMSE: {} MAE: {} R2: {}'.format(rmse,mae,r2))
+        print('RMSE: {} MAE: {} R2: {}'.format(rmse, mae, r2))

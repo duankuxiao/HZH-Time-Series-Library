@@ -108,5 +108,5 @@ if __name__ == '__main__':
     args.model_id = 'PV'
     args.model = 'TimeLLM'  # [Autoformer, TimeLLM, TimeLLMForecast, TimeLLMX, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN,PatchTST]
     args.is_training = 1
-    # args.features = 'S'
+    args.features = 'S'
     main(args)

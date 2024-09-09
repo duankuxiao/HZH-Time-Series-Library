@@ -38,7 +38,7 @@ parser.add_argument('--seq_dim', type=int, default=11, help='input sequence leng
 parser.add_argument('--pred_dim', type=int, default=11, help='input sequence length')
 parser.add_argument('--forecast_dim', type=int, default=2, help='input sequence length')
 
-parser.add_argument('--seasonal_patterns', type=str, default='Monthly', help='subset for M4')
+parser.add_argument('--seasonal_patterns', type=str, default='Hourly', help='subset for M4')
 parser.add_argument('--inverse', action='store_true', help='inverse output data', default=False)
 
 # model define
