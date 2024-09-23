@@ -111,6 +111,8 @@ if __name__ == '__main__':
     args.model = 'Transformer'  # [Autoformer, TimeLLM, TimeLLMForecast, TimeLLMX, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST]
     args.is_training = 1
     # args.features = 'S'
-    args.scale=False
-
+    args.scale = False
+    args.feature_cols = ['Temperature','Precipitation','Wind_speed','Sunshine_duration','Global_horizontal_irradiance','Price']
+    args.enc_in = len(args.feature_cols)
+    args.dec_in = len(args.feature_cols)
     main(args)

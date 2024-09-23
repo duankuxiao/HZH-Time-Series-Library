@@ -53,7 +53,7 @@ class Dataset_PV_hour(Dataset):
         '''
         df_raw.columns: ['date', ...(other features), target feature]
         '''
-        cols = self.feature_cols
+        cols = self.feature_cols.copy()
         if self.target in cols:
             cols.remove(self.target)
         if 'date' in cols:
@@ -178,7 +178,7 @@ class Dataset_solar_radiation(Dataset):
         '''
         df_raw.columns: ['date', ...(other features), target feature]
         '''
-        cols = self.feature_cols
+        cols = self.feature_cols.copy()
         if self.target in cols:
             cols.remove(self.target)
         if 'date' in cols:
