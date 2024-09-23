@@ -1,7 +1,7 @@
 from data_provider.data_loader import Dataset_ETT_hour, Dataset_ETT_minute, Dataset_Custom, Dataset_M4
 from torch.utils.data import DataLoader
-from data_provider.data_loader_cumstom import Dataset_PV_hour,Dataset_solar_radiation
-from data_provider.data_loader_LLM import Dataset_PV_hour_llm,Dataset_solar_radiation_llm
+from data_provider.data_loader_cumstom import Dataset_PV_hour, Dataset_solar_radiation
+from data_provider.data_loader_LLM import Dataset_PV_hour_llm, Dataset_solar_radiation_llm
 
 data_dict = {
     'ETTh1': Dataset_ETT_hour,
@@ -27,11 +27,11 @@ data_dict = {
 def data_provider(args, flag):
     Data = data_dict[args.data]
 
-    if 'TimeLLM' in args.model:
-        Data = Dataset_solar_radiation_llm  # Dataset_solar_radiation_llm
-
-    if 'TimeLLM' in args.model and args.data == 'PV':
-        Data = Dataset_PV_hour_llm  # Dataset_PV_hour_llm
+    # if 'TimeLLM' in args.model:
+    #     Data = Dataset_solar_radiation_llm  # Dataset_solar_radiation_llm
+    #
+    # if 'TimeLLM' in args.model and args.data == 'PV':
+    #     Data = Dataset_PV_hour_llm  # Dataset_PV_hour_llm
 
     timeenc = 0 if args.embed != 'timeF' else 1
     percent = args.percent
@@ -71,7 +71,10 @@ def data_provider(args, flag):
             timeenc=timeenc,
             freq=freq,
             percent=percent,
-            seasonal_patterns=args.seasonal_patterns
+            scale=args.scale,
+            seasonal_patterns=args.seasonal_patterns,
+            forecast_dim=args.forecast_dim,
+            feature_cols=args.feature_cols,
         )
     data_loader = DataLoader(
         data_set,

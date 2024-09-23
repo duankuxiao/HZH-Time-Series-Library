@@ -143,8 +143,15 @@ def load_content(args):
         file = 'ETT'
     else:
         file = args.data
-    with open('./dataset/prompt_bank/{0}.txt'.format(file), 'r', encoding='utf-8') as f:
-        content = f.read()
+    if args.target == 'Global_horizontal_irradiance':
+        with open('./dataset/prompt_bank/sr/{0}.txt'.format(file), 'r', encoding='utf-8') as f:
+            content = f.read()
+    elif args.target == 'Price':
+        with open('./dataset/prompt_bank/price/{0}.txt'.format(file), 'r', encoding='utf-8') as f:
+            content = f.read()
+    else:
+        with open('./dataset/prompt_bank/{0}.txt'.format(file), 'r', encoding='utf-8') as f:
+            content = f.read()
     return content
 
 

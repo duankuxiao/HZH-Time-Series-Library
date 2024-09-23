@@ -3,21 +3,21 @@ import argparse
 parser = argparse.ArgumentParser(description='Time-LLM')
 
 # basic config
-parser.add_argument('--task_name', type=str,  default='long_term_forecast',
+parser.add_argument('--task_name', type=str, default='long_term_forecast',
                     help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]')
 parser.add_argument('--is_training', type=int, default=1, help='status')
-parser.add_argument('--model_id', type=str, default='forecast', help='model id')
-parser.add_argument('--model_comment', type=str, default='PV', help='prefix when saving test results')
-parser.add_argument('--model', type=str, default='DLinear',
-                    help='model name, options: [Autoformer, TimeLLM,TimeLLMForecast, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerX, RNN, PatchTST]')
+parser.add_argument('--model_id', type=str, default='test', help='model id')
+parser.add_argument('--model_comment', type=str, default='solar', help='prefix when saving test results')
+parser.add_argument('--model', type=str, default='TimeLLMForecast',
+                    help='model name, options: [Autoformer, TimeLLM,TimeLLMForecast, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerX, RNN]')
 
 # data loader
-parser.add_argument('--data', type=str, default='PV', help='dataset type')
-parser.add_argument('--root_path', type=str, default='./dataset/PV', help='root path of the data file')
-parser.add_argument('--data_path', type=str, default='PV_hour_7f.csv', help='data file PV_hour.csv or PV_hour_7f.csv')
+parser.add_argument('--data', type=str, default='Tokyo', help='dataset type')
+parser.add_argument('--root_path', type=str, default='./dataset/price', help='root path of the data file')
+parser.add_argument('--data_path', type=str, default='Tokyo.csv', help='data file')
 parser.add_argument('--features', type=str, default='MS', help='forecasting task, options:[M, S, MS]; '
                          'M:multivariate predict multivariate, S: univariate predict univariate, ' 'MS:multivariate predict univariate')
-parser.add_argument('--target', type=str, default='PV', help='target feature in S or MS task')
+parser.add_argument('--target', type=str, default='Price', help='target feature in S or MS task')
 parser.add_argument('--loader', type=str, default='modal', help='dataset type')
 parser.add_argument('--freq', type=str, default='h', help='freq for time features encoding, '
                          'options:[s:secondly, t:minutely, h:hourly, d:daily, b:business days, w:weekly, m:monthly], '
@@ -31,14 +31,13 @@ parser.add_argument('--use_multi_gpu', action='store_true', help='use multiple g
 parser.add_argument('--devices', type=str, default='0,1,2,3', help='device ids of multile gpus')
 
 # forecasting task
-parser.add_argument('--seq_len', type=int, default=72, help='input sequence length')
+parser.add_argument('--seq_len', type=int, default=24, help='input sequence length')
 parser.add_argument('--label_len', type=int, default=24, help='start token length')
 parser.add_argument('--pred_len', type=int, default=24, help='prediction sequence length')
-parser.add_argument('--seq_dim', type=int, default=11, help='input sequence length')
+parser.add_argument('--seq_dim', type=int, default=9, help='input sequence length')
 parser.add_argument('--pred_dim', type=int, default=1, help='input sequence length')
 parser.add_argument('--forecast_dim', type=int, default=2, help='input sequence length')
-parser.add_argument('--feature_cols', type=list, default=['Temperature','Relative_humidity','Sun','Dew_point','Global_horizontal_irradiance','Sunshine_duration','PV'], help='input sequence length')
-
+parser.add_argument('--feature_cols', type=list, default=['Temperature','Relative_humidity','Precipitation','Dew_point','Vapor_pressure','Wind_speed','Sunshine_duration','Snowfall','Global_horizontal_irradiance','Price'], help='input sequence length')
 
 parser.add_argument('--seasonal_patterns', type=str, default='Hourly', help='subset for M4')
 parser.add_argument('--inverse', action='store_true', help='inverse output data', default=False)
@@ -48,9 +47,9 @@ parser.add_argument('--top_k', type=int, default=5, help='for TimesBlock')
 parser.add_argument('--num_kernels', type=int, default=6, help='for Inception')
 parser.add_argument('--distil', action='store_false',help='whether to use distilling in encoder, using this argument means not using distilling',default=True)
 
-parser.add_argument('--enc_in', type=int, default=11, help='encoder input size (seq features dim)')
-parser.add_argument('--dec_in', type=int, default=11, help='decoder input size (forecast dim)')
-parser.add_argument('--c_out', type=int, default=11, help='output size (pred dim)')
+parser.add_argument('--enc_in', type=int, default=10, help='encoder input size (seq features dim)')
+parser.add_argument('--dec_in', type=int, default=10, help='decoder input size (forecast dim)')
+parser.add_argument('--c_out', type=int, default=10, help='output size (pred dim)')
 parser.add_argument('--d_model', type=int, default=512, help='dimension of model')
 parser.add_argument('--n_heads', type=int, default=8, help='num of heads')
 parser.add_argument('--e_layers', type=int, default=8, help='num of encoder layers')
@@ -59,7 +58,7 @@ parser.add_argument('--d_ff', type=int, default=2048, help='dimension of fcn')
 parser.add_argument('--hidden_sizes', nargs='+', default=[128,128], help='output mlp layer')
 
 # Autoformer
-parser.add_argument('--moving_avg', type=int, default=25, help='window size of moving average for Autoformer')
+parser.add_argument('--moving_avg', type=int, default=24, help='window size of moving average for Autoformer')
 # TimeMixer
 parser.add_argument('--down_sampling_window', type=int, default=1, help='down sampling window size for TimeMixer')
 parser.add_argument('--down_sampling_layers', type=int, default=0, help='num of down sampling layers for TimeMixer')
@@ -131,6 +130,7 @@ if __name__ == '__main__':
     Exp = Exp_Forecast
 
     if 'TimeLLM' in args.model:
+        args.learning_rate = 0.01
         args.content = load_content(args)
         if 'LLAMA' in args.llm_model:
             args.d_model = 16
@@ -166,10 +166,10 @@ if __name__ == '__main__':
                 args.embed,
                 args.des, ii)
 
-            if args.model == 'TimeLLM':
-                setting += '_{}_llmd{}_llmf{}'.format(args.llm_model, args.llm_dim, args.llm_layers, )
-            if args.model == 'RNN':
-                setting += '_{}_llmd{}_llmf{}'.format(args.rnn_model, args.rnn_dim, args.rnn_layers, )
+            if 'TimeLLM' in args.model:
+                setting += '_{}_llmd{}_llmf{}'.format(args.llm_model,args.llm_dim,args.llm_layers,)
+            if 'RNN' in args.model:
+                setting += '_{}_llmd{}_llmf{}'.format(args.rnn_model,args.rnn_dim,args.rnn_layers,)
 
             print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
             exp.train(setting)

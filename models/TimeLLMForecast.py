@@ -40,7 +40,7 @@ class Model(nn.Module):
         self.d_llm = configs.llm_dim
         self.patch_len = configs.patch_len
         self.stride = configs.stride
-        self.forecast_prompt = False
+
         if configs.llm_model == 'LLAMA':
             # self.llama_config = LlamaConfig.from_pretrained('/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/')
             self.llama_config = LlamaConfig.from_pretrained(r'D:\LLM\llama')
@@ -251,37 +251,38 @@ class Model(nn.Module):
         medians = torch.median(x_enc, dim=1).values
         lags = self.calcute_lags(x_enc)
         trends = x_enc.diff(dim=1).sum(dim=1)
-        if self.forecast_prompt:
-            first_forecast_min_values = torch.min(x_forecast[:,:,:1],dim=1)[0]
-            second_forecast_min_values = torch.min(x_forecast[:,:,1:2],dim=1)[0]
-            first_forecast_max_values = torch.max(x_forecast[:,:,:1],dim=1)[0]
-            second_forecast_max_values = torch.max(x_forecast[:,:,1:2],dim=1)[0]
-            first_forecast_medians = torch.median(x_forecast[:,:,:1], dim=1).values
-            second_forecast_medians = torch.median(x_forecast[:,:,1:2], dim=1).values
-            first_forecast_lags = self.calcute_lags(x_forecast[:,:,:1])
-            second_forecast_lags = self.calcute_lags(x_forecast[:,:,1:2])
-            prompt_forecast = []
+
+        first_forecast_min_values = torch.min(x_forecast[:,:,:1],dim=1)[0]
+        second_forecast_min_values = torch.min(x_forecast[:,:,1:2],dim=1)[0]
+
+        first_forecast_max_values = torch.max(x_forecast[:,:,:1],dim=1)[0]
+        second_forecast_max_values = torch.max(x_forecast[:,:,1:2],dim=1)[0]
+
+        first_forecast_medians = torch.median(x_forecast[:,:,:1], dim=1).values
+        second_forecast_medians = torch.median(x_forecast[:,:,1:2], dim=1).values
+
+        first_forecast_lags = self.calcute_lags(x_forecast[:,:,:1])
+        second_forecast_lags = self.calcute_lags(x_forecast[:,:,1:2])
 
         B, pred_len, forecast_dim = x_forecast.size()
         x_forecast = x_forecast.permute(0, 2, 1).contiguous().reshape(B, pred_len*forecast_dim, 1)
 
         prompt = []
-
         for b in range(x_enc.shape[0]):
             min_values_str = str(min_values[b].tolist()[0])
             max_values_str = str(max_values[b].tolist()[0])
             median_values_str = str(medians[b].tolist()[0])
             lags_values_str = str(lags[b].tolist())
-            if self.forecast_prompt:
-                min_values_str_1st_forecast = str(first_forecast_min_values[b].tolist()[0])
-                max_values_str_1st_forecast = str(first_forecast_max_values[b].tolist()[0])
-                median_values_str_1st_forecast = str(first_forecast_medians[b].tolist()[0])
-                lags_values_str_1st_forecast = str(first_forecast_lags[b].tolist())
 
-                min_values_str_2nd_forecast = str(second_forecast_min_values[b].tolist()[0])
-                max_values_str_2nd_forecast = str(second_forecast_max_values[b].tolist()[0])
-                median_values_str_2nd_forecast = str(second_forecast_medians[b].tolist()[0])
-                lags_values_str_2nd_forecast = str(second_forecast_lags[b].tolist())
+            min_values_str_1st_forecast = str(first_forecast_min_values[b].tolist()[0])
+            max_values_str_1st_forecast = str(first_forecast_max_values[b].tolist()[0])
+            median_values_str_1st_forecast = str(first_forecast_medians[b].tolist()[0])
+            lags_values_str_1st_forecast = str(first_forecast_lags[b].tolist())
+
+            min_values_str_2nd_forecast = str(second_forecast_min_values[b].tolist()[0])
+            max_values_str_2nd_forecast = str(second_forecast_max_values[b].tolist()[0])
+            median_values_str_2nd_forecast = str(second_forecast_medians[b].tolist()[0])
+            lags_values_str_2nd_forecast = str(second_forecast_lags[b].tolist())
 
             prompt_ = (
                 f"<|start_prompt|>Dataset description: {self.description}"
@@ -291,32 +292,23 @@ class Model(nn.Module):
                 f"max value {max_values_str}, "
                 f"median value {median_values_str}, "
                 f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
-                f"top 5 lags are : {lags_values_str}<|<end_prompt>|>"
+                f"top 5 lags are : {lags_values_str}"
+                "Input known future data statistics: "
+                f"first future feature min value {min_values_str_1st_forecast}, "
+                f"first future feature max value {max_values_str_1st_forecast}, "
+                f"first future feature median value {median_values_str_1st_forecast}, "
+                f"first future feature top {self.top_k} lags are : {lags_values_str_1st_forecast}"
+                f"second future feature min value {min_values_str_2nd_forecast}, "
+                f"second future feature max value {max_values_str_2nd_forecast}, "
+                f"second future feature median value {median_values_str_2nd_forecast}, "
+                f"second future feature top {self.top_k} lags are : {lags_values_str_2nd_forecast}<|<end_prompt>|>"
             )
             prompt.append(prompt_)
-            if self.forecast_prompt:
-                prompt_forecast_ = (
-                    f"<|start_prompt|>Dataset description: {self.description}"
-                    f"Task description: forecast the next {str(self.pred_len)} steps given the known future {str(self.pred_len)} steps information; "
-                    "Input known future data statistics: "
-                    f"first future feature min value {min_values_str_1st_forecast}, "
-                    f"first future feature max value {max_values_str_1st_forecast}, "
-                    f"first future feature median value {median_values_str_1st_forecast}, "
-                    f"first future feature top {self.top_k} lags are : {lags_values_str_1st_forecast}"
-                    f"second future feature min value {min_values_str_2nd_forecast}, "
-                    f"second future feature max value {max_values_str_2nd_forecast}, "
-                    f"second future feature median value {median_values_str_2nd_forecast}, "
-                    f"second future feature top {self.top_k} lags are : {lags_values_str_2nd_forecast}<|<end_prompt>|>"
-                )
-                prompt_forecast.append(prompt_forecast_)
 
         x_enc = x_enc.reshape(B, N, T).permute(0, 2, 1).contiguous()
 
         prompt = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
         prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)
-
-        # prompt_forecast = self.tokenizer(prompt_forecast, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
-        # prompt_forecast_embeddings = self.llm_model.get_input_embeddings()(prompt_forecast.to(x_enc.device))  # (batch, prompt_token, dim)
 
         source_embeddings = self.mapping_layer(self.word_embeddings.permute(1, 0)).permute(1, 0)
 

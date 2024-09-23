@@ -59,7 +59,7 @@ def transfer_test(args,path):
 
 
 if __name__ == '__main__':
-    path = r'D:\Time-LLM-main\results\sr_RNN_Tokyo_ftM_sl72_ll24_pl24_sd9_dm512_nh8_el8_dl1_df2048_fc3_dropout0.1_ebtimeF_test_0_LSTM_llmd256_llmf3'
+    path = r'D:\Time-LLM-main\results\sr_TimeLLM_Tokyo_ftMS_sl72_ll24_pl24_sd9_dm64_nh8_el8_dl1_df256_fc3_dropout0.1_ebtimeF_test_0_BERT_llmd768_llmf6_tk5'
     args = load_config(os.path.join(path,'checkpoints','configs.pkl'))
 
     for city in ['Sapporo','Naha']:

@@ -80,8 +80,8 @@ class Exp_Forecast(Exp_Basic):
                         outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)[0]
                     else:
                         outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
-                # f_dim = -1 if self.args.features == 'MS' else 0
-                f_dim = -1
+
+                f_dim = -self.args.pred_dim
                 outputs = outputs[:, -self.args.pred_len:, f_dim:]
                 batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
 
@@ -136,8 +136,7 @@ class Exp_Forecast(Exp_Basic):
                 dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
                 dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
 
-                # f_dim = -1 if self.args.features == 'MS' else 0
-                f_dim = -1
+                f_dim = -self.args.pred_dim
 
                 # encoder - decoder
                 if self.args.use_amp:
@@ -260,8 +259,7 @@ class Exp_Forecast(Exp_Basic):
                     else:
                         outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
 
-                # f_dim = -1 if self.args.features == 'MS' else 0
-                f_dim = -1
+                f_dim = -self.args.pred_dim
                 outputs = outputs[:, -self.args.pred_len:, f_dim:]
                 batch_y = batch_y[:, -self.args.pred_len:, f_dim:]  # .to(self.device)
                 outputs = outputs.detach().cpu().numpy()

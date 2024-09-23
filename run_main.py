@@ -39,6 +39,8 @@ def get_setting(args,ii):
         setting += '_{}_llmd{}_llmf{}_tk{}'.format(args.llm_model, args.llm_dim, args.llm_layers, args.top_k)
     if 'RNN' in args.model:
         setting += '_{}_llmd{}_llmf{}'.format(args.rnn_model, args.rnn_dim, args.rnn_layers, )
+    if args.percent != 100:
+        setting = 'few-shot{}_'.format(args.percent) + setting
     return setting
 
 def main(args):
@@ -63,7 +65,7 @@ def main(args):
             args.llm_dim = 4096
         elif 'BERT' in args.llm_model:
             args.d_model = 16
-            args.d_ff = 68  # d_ff < llm_dim
+            args.d_ff = 64  # d_ff < llm_dim
             args.llm_layers = 6
             args.llm_dim = 768
         else:
@@ -102,11 +104,13 @@ def main(args):
 
 
 if __name__ == '__main__':
-    from pv_configs import args
+    # from pv_configs import args
     # from solar_radiation_configs import args
-
-    args.model_id = 'PV'
-    args.model = 'TimeLLM'  # [Autoformer, TimeLLM, TimeLLMForecast, TimeLLMX, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN,PatchTST]
+    from price_configs import args
+    args.model_id = 'test'
+    args.model = 'Transformer'  # [Autoformer, TimeLLM, TimeLLMForecast, TimeLLMX, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST]
     args.is_training = 1
-    args.features = 'S'
+    # args.features = 'S'
+    args.scale=False
+
     main(args)

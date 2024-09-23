@@ -1,4 +1,4 @@
-date,temp,RH,Sun,dewpoint_temp,total_radiation,sunshine_duration,PV
+date,Temperature,Relative_humidity,Sun,Dew_point,Global_horizontal_irradiance,Sunshine_duration,PV
 2020/11/9 13:00,16.4,37,1,1.7,1.43,0.5,1.102
 2020/11/9 14:00,16.6,32,1,-0.1,0.94,0.2,0.748
 2020/11/9 15:00,15.5,37,1,0.9,0.52,0.1,0.545

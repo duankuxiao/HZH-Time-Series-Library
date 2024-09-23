@@ -15,7 +15,7 @@ parser.add_argument('--model', type=str, default='TimeLLMForecast',
 parser.add_argument('--data', type=str, default='Tokyo', help='dataset type')
 parser.add_argument('--root_path', type=str, default='./dataset/solar_radiation', help='root path of the data file')
 parser.add_argument('--data_path', type=str, default='Tokyo.csv', help='data file')
-parser.add_argument('--features', type=str, default='M', help='forecasting task, options:[M, S, MS]; '
+parser.add_argument('--features', type=str, default='MS', help='forecasting task, options:[M, S, MS]; '
                          'M:multivariate predict multivariate, S: univariate predict univariate, ' 'MS:multivariate predict univariate')
 parser.add_argument('--target', type=str, default='Global_horizontal_irradiance', help='target feature in S or MS task')
 parser.add_argument('--loader', type=str, default='modal', help='dataset type')
@@ -31,12 +31,13 @@ parser.add_argument('--use_multi_gpu', action='store_true', help='use multiple g
 parser.add_argument('--devices', type=str, default='0,1,2,3', help='device ids of multile gpus')
 
 # forecasting task
-parser.add_argument('--seq_len', type=int, default=72, help='input sequence length')
+parser.add_argument('--seq_len', type=int, default=24, help='input sequence length')
 parser.add_argument('--label_len', type=int, default=24, help='start token length')
 parser.add_argument('--pred_len', type=int, default=24, help='prediction sequence length')
 parser.add_argument('--seq_dim', type=int, default=9, help='input sequence length')
-parser.add_argument('--pred_dim', type=int, default=9, help='input sequence length')
+parser.add_argument('--pred_dim', type=int, default=1, help='input sequence length')
 parser.add_argument('--forecast_dim', type=int, default=2, help='input sequence length')
+parser.add_argument('--feature_cols', type=list, default=['Temperature','Relative_humidity','Precipitation','Dew_point','Vapor_pressure','Wind_speed','Sunshine_duration','Snowfall','Global_horizontal_irradiance'], help='input sequence length')
 
 parser.add_argument('--seasonal_patterns', type=str, default='Hourly', help='subset for M4')
 parser.add_argument('--inverse', action='store_true', help='inverse output data', default=False)

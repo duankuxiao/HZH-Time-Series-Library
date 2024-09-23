@@ -60,7 +60,9 @@ class Model(nn.Module):
                 ],
                 norm_layer=torch.nn.LayerNorm(configs.d_model),
             )
-            self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
+            # self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
+
+            self.output_projection = nn.Linear(configs.d_model, configs.pred_len, bias=True)
 
         if self.task_name == 'imputation':
             self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
@@ -79,6 +81,8 @@ class Model(nn.Module):
         dec_out = self.dec_embedding(x_dec, x_mark_dec)
         dec_out = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None)
         dec_out = self.output_projection(dec_out)
+
+        # dec_out = self.output_projection(dec_out[:,-1:,:]).permute(0,2,1)
         return dec_out
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):

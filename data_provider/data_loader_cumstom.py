@@ -12,8 +12,10 @@ class Dataset_PV_hour(Dataset):
     def __init__(self, root_path, flag='train', size=None,
                  features='S', data_path='PV_power.csv',
                  target='PV', scale=True, timeenc=0, freq='h', percent=100,
-                 seasonal_patterns=None,forecast_dim=3):
+                 seasonal_patterns=None,forecast_dim=2,feature_cols=['Temperature']):
         self.forecast_dim = forecast_dim
+        self.feature_cols = feature_cols
+
         if size == None:
             self.seq_len = 24 * 4 * 4
             self.label_len = 24 * 4
@@ -51,9 +53,11 @@ class Dataset_PV_hour(Dataset):
         '''
         df_raw.columns: ['date', ...(other features), target feature]
         '''
-        cols = list(df_raw.columns)
-        cols.remove(self.target)
-        cols.remove('date')
+        cols = self.feature_cols
+        if self.target in cols:
+            cols.remove(self.target)
+        if 'date' in cols:
+            cols.remove('date')
         df_raw = df_raw[['date'] + cols + [self.target]]
         num_train = 8760
         num_test = 8760
@@ -66,13 +70,17 @@ class Dataset_PV_hour(Dataset):
         if self.set_type == 0:
             border2 = (border2 - self.seq_len) * self.percent // 100 + self.seq_len
 
-        if self.features == 'M' or self.features == 'MS':
-            cols_data = df_raw.columns[1:]
-            df_data = df_raw[cols_data]
-            df_target = df_raw[[self.target]]
-        elif self.features == 'S':
-            df_data = df_raw[[self.target]]
-            df_target = df_raw[[self.target]]
+        # if self.features == 'M' or self.features == 'MS':
+        #     cols_data = df_raw.columns[1:]
+        #     df_data = df_raw[cols_data]
+        #     df_target = df_raw[[self.target]]
+        # elif self.features == 'S':
+        #     df_data = df_raw[[self.target]]
+        #     df_target = df_raw[[self.target]]
+
+        cols_data = df_raw.columns[1:]
+        df_data = df_raw[cols_data]
+        df_target = df_raw[[self.target]]
 
         if self.scale:
             train_data = df_data[border1s[0]:border2s[0]]
@@ -96,8 +104,14 @@ class Dataset_PV_hour(Dataset):
             data_stamp = time_features(pd.to_datetime(df_stamp['date'].values), freq=self.freq)
             data_stamp = data_stamp.transpose(1, 0)
 
-        self.data_x = data[border1:border2]
-        self.data_y = data[border1:border2]
+        if self.features == 'M' or self.features == 'MS':
+            self.data_x = data[border1:border2,:len(self.feature_cols)]
+            self.data_y = data[border1:border2,:len(self.feature_cols)]
+        elif self.features == 'S':
+            self.data_x = data[border1:border2, -1:]
+            self.data_y = data[border1:border2, -1:]
+
+        self.data_forecast = data[border1:border2, :self.forecast_dim]
         self.data_stamp = data_stamp
 
     def __getitem__(self, index):
@@ -110,7 +124,7 @@ class Dataset_PV_hour(Dataset):
         seq_y = self.data_y[r_begin:r_end, :]
         seq_x_mark = self.data_stamp[s_begin:s_end]
         seq_y_mark = self.data_stamp[r_begin:r_end]
-        x_forecast = self.data_x[r_begin:r_end, :self.forecast_dim]
+        x_forecast = self.data_forecast[r_begin:r_end, :self.forecast_dim]
 
         return seq_x, seq_y, seq_x_mark, seq_y_mark, x_forecast
 
@@ -124,8 +138,9 @@ class Dataset_solar_radiation(Dataset):
     def __init__(self, root_path, flag='train', size=None,
                  features='S', data_path='Tokyo.csv',
                  target='Global_horizontal_irradiance', scale=True, timeenc=0, freq='h', percent=100,
-                 seasonal_patterns=None,forecast_dim=2):
+                 seasonal_patterns=None,forecast_dim=2,feature_cols=['Temperature']):
         self.forecast_dim = forecast_dim
+        self.feature_cols = feature_cols
         if size == None:
             self.seq_len = 24 * 3
             self.label_len = 24
@@ -163,9 +178,11 @@ class Dataset_solar_radiation(Dataset):
         '''
         df_raw.columns: ['date', ...(other features), target feature]
         '''
-        cols = list(df_raw.columns)
-        cols.remove(self.target)
-        cols.remove('date')
+        cols = self.feature_cols
+        if self.target in cols:
+            cols.remove(self.target)
+        if 'date' in cols:
+            cols.remove('date')
         df_raw = df_raw[['date'] + cols + [self.target]]
         # num_train = int(len(df_raw) * 0.7)
         # num_test = int(len(df_raw) * 0.2)
@@ -180,21 +197,29 @@ class Dataset_solar_radiation(Dataset):
         if self.set_type == 0:
             border2 = (border2 - self.seq_len) * self.percent // 100 + self.seq_len
 
-        if self.features == 'M' or self.features == 'MS':
-            cols_data = df_raw.columns[1:]
-            df_data = df_raw[cols_data]
-            df_target = df_raw[[self.target]]
+        # if self.features == 'M' or self.features == 'MS':
+        #     cols_data = df_raw.columns[1:]
+        #     df_data = df_raw[cols_data]
+        #     df_target = df_raw[[self.target]]
+        #
+        #     cols_data_source_domain = df_source_domain.columns[1:]
+        #     df_data_source_domain = df_source_domain[cols_data_source_domain]
+        #     df_target_source_domain = df_source_domain[[self.target]]
+        #
+        # elif self.features == 'S':
+        #     df_data = df_raw[[self.target]]
+        #     df_target = df_raw[[self.target]]
+        #
+        #     df_data_source_domain = df_source_domain[[self.target]]
+        #     df_target_source_domain = df_source_domain[[self.target]]
 
-            cols_data_source_domain = df_source_domain.columns[1:]
-            df_data_source_domain = df_source_domain[cols_data_source_domain]
-            df_target_source_domain = df_source_domain[[self.target]]
+        cols_data = df_raw.columns[1:]
+        df_data = df_raw[cols_data]
+        df_target = df_raw[[self.target]]
 
-        elif self.features == 'S':
-            df_data = df_raw[[self.target]]
-            df_target = df_raw[[self.target]]
-
-            df_data_source_domain = df_source_domain[[self.target]]
-            df_target_source_domain = df_source_domain[[self.target]]
+        cols_data_source_domain = df_source_domain.columns[1:]
+        df_data_source_domain = df_source_domain[cols_data_source_domain]
+        df_target_source_domain = df_source_domain[[self.target]]
 
         if self.scale:
             # train_data = df_data[border1s[0]:border2s[0]]
@@ -222,8 +247,14 @@ class Dataset_solar_radiation(Dataset):
             data_stamp = time_features(pd.to_datetime(df_stamp['date'].values), freq=self.freq)
             data_stamp = data_stamp.transpose(1, 0)
 
-        self.data_x = data[border1:border2]
-        self.data_y = data[border1:border2]
+        if self.features == 'M' or self.features == 'MS':
+            self.data_x = data[border1:border2,:len(self.feature_cols)]
+            self.data_y = data[border1:border2,:len(self.feature_cols)]
+        elif self.features == 'S':
+            self.data_x = data[border1:border2, -1:]
+            self.data_y = data[border1:border2, -1:]
+
+        self.data_forecast = data[border1:border2, :2]
         self.data_stamp = data_stamp
 
     def __getitem__(self, index):
@@ -236,7 +267,7 @@ class Dataset_solar_radiation(Dataset):
         seq_y = self.data_y[r_begin:r_end, :]
         seq_x_mark = self.data_stamp[s_begin:s_end]
         seq_y_mark = self.data_stamp[r_begin:r_end]
-        x_forecast = self.data_x[r_begin:r_end, :self.forecast_dim]
+        x_forecast = self.data_forecast[r_begin:r_end, :self.forecast_dim]
 
         return seq_x, seq_y, seq_x_mark, seq_y_mark, x_forecast
 
