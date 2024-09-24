@@ -31,7 +31,7 @@ parser.add_argument('--use_multi_gpu', action='store_true', help='use multiple g
 parser.add_argument('--devices', type=str, default='0,1,2,3', help='device ids of multile gpus')
 
 # forecasting task
-parser.add_argument('--seq_len', type=int, default=24, help='input sequence length')
+parser.add_argument('--seq_len', type=int, default=72, help='input sequence length')
 parser.add_argument('--label_len', type=int, default=24, help='start token length')
 parser.add_argument('--pred_len', type=int, default=24, help='prediction sequence length')
 parser.add_argument('--seq_dim', type=int, default=9, help='input sequence length')
@@ -58,7 +58,7 @@ parser.add_argument('--d_ff', type=int, default=2048, help='dimension of fcn')
 parser.add_argument('--hidden_sizes', nargs='+', default=[128,128], help='output mlp layer')
 
 # Autoformer
-parser.add_argument('--moving_avg', type=int, default=24, help='window size of moving average for Autoformer')
+parser.add_argument('--moving_avg', type=int, default=25, help='window size of moving average for Autoformer')
 # TimeMixer
 parser.add_argument('--down_sampling_window', type=int, default=1, help='down sampling window size for TimeMixer')
 parser.add_argument('--down_sampling_layers', type=int, default=0, help='num of down sampling layers for TimeMixer')
@@ -74,8 +74,8 @@ parser.add_argument('--activation', type=str, default='gelu', help='activation')
 parser.add_argument('--output_attention', action='store_true', help='whether to output attention in encoder')
 
 # TimeLLM
-parser.add_argument('--patch_len', type=int, default=16, help='patch length')
-parser.add_argument('--stride', type=int, default=8, help='stride')
+parser.add_argument('--patch_len', type=int, default=8, help='patch length')
+parser.add_argument('--stride', type=int, default=4, help='stride')
 parser.add_argument('--prompt_domain', type=int, default=1, help='')
 parser.add_argument('--llm_model', type=str, default='BERT', help='LLM model')  # LLAMA, GPT2, BERT
 parser.add_argument('--llm_dim', type=int, default=768, help='LLM model dimension')  # LLama7b:4096; GPT2-small:768; BERT-base:768
@@ -105,99 +105,3 @@ parser.add_argument('--percent', type=int, default=100)
 parser.add_argument('--use_dtw', type=bool, default=False, help='the controller of using dtw metric (dtw is time consuming, not suggested unless necessary)')
 
 args = parser.parse_args()
-
-
-if __name__ == '__main__':
-    import torch
-
-    from exp.exp_forecasting import Exp_Forecast
-    from utils.print_args import print_args
-    from utils.tools import load_content
-
-    args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False
-    args.inverse = True
-    print(torch.cuda.is_available())
-
-    if args.use_gpu and args.use_multi_gpu:
-        args.devices = args.devices.replace(' ', '')
-        device_ids = args.devices.split(',')
-        args.device_ids = [int(id_) for id_ in device_ids]
-        args.gpu = args.device_ids[0]
-
-    print('Args in experiment:')
-    print_args(args)
-
-    Exp = Exp_Forecast
-
-    if 'TimeLLM' in args.model:
-        args.learning_rate = 0.01
-        args.content = load_content(args)
-        if 'LLAMA' in args.llm_model:
-            args.d_model = 16
-            args.d_ff = 32
-            args.llm_layers = 32
-        elif 'BERT' in args.llm_model:
-            args.d_model = 32
-            args.d_ff = 128
-            args.llm_layers = 6
-        else:
-            raise ValueError('Unknown llm model')
-
-    if args.is_training:
-        for ii in range(args.itr):
-            exp = Exp(args)
-            # setting record of experiments
-            setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_dropout{}_eb{}_{}_{}'.format(
-                args.model_id,
-                args.model,
-                args.data,
-                args.features,
-                args.seq_len,
-                args.label_len,
-                args.pred_len,
-                args.seq_dim,
-                args.d_model,
-                args.n_heads,
-                args.e_layers,
-                args.d_layers,
-                args.d_ff,
-                args.factor,
-                args.dropout,
-                args.embed,
-                args.des, ii)
-
-            if 'TimeLLM' in args.model:
-                setting += '_{}_llmd{}_llmf{}'.format(args.llm_model,args.llm_dim,args.llm_layers,)
-            if 'RNN' in args.model:
-                setting += '_{}_llmd{}_llmf{}'.format(args.rnn_model,args.rnn_dim,args.rnn_layers,)
-
-            print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
-            exp.train(setting)
-
-            print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-            exp.test(setting)
-            torch.cuda.empty_cache()
-    else:
-        ii = 0
-        setting = '{}_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_eb{}_{}_{}'.format(
-            args.task_name,
-            args.model_id,
-            args.model,
-            args.data,
-            args.features,
-            args.seq_len,
-            args.label_len,
-            args.pred_len,
-            args.d_model,
-            args.n_heads,
-            args.e_layers,
-            args.d_layers,
-            args.d_ff,
-            args.factor,
-            args.embed,
-            args.des, ii)
-
-        exp = Exp(args)  # set experiments
-        print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-        exp.test(setting, test=1)
-        torch.cuda.empty_cache()

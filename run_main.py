@@ -24,7 +24,7 @@ def get_setting(args,ii):
         args.seq_len,
         args.label_len,
         args.pred_len,
-        args.seq_dim,
+        args.enc_in,
         args.d_model,
         args.n_heads,
         args.e_layers,
@@ -41,6 +41,8 @@ def get_setting(args,ii):
         setting += '_{}_llmd{}_llmf{}'.format(args.rnn_model, args.rnn_dim, args.rnn_layers, )
     if args.percent != 100:
         setting = 'few-shot{}_'.format(args.percent) + setting
+    if args.scale:
+        setting += '_scale'
     return setting
 
 def main(args):
@@ -90,6 +92,9 @@ def main(args):
             print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
             exp.train(setting)
 
+
+
+
             print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
             exp.test(setting)
             torch.cuda.empty_cache()
@@ -107,12 +112,12 @@ if __name__ == '__main__':
     # from pv_configs import args
     # from solar_radiation_configs import args
     from price_configs import args
-    args.model_id = 'test'
-    args.model = 'Transformer'  # [Autoformer, TimeLLM, TimeLLMForecast, TimeLLMX, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST]
+    args.model_id = 'price'
+    args.model = 'DLinear'  # [Autoformer, TimeLLM, TimeLLMForecast, TimeLLMX, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST]
     args.is_training = 1
     # args.features = 'S'
-    args.scale = False
-    args.feature_cols = ['Temperature','Precipitation','Wind_speed','Sunshine_duration','Global_horizontal_irradiance','Price']
+    args.scale = True
+    args.feature_cols = ['Temperature','Wind_speed','Global_horizontal_irradiance','Price']
     args.enc_in = len(args.feature_cols)
     args.dec_in = len(args.feature_cols)
     main(args)
