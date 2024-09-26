@@ -55,7 +55,7 @@ class Dataset_PV_hour_llm(Dataset):
         '''
         if self.feature_cols is None:
             self.feature_cols = df_raw.columns[1:]
-        cols = self.feature_cols.copy()
+        cols = list(self.feature_cols.copy())
 
         if self.target in cols:
             cols.remove(self.target)
@@ -192,7 +192,7 @@ class Dataset_solar_radiation_llm(Dataset):
         '''
         if self.feature_cols is None:
             self.feature_cols = df_raw.columns[1:]
-        cols = self.feature_cols.copy()
+        cols = list(self.feature_cols.copy())
         if self.target in cols:
             cols.remove(self.target)
         if 'date' in cols:

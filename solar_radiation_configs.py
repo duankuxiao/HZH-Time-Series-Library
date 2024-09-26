@@ -55,7 +55,7 @@ parser.add_argument('--n_heads', type=int, default=8, help='num of heads')
 parser.add_argument('--e_layers', type=int, default=8, help='num of encoder layers')
 parser.add_argument('--d_layers', type=int, default=1, help='num of decoder layers')
 parser.add_argument('--d_ff', type=int, default=2048, help='dimension of fcn')
-parser.add_argument('--hidden_sizes', nargs='+', default=[128,128], help='output mlp layer')
+parser.add_argument('--hidden_size', nargs='+', default=[256], help='output mlp layer')
 
 # Autoformer
 parser.add_argument('--moving_avg', type=int, default=25, help='window size of moving average for Autoformer')

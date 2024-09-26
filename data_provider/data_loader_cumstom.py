@@ -56,7 +56,7 @@ class Dataset_PV_hour(Dataset):
         '''
         if self.feature_cols is None:
             self.feature_cols = df_raw.columns[1:]
-        cols = self.feature_cols.copy()
+        cols = list(self.feature_cols.copy())
         if self.target in cols:
             cols.remove(self.target)
         if 'date' in cols:
@@ -183,7 +183,7 @@ class Dataset_solar_radiation(Dataset):
         '''
         if self.feature_cols is None:
             self.feature_cols = df_raw.columns[1:]
-        cols = self.feature_cols.copy()
+        cols = list(self.feature_cols.copy())
         if self.target in cols:
             cols.remove(self.target)
         if 'date' in cols:
@@ -197,8 +197,8 @@ class Dataset_solar_radiation(Dataset):
         # border1s = [0, num_train - self.seq_len, len(df_raw) - num_test - self.seq_len]
         # border2s = [num_train, num_train + num_vali, len(df_raw)]
 
-        num_train = 8760 * 0.3
-        num_test = 8760 * 0.7
+        num_train = int(8760 * 0.3)
+        num_test = int(8760 * 0.7)
         num_vali = len(df_raw) - num_train - num_test
         border1s = [0, 8760 - num_test - self.seq_len, 8760 - num_test - self.seq_len]
         border2s = [num_train, 8760, 8760]

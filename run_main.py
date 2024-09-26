@@ -111,16 +111,16 @@ def main(args):
 
 if __name__ == '__main__':
     # from pv_configs import args
-    # from solar_radiation_configs import args
-    from price_configs import args
+    from solar_radiation_configs import args
+    # from price_configs import args
 
-    args.model_id = 'price'
-    args.model = 'TimeLLM'  # [Autoformer, TimeLLM, TimeLLMForecast, TimeLLMX, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST]
+    args.model_id = 'test'
+    args.model = 'Transformer'  # [Autoformer, TimeLLM, TimeLLMForecast, TimeLLMX, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST]
     args.is_training = 1
     # args.features = 'S'
     args.scale = True
-    args.feature_cols = ['Temperature','Global_horizontal_irradiance','Sell_volume','Buy_volume','Total_volume','Sell_volume_block_orders','Sell_volume_contracted_block_orders',
-                         'Buy_volume_block_orders','Buy_volume_contracted_block_orders','Price']
+    # args.feature_cols = ['Temperature','Global_horizontal_irradiance','Sell_volume','Buy_volume','Total_volume','Sell_volume_block_orders','Sell_volume_contracted_block_orders',
+    #                      'Buy_volume_block_orders','Buy_volume_contracted_block_orders','Price']
 
 
     main(args)
