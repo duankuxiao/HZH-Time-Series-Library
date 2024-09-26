@@ -330,8 +330,11 @@ class Exp_Forecast(Exp_Basic):
         return
 
     def res_evaluation(self, pred, true, path):
-        pred_output = pred.squeeze()[::self.args.pred_len, :].reshape(-1, 1)
-        true_output = true.squeeze()[::self.args.pred_len, :].reshape(-1, 1)
+        stride = self.args.pred_len
+        stride = 1
+        pred_output = pred.squeeze()[::stride, :].reshape(-1, 1)
+        true_output = true.squeeze()[::stride, :].reshape(-1, 1)
+
         pred_res = pd.DataFrame({'pred': pred_output.flatten(), 'true': true_output.flatten()})
         pred_res.loc[pred_res['true'] < 1e-4, 'true'] = 0
         pred_res.loc[pred_res['true'] < 1e-4, 'pred'] = 0

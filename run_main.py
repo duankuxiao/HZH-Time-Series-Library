@@ -45,6 +45,7 @@ def get_setting(args,ii):
         setting += '_scale'
     return setting
 
+
 def main(args):
     args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False
     args.device = torch.device('cuda' if torch.cuda.is_available() and args.use_gpu else 'cpu')
@@ -61,6 +62,7 @@ def main(args):
         args.dec_in = len(args.feature_cols)
 
     if 'TimeLLM' in args.model:
+        args.batch_size = 8
         args.learning_rate = 0.01
         args.content = load_content(args)
         if 'LLAMA' in args.llm_model:
@@ -69,9 +71,9 @@ def main(args):
             args.llm_layers = 6
             args.llm_dim = 4096
         elif 'BERT' in args.llm_model:
-            args.d_model = 16
-            args.d_ff = 64  # d_ff < llm_dim
-            args.llm_layers = 6
+            args.d_model = 32
+            args.d_ff = 128  # d_ff < llm_dim
+            args.llm_layers = 16
             args.llm_dim = 768
         else:
             raise ValueError('Unknown llm model')
@@ -95,7 +97,6 @@ def main(args):
             print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
             exp.train(setting)
 
-
             print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
             exp.test(setting)
             torch.cuda.empty_cache()
@@ -111,16 +112,15 @@ def main(args):
 
 if __name__ == '__main__':
     # from pv_configs import args
-    from solar_radiation_configs import args
-    # from price_configs import args
+    # from solar_radiation_configs import args
+    from price_configs import args
 
-    args.model_id = 'test'
+    args.model_id = 'price'
     args.model = 'Transformer'  # [Autoformer, TimeLLM, TimeLLMForecast, TimeLLMX, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST]
     args.is_training = 1
     # args.features = 'S'
     args.scale = True
-    # args.feature_cols = ['Temperature','Global_horizontal_irradiance','Sell_volume','Buy_volume','Total_volume','Sell_volume_block_orders','Sell_volume_contracted_block_orders',
-    #                      'Buy_volume_block_orders','Buy_volume_contracted_block_orders','Price']
-
+    args.feature_cols = ['Temperature','Global_horizontal_irradiance','Sell_volume','Buy_volume','Total_volume','Sell_volume_block_orders','Sell_volume_contracted_block_orders',
+                         'Buy_volume_block_orders','Buy_volume_contracted_block_orders','Price']
 
     main(args)

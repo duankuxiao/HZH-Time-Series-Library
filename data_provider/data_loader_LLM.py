@@ -8,18 +8,19 @@ import warnings
 
 warnings.filterwarnings('ignore')
 
-class Dataset_PV_hour_llm(Dataset):
+
+class Dataset_cumstom(Dataset):
     def __init__(self, root_path, flag='train', size=None,
                  features='S', data_path='PV_power.csv',
                  target='PV', scale=True, timeenc=0, freq='h', percent=100,
-                 seasonal_patterns=None,forecast_dim=2,feature_cols=None):
+                 seasonal_patterns=None, forecast_dim=2, feature_cols=['Temperature']):
         self.forecast_dim = forecast_dim
         self.feature_cols = feature_cols
 
         if size == None:
-            self.seq_len = 24 * 4 * 4
-            self.label_len = 24 * 4
-            self.pred_len = 24 * 4
+            self.seq_len = 24 * 3
+            self.label_len = 24
+            self.pred_len = 24
         else:
             self.seq_len = size[0]
             self.label_len = size[1]
@@ -42,6 +43,43 @@ class Dataset_PV_hour_llm(Dataset):
 
         self.enc_in = self.data_x.shape[-1]
         self.tot_len = len(self.data_x) - self.seq_len - self.pred_len + 1
+
+    def __getitem__(self, index):
+        feat_id = index // self.tot_len
+        s_begin = index % self.tot_len
+
+        s_end = s_begin + self.seq_len
+        r_begin = s_end - self.label_len
+        r_end = r_begin + self.label_len + self.pred_len
+        if self.features == 'M' or self.features == 'MS':
+            seq_x = self.data_x[s_begin:s_end, feat_id:feat_id + 1] if self.set_type == 0 else self.data_x[s_begin:s_end, -1:]
+            seq_y = self.data_y[r_begin:r_end, feat_id:feat_id + 1] if self.set_type == 0 else self.data_y[r_begin:r_end, -1:]
+        elif self.features == 'S':
+            seq_x = self.data_x[s_begin:s_end, -1:]
+            seq_y = self.data_y[r_begin:r_end, -1:]
+
+        seq_x_mark = self.data_stamp[s_begin:s_end]
+        seq_y_mark = self.data_stamp[r_begin:r_end]
+        x_forecast = self.data_forecast[r_begin:r_end, :self.forecast_dim]
+
+        return seq_x, seq_y, seq_x_mark, seq_y_mark, x_forecast
+
+    def __len__(self):
+        if self.features == 'M' or self.features == 'MS':
+            return (len(self.data_x) - self.seq_len - self.pred_len + 1) * self.enc_in if self.set_type == 0 else (len(self.data_x) - self.seq_len - self.pred_len + 1)
+        elif self.features == 'S':
+            return (len(self.data_x) - self.seq_len - self.pred_len + 1)
+
+    def inverse_transform(self, data):
+        return self.target_scaler.inverse_transform(data)
+
+
+class Dataset_PV_hour_llm(Dataset_cumstom):
+    def __init__(self, root_path, flag='train', size=None,
+                 features='S', data_path='PV_power.csv',
+                 target='PV', scale=True, timeenc=0, freq='h', percent=100,
+                 seasonal_patterns=None,forecast_dim=2,feature_cols=None):
+        super(Dataset_PV_hour_llm, self).__init__(root_path, flag, size, features,data_path, target,scale,timeenc,freq,percent,seasonal_patterns,forecast_dim,feature_cols)
 
     def __read_data__(self):
         self.scaler = StandardScaler()
@@ -116,69 +154,13 @@ class Dataset_PV_hour_llm(Dataset):
         self.data_forecast = data[border1:border2, :self.forecast_dim]
         self.data_stamp = data_stamp
 
-    def __getitem__(self, index):
-        feat_id = index // self.tot_len
-        s_begin = index % self.tot_len
 
-        s_end = s_begin + self.seq_len
-        r_begin = s_end - self.label_len
-        r_end = r_begin + self.label_len + self.pred_len
-        if self.features == 'M' or self.features == 'MS':
-            seq_x = self.data_x[s_begin:s_end, feat_id:feat_id + 1] if self.set_type == 0 else self.data_x[s_begin:s_end,-1:]
-            seq_y = self.data_y[r_begin:r_end, feat_id:feat_id + 1] if self.set_type == 0 else self.data_y[r_begin:r_end,-1:]
-        elif self.features == 'S':
-            seq_x = self.data_x[s_begin:s_end, -1:]
-            seq_y = self.data_y[r_begin:r_end, -1:]
-
-        seq_x_mark = self.data_stamp[s_begin:s_end]
-        seq_y_mark = self.data_stamp[r_begin:r_end]
-        x_forecast = self.data_forecast[r_begin:r_end, :self.forecast_dim]
-
-        return seq_x, seq_y, seq_x_mark, seq_y_mark, x_forecast
-
-    def __len__(self):
-        if self.features == 'M' or self.features == 'MS':
-            return (len(self.data_x) - self.seq_len - self.pred_len + 1) * self.enc_in if self.set_type == 0 else (len(self.data_x) - self.seq_len - self.pred_len + 1)
-        elif self.features == 'S':
-            return (len(self.data_x) - self.seq_len - self.pred_len + 1)
-
-    def inverse_transform(self, data):
-        return self.target_scaler.inverse_transform(data)
-
-
-class Dataset_solar_radiation_llm(Dataset):
+class Dataset_solar_radiation_llm(Dataset_cumstom):
     def __init__(self, root_path, flag='train', size=None, features='S', data_path='Tokyo.csv',
                  target='Global_horizontal_irradiance', scale=True, timeenc=0, freq='h', percent=100,
                  seasonal_patterns=None,forecast_dim=2,feature_cols=['Temperature']):
-        self.feature_cols = feature_cols
-        self.forecast_dim = forecast_dim
+        super(Dataset_solar_radiation_llm, self).__init__(root_path, flag, size, features,data_path, target,scale,timeenc,freq,percent,seasonal_patterns,forecast_dim,feature_cols)
 
-        if size == None:
-            self.seq_len = 24 * 3
-            self.label_len = 24
-            self.pred_len = 24
-        else:
-            self.seq_len = size[0]
-            self.label_len = size[1]
-            self.pred_len = size[2]
-        # init
-        assert flag in ['train', 'test', 'val']
-        type_map = {'train': 0, 'val': 1, 'test': 2}
-        self.set_type = type_map[flag]
-        self.percent = percent
-        assert features in ['S', 'M', 'MS']
-        self.features = features
-        self.target = target
-        self.scale = scale
-        self.timeenc = timeenc
-        self.freq = freq
-
-        self.root_path = root_path
-        self.data_path = data_path
-        self.__read_data__()
-
-        self.enc_in = self.data_x.shape[-1]
-        self.tot_len = len(self.data_x) - self.seq_len - self.pred_len + 1
 
     def __read_data__(self):
         self.scaler = StandardScaler()
@@ -202,11 +184,19 @@ class Dataset_solar_radiation_llm(Dataset):
 
         # num_train = int(len(df_raw) * 0.7)
         # num_test = int(len(df_raw) * 0.2)
+
         num_train = 8760 * 2 + 24
         num_test = 8760
         num_vali = len(df_raw) - num_train - num_test
         border1s = [0, num_train - self.seq_len, len(df_raw) - num_test - self.seq_len]
         border2s = [num_train, num_train + num_vali, len(df_raw)]
+
+        # num_train = int(8760 * 0.3)
+        # num_test = int(8760 * 0.7)
+        # num_vali = len(df_raw) - num_train - num_test
+        # border1s = [0, 8760 - num_test - self.seq_len, 8760 - num_test - self.seq_len]
+        # border2s = [num_train, 8760, 8760]
+
         border1 = border1s[self.set_type]
         border2 = border2s[self.set_type]
 
@@ -256,33 +246,3 @@ class Dataset_solar_radiation_llm(Dataset):
 
         self.data_forecast = data[border1:border2,:2]
         self.data_stamp = data_stamp
-
-    def __getitem__(self, index):
-        feat_id = index // self.tot_len
-        s_begin = index % self.tot_len
-
-        s_end = s_begin + self.seq_len
-        r_begin = s_end - self.label_len
-        r_end = r_begin + self.label_len + self.pred_len
-
-        if self.features == 'M' or self.features == 'MS':
-            seq_x = self.data_x[s_begin:s_end, feat_id:feat_id + 1] if self.set_type == 0 else self.data_x[s_begin:s_end,-1:]
-            seq_y = self.data_y[r_begin:r_end, feat_id:feat_id + 1] if self.set_type == 0 else self.data_y[r_begin:r_end,-1:]
-        elif self.features == 'S':
-            seq_x = self.data_x[s_begin:s_end, -1:]
-            seq_y = self.data_y[r_begin:r_end, -1:]
-
-        seq_x_mark = self.data_stamp[s_begin:s_end]
-        seq_y_mark = self.data_stamp[r_begin:r_end]
-        x_forecast = self.data_forecast[r_begin:r_end, :self.forecast_dim]
-
-        return seq_x, seq_y, seq_x_mark, seq_y_mark, x_forecast
-
-    def __len__(self):
-        if self.features == 'M' or self.features == 'MS':
-            return (len(self.data_x) - self.seq_len - self.pred_len + 1) * self.enc_in if self.set_type == 0 else (len(self.data_x) - self.seq_len - self.pred_len + 1)
-        elif self.features == 'S':
-            return (len(self.data_x) - self.seq_len - self.pred_len + 1)
-
-    def inverse_transform(self, data):
-        return self.target_scaler.inverse_transform(data)
