@@ -85,9 +85,9 @@ class Model(nn.Module):
                 ],
                 norm_layer=torch.nn.LayerNorm(configs.d_model),
             )
-            # self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
+            self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
 
-            self.output_projection = MLP(configs.d_model,configs.c_out,configs.hidden_size,configs.dropout)
+            # self.output_projection = MLP(configs.d_model,configs.c_out,configs.hidden_size,configs.dropout)
 
         if self.task_name == 'imputation':
             self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)

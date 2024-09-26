@@ -331,7 +331,6 @@ class Exp_Forecast(Exp_Basic):
 
     def res_evaluation(self, pred, true, path):
         stride = self.args.pred_len
-        stride = 1
         pred_output = pred.squeeze()[::stride, :].reshape(-1, 1)
         true_output = true.squeeze()[::stride, :].reshape(-1, 1)
 

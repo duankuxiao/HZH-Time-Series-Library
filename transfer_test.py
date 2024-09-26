@@ -8,7 +8,7 @@ from utils.tools import load_content
 import random
 import numpy as np
 from pred_results import res_evaluation
-
+from run_main import get_setting
 
 def transfer_test(args,path):
     args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False
@@ -28,29 +28,7 @@ def transfer_test(args,path):
     Exp = Exp_Forecast
 
     ii = 0
-    setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_dropout{}_eb{}_{}_{}'.format(
-        args.model_id,
-        args.model,
-        args.data,
-        args.features,
-        args.seq_len,
-        args.label_len,
-        args.pred_len,
-        args.seq_dim,
-        args.d_model,
-        args.n_heads,
-        args.e_layers,
-        args.d_layers,
-        args.d_ff,
-        args.factor,
-        args.dropout,
-        args.embed,
-        args.des, ii)
-
-    if 'TimeLLM' in args.model:
-        setting += '_{}_llmd{}_llmf{}_tk{}'.format(args.llm_model, args.llm_dim, args.llm_layers, args.top_k)
-    if 'RNN' in args.model:
-        setting += '_{}_llmd{}_llmf{}'.format(args.rnn_model, args.rnn_dim, args.rnn_layers, )
+    setting = get_setting(args,ii)
 
     exp = Exp(args)  # set experiments
     print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
@@ -60,10 +38,10 @@ def transfer_test(args,path):
 
 if __name__ == '__main__':
 
-    path = r'D:\Time-LLM-main\results\sr_TimeLLM_Tokyo_ftMS_sl72_ll24_pl24_sd9_dm64_nh8_el8_dl1_df256_fc3_dropout0.1_ebtimeF_test_0_BERT_llmd768_llmf6_tk5'
+    path = r'D:\Time-LLM-main\results\price\price_RNN_Tokyo_ftS_sl72_ll24_pl24_sd1_dm512_nh8_el8_dl1_df2048_fc3_dropout0.1_ebtimeF_test_0_LSTM_llmd256_llmf3_scale'
     args = load_config(os.path.join(path,'checkpoints','configs.pkl'))
 
-    for city in ['Sapporo','Naha']:
+    for city in ['Sapporo','Fukuoka']:
         args.data = city  # Sapporo Sendai Tokyo Osaka Fukuoka Naha
         args.data_path = '{}.csv'.format(args.data)
 

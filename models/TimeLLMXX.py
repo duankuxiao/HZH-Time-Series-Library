@@ -206,8 +206,7 @@ class Model(nn.Module):
 
         self.dropout = nn.Dropout(configs.dropout)
 
-        self.patch_embedding = PatchEmbedding(
-            configs.d_model, self.patch_len, self.stride, configs.dropout)
+        self.patch_embedding = PatchEmbedding(configs.d_model, self.patch_len, self.stride, configs.dropout)
 
         self.word_embeddings = self.llm_model.get_input_embeddings().weight
         self.vocab_size = self.word_embeddings.shape[0]
@@ -242,13 +241,12 @@ class Model(nn.Module):
         x_enc = self.normalize_layers(x_enc, 'norm')
 
         B, T, N = x_enc.size()
-        x_enc = x_enc.permute(0, 2, 1).contiguous().reshape(B * N, T, 1)
 
-        min_values = torch.min(x_enc, dim=1)[0]
-        max_values = torch.max(x_enc, dim=1)[0]
-        medians = torch.median(x_enc, dim=1).values
-        lags = self.calcute_lags(x_enc)
-        trends = x_enc.diff(dim=1).sum(dim=1)
+        min_values = torch.min(x_enc[:,:,-1:], dim=1)[0]
+        max_values = torch.max(x_enc[:,:,-1:], dim=1)[0]
+        medians = torch.median(x_enc[:,:,-1:], dim=1).values
+        lags = self.calcute_lags(x_enc[:,:,-1:])
+        trends = x_enc[:,:,-1:].diff(dim=1).sum(dim=1)
 
         prompt = []
         for b in range(x_enc.shape[0]):
@@ -268,15 +266,12 @@ class Model(nn.Module):
             )
 
             prompt.append(prompt_)
-        # x_enc [B * N, T, 1]
-        x_enc = x_enc.reshape(B, N, T).permute(0, 2, 1).contiguous()  # [B, T, N]
 
         prompt = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
         prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)
 
         source_embeddings = self.mapping_layer(self.word_embeddings.permute(1, 0)).permute(1, 0)
 
-        x_enc = x_enc.permute(0, 2, 1).contiguous()
         enc_out, n_vars = self.patch_embedding(x_enc.to(torch.bfloat16))
         enc_out = self.reprogramming_layer(enc_out, source_embeddings, source_embeddings)
 
@@ -320,19 +315,19 @@ class ReprogrammingLayer(nn.Module):
         self.dropout = nn.Dropout(attention_dropout)
 
     def forward(self, target_embedding, source_embedding, value_embedding):
-        B, L, _ = target_embedding.shape  # [80, 18, 32]
-        S, _ = source_embedding.shape  # [1000, 768]
+        B, L, _ = target_embedding.shape
+        S, _ = source_embedding.shape
         H = self.n_heads
 
-        target_embedding = self.query_projection(target_embedding).view(B, L, H, -1)  # [80, 18, 8, 128]
-        source_embedding = self.key_projection(source_embedding).view(S, H, -1)  # [1000, 8, 128]
-        value_embedding = self.value_projection(value_embedding).view(S, H, -1)  # [1000, 8, 128]
+        target_embedding = self.query_projection(target_embedding).view(B, L, H, -1)
+        source_embedding = self.key_projection(source_embedding).view(S, H, -1)
+        value_embedding = self.value_projection(value_embedding).view(S, H, -1)
 
-        out = self.reprogramming(target_embedding, source_embedding, value_embedding)  # [80, 18, 8, 128]
+        out = self.reprogramming(target_embedding, source_embedding, value_embedding)
 
-        out = out.reshape(B, L, -1)  # [80, 18, 1024]
+        out = out.reshape(B, L, -1)
 
-        return self.out_projection(out)  # [80, 18, 768]
+        return self.out_projection(out)
 
     def reprogramming(self, target_embedding, source_embedding, value_embedding):
         B, L, H, E = target_embedding.shape

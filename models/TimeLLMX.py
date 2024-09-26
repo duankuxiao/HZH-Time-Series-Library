@@ -213,60 +213,43 @@ class Model(nn.Module):
         self.num_tokens = 1000
         self.mapping_layer = nn.Linear(self.vocab_size, self.num_tokens)
 
-        self.reprogramming_layer = ReprogrammingLayer(configs.d_model, configs.n_heads, self.d_ff, self.d_llm)
+        self.reprogramming_layer = ReprogrammingLayer(configs.dec_in, configs.n_heads, self.d_ff, self.d_llm)
 
         self.patch_nums = int((configs.seq_len - self.patch_len) / self.stride + 2)
-        self.head_nf = configs.d_ff * self.patch_nums
+        self.head_nf = self.d_ff * self.patch_nums
 
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
-            self.output_projection = FlattenHead(configs.seq_dim, self.head_nf, self.pred_len, head_dropout=configs.dropout)
+            # self.output_projection = FlattenHead(configs.enc_in, self.head_nf, self.pred_len, head_dropout=configs.dropout)
+            self.output_projection = nn.Linear(self.d_llm, configs.c_out)
+            self.linear_predict = nn.Linear(configs.rnn_dim, configs.pred_len)
+
         else:
             raise NotImplementedError
 
         self.normalize_layers = Normalize(configs.enc_in, affine=False)
-        self.normalize_forecast_layers = Normalize(configs.forecast_dim, affine=False)
 
-        self.linear_predict = nn.Linear(9, configs.pred_len)
-        self.output_projection = nn.Linear(configs.llm_dim, configs.c_out)
-
-        self.linear_predict.to(device=self.device)
         self.llm_model.to(device=self.device)
         self.mapping_layer.to(device=self.device)
         self.reprogramming_layer.to(device=self.device)
         self.output_projection.to(device=self.device)
         self.patch_embedding.to(device=self.device)
 
-    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast=None, mask=None):
+    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None, mask=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)
             return dec_out[:, -self.pred_len:, :]
         return None
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
-        x_forecast = x_forecast[:, -self.pred_len:, :]
-        x_enc = self.normalize_layers(x_enc, 'norm')  # [B, seq_len, 1]
-        x_forecast = self.normalize_forecast_layers(x_forecast, 'norm')
+        x_enc = self.normalize_layers(x_enc, 'norm')
 
         B, T, N = x_enc.size()
-        x_enc = x_enc.permute(0, 2, 1).contiguous().reshape(B * N, T, 1)
 
-        min_values = torch.min(x_enc, dim=1)[0]
-        max_values = torch.max(x_enc, dim=1)[0]
-        medians = torch.median(x_enc, dim=1).values
-        lags = self.calcute_lags(x_enc)
-        trends = x_enc.diff(dim=1).sum(dim=1)
-
-        # first_forecast_min_values = torch.min(x_forecast[:,:,:1],dim=1)[0]
-        # second_forecast_min_values = torch.min(x_forecast[:,:,1:2],dim=1)[0]
-        # first_forecast_max_values = torch.max(x_forecast[:,:,:1],dim=1)[0]
-        # second_forecast_max_values = torch.max(x_forecast[:,:,1:2],dim=1)[0]
-        # first_forecast_medians = torch.median(x_forecast[:,:,:1], dim=1).values
-        # second_forecast_medians = torch.median(x_forecast[:,:,1:2], dim=1).values
-        # first_forecast_lags = self.calcute_lags(x_forecast[:,:,:1])
-        # second_forecast_lags = self.calcute_lags(x_forecast[:,:,1:2])
-
-        B, pred_len, forecast_dim = x_forecast.size()
-        x_forecast = x_forecast.permute(0, 2, 1).contiguous().reshape(B, pred_len*forecast_dim, 1)
+        min_values = torch.min(x_enc[:,:,-1:], dim=1)[0]
+        max_values = torch.max(x_enc[:,:,-1:], dim=1)[0]
+        medians = torch.median(x_enc[:,:,-1:], dim=1).values
+        lags = self.calcute_lags(x_enc[:,:,-1:])
+        trends = x_enc[:,:,-1:].diff(dim=1).sum(dim=1)
 
         prompt = []
         for b in range(x_enc.shape[0]):
@@ -274,36 +257,6 @@ class Model(nn.Module):
             max_values_str = str(max_values[b].tolist()[0])
             median_values_str = str(medians[b].tolist()[0])
             lags_values_str = str(lags[b].tolist())
-
-            # min_values_str_1st_forecast = str(first_forecast_min_values[b].tolist()[0])
-            # max_values_str_1st_forecast = str(first_forecast_max_values[b].tolist()[0])
-            # median_values_str_1st_forecast = str(first_forecast_medians[b].tolist()[0])
-            # lags_values_str_1st_forecast = str(first_forecast_lags[b].tolist())
-            #
-            # min_values_str_2nd_forecast = str(second_forecast_min_values[b].tolist()[0])
-            # max_values_str_2nd_forecast = str(second_forecast_max_values[b].tolist()[0])
-            # median_values_str_2nd_forecast = str(second_forecast_medians[b].tolist()[0])
-            # lags_values_str_2nd_forecast = str(second_forecast_lags[b].tolist())
-            # prompt_ = (
-            #     f"<|start_prompt|>Dataset description: {self.description}"
-            #     f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information and the known future {str(self.pred_len)} steps information; "
-            #     "Input previous statistics: "
-            #     f"min value {min_values_str}, "
-            #     f"max value {max_values_str}, "
-            #     f"median value {median_values_str}, "
-            #     f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
-            #     f"top 5 lags are : {lags_values_str}"
-            #     "Input known future data statistics: "
-            #     f"first future feature min value {min_values_str_1st_forecast}, "
-            #     f"first future feature max value {max_values_str_1st_forecast}, "
-            #     f"first future feature median value {median_values_str_1st_forecast}, "
-            #     f"first future feature top {self.top_k} lags are : {lags_values_str_1st_forecast}"
-            #     f"second future feature min value {min_values_str_2nd_forecast}, "
-            #     f"second future feature max value {max_values_str_2nd_forecast}, "
-            #     f"second future feature median value {median_values_str_2nd_forecast}, "
-            #     f"second future feature top {self.top_k} lags are : {lags_values_str_2nd_forecast}<|<end_prompt>|>"
-            # )
-
             prompt_ = (
                 f"<|start_prompt|>Dataset description: {self.description}"
                 f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information; "
@@ -314,42 +267,21 @@ class Model(nn.Module):
                 f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
                 f"top {self.top_k} lags are : {lags_values_str}<|<end_prompt>|>"
             )
-            # prompt_ = (
-            #     f"<|start_prompt|>Dataset description: {self.description}"
-            #     f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information<|<end_prompt>|>"
-            # )
-            prompt.append(prompt_)
 
-        x_enc = x_enc.reshape(B, N, T).permute(0, 2, 1).contiguous()
+            prompt.append(prompt_)
 
         prompt = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
         prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)
 
         source_embeddings = self.mapping_layer(self.word_embeddings.permute(1, 0)).permute(1, 0)
 
-        x_enc = x_enc.permute(0, 2, 1).contiguous()
-        enc_out, n_vars = self.patch_embedding(x_enc.to(torch.bfloat16))
-        enc_out = self.reprogramming_layer(enc_out, source_embeddings, source_embeddings)
+        # enc_out, n_vars = self.patch_embedding(x_enc.to(torch.bfloat16))
+        enc_out = self.reprogramming_layer(x_enc, source_embeddings, source_embeddings)  # source_embeddings [1000, 768]
 
-        x_forecast = x_forecast.permute(0, 2, 1).contiguous()
-        enc_forecast_out, n_vars = self.patch_embedding(x_forecast.to(torch.bfloat16))
-        enc_forecast_out = self.reprogramming_layer(enc_forecast_out, source_embeddings, source_embeddings)
+        llama_enc_out = torch.cat([prompt_embeddings, enc_out], dim=1)
 
-        llama_enc_out = torch.cat([prompt_embeddings, enc_out, enc_forecast_out], dim=1)
         dec_out = self.llm_model(inputs_embeds=llama_enc_out).last_hidden_state
-
-        # dec_out = dec_out[:, :, :self.d_ff]
-        #
-        # dec_out = torch.reshape(dec_out, (-1, n_vars, dec_out.shape[-2], dec_out.shape[-1]))
-        # dec_out = dec_out.permute(0, 1, 3, 2).contiguous()
-        #
-        # dec_out = self.output_projection(dec_out[:, :, :, -self.patch_nums:])
-        # dec_out = dec_out.permute(0, 2, 1).contiguous()
-
-        dec_out = self.linear_predict(dec_out[:,-9:,:].permute(0,2,1))
-        dec_out = self.output_projection(dec_out.permute(0,2,1))
-
-        # dec_out = self.output_projection(dec_out[:,-pred_len:,:])
+        dec_out = self.output_projection(dec_out[:, -self.pred_len:, :])
 
         dec_out = self.normalize_layers(dec_out, 'denorm')
         return dec_out
@@ -378,17 +310,17 @@ class ReprogrammingLayer(nn.Module):
         self.dropout = nn.Dropout(attention_dropout)
 
     def forward(self, target_embedding, source_embedding, value_embedding):
-        B, L, _ = target_embedding.shape
+        B, T, N = target_embedding.shape
         S, _ = source_embedding.shape
         H = self.n_heads
 
-        target_embedding = self.query_projection(target_embedding).view(B, L, H, -1)
-        source_embedding = self.key_projection(source_embedding).view(S, H, -1)
-        value_embedding = self.value_projection(value_embedding).view(S, H, -1)
+        target_embedding = self.query_projection(target_embedding).view(B, T, H, -1)  # [8, 72, 8, 128]
+        source_embedding = self.key_projection(source_embedding).view(S, H, -1)  # [1000, 8, 128]
+        value_embedding = self.value_projection(value_embedding).view(S, H, -1)  # [1000, 8, 128]
 
-        out = self.reprogramming(target_embedding, source_embedding, value_embedding)
+        out = self.reprogramming(target_embedding, source_embedding, value_embedding)  # [B, T, H, 128]
 
-        out = out.reshape(B, L, -1)
+        out = out.reshape(B, T, -1)
 
         return self.out_projection(out)
 

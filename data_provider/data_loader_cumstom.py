@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import pandas as pd
+from matplotlib import pyplot as plt
 from torch.utils.data import Dataset
 from sklearn.preprocessing import StandardScaler
 from utils.timefeatures import time_features
@@ -60,6 +61,9 @@ class Dataset_cumstom(Dataset):
 
     def __len__(self):
         return len(self.data_x) - self.seq_len - self.pred_len + 1
+
+    def __read_data__(self):
+        raise NotImplementedError
 
     def inverse_transform(self, data):
         return self.target_scaler.inverse_transform(data)
@@ -236,3 +240,11 @@ class Dataset_solar_radiation(Dataset_cumstom):
 
         self.data_forecast = data[border1:border2, :2]
         self.data_stamp = data_stamp
+
+
+if __name__ == '__main__':
+    from utils.tools import heatmap
+    folder = r'D:\Time-LLM-main\dataset\price'
+    data_file = 'Tokyo.csv'
+    data = pd.read_csv(os.path.join(folder, data_file),index_col=0)
+    heatmap(data)
