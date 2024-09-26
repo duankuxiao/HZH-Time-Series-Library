@@ -37,7 +37,10 @@ parser.add_argument('--pred_len', type=int, default=24, help='prediction sequenc
 parser.add_argument('--seq_dim', type=int, default=9, help='input sequence length')
 parser.add_argument('--pred_dim', type=int, default=1, help='input sequence length')
 parser.add_argument('--forecast_dim', type=int, default=2, help='input sequence length')
-parser.add_argument('--feature_cols', type=list, default=['Temperature','Relative_humidity','Precipitation','Dew_point','Vapor_pressure','Wind_speed','Sunshine_duration','Snowfall','Global_horizontal_irradiance','Price'], help='input sequence length')
+parser.add_argument('--feature_cols', type=list, default=None,help="input features ['Temperature','Relative_humidity','Precipitation','Dew_point','Vapor_pressure',"
+                                                                   "'Wind_speed','Sunshine_duration','Snowfall','Global_horizontal_irradiance','Sell_volume','Buy_volume',"
+                                                                   "'Total_volume','Sell_volume_block_orders','Sell_volume_contracted_block_orders','Buy_volume_block_orders',"
+                                                                   "'Buy_volume_contracted_block_orders','Price']")
 
 parser.add_argument('--seasonal_patterns', type=str, default='Hourly', help='subset for M4')
 parser.add_argument('--inverse', action='store_true', help='inverse output data', default=False)
@@ -55,7 +58,7 @@ parser.add_argument('--n_heads', type=int, default=8, help='num of heads')
 parser.add_argument('--e_layers', type=int, default=8, help='num of encoder layers')
 parser.add_argument('--d_layers', type=int, default=1, help='num of decoder layers')
 parser.add_argument('--d_ff', type=int, default=2048, help='dimension of fcn')
-parser.add_argument('--hidden_sizes', nargs='+', default=[128,128], help='output mlp layer')
+parser.add_argument('--hidden_size', nargs='+', default=[256], help='output mlp layer')
 
 # Autoformer
 parser.add_argument('--moving_avg', type=int, default=25, help='window size of moving average for Autoformer')

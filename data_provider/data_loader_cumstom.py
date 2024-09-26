@@ -5,6 +5,7 @@ from torch.utils.data import Dataset
 from sklearn.preprocessing import StandardScaler
 from utils.timefeatures import time_features
 import warnings
+import torch
 
 warnings.filterwarnings('ignore')
 
@@ -53,6 +54,8 @@ class Dataset_PV_hour(Dataset):
         '''
         df_raw.columns: ['date', ...(other features), target feature]
         '''
+        if self.feature_cols is None:
+            self.feature_cols = df_raw.columns[1:]
         cols = self.feature_cols.copy()
         if self.target in cols:
             cols.remove(self.target)
@@ -178,6 +181,8 @@ class Dataset_solar_radiation(Dataset):
         '''
         df_raw.columns: ['date', ...(other features), target feature]
         '''
+        if self.feature_cols is None:
+            self.feature_cols = df_raw.columns[1:]
         cols = self.feature_cols.copy()
         if self.target in cols:
             cols.remove(self.target)
@@ -185,34 +190,24 @@ class Dataset_solar_radiation(Dataset):
             cols.remove('date')
         df_raw = df_raw[['date'] + cols + [self.target]]
         df_source_domain = df_source_domain[['date'] + cols + [self.target]]
-        # num_train = int(len(df_raw) * 0.7)
-        # num_test = int(len(df_raw) * 0.2)
-        num_train = 8760 * 2 + 24
-        num_test = 8760
+
+        # num_train = 8760 * 2 + 24  # int(len(df_raw) * 0.7)
+        # num_test = 8760  # int(len(df_raw) * 0.2)
+        # num_vali = len(df_raw) - num_train - num_test
+        # border1s = [0, num_train - self.seq_len, len(df_raw) - num_test - self.seq_len]
+        # border2s = [num_train, num_train + num_vali, len(df_raw)]
+
+        num_train = 8760 * 0.3
+        num_test = 8760 * 0.7
         num_vali = len(df_raw) - num_train - num_test
-        border1s = [0, num_train - self.seq_len, len(df_raw) - num_test - self.seq_len]
-        border2s = [num_train, num_train + num_vali, len(df_raw)]
+        border1s = [0, 8760 - num_test - self.seq_len, 8760 - num_test - self.seq_len]
+        border2s = [num_train, 8760, 8760]
+
         border1 = border1s[self.set_type]
         border2 = border2s[self.set_type]
 
         if self.set_type == 0:
             border2 = (border2 - self.seq_len) * self.percent // 100 + self.seq_len
-
-        # if self.features == 'M' or self.features == 'MS':
-        #     cols_data = df_raw.columns[1:]
-        #     df_data = df_raw[cols_data]
-        #     df_target = df_raw[[self.target]]
-        #
-        #     cols_data_source_domain = df_source_domain.columns[1:]
-        #     df_data_source_domain = df_source_domain[cols_data_source_domain]
-        #     df_target_source_domain = df_source_domain[[self.target]]
-        #
-        # elif self.features == 'S':
-        #     df_data = df_raw[[self.target]]
-        #     df_target = df_raw[[self.target]]
-        #
-        #     df_data_source_domain = df_source_domain[[self.target]]
-        #     df_target_source_domain = df_source_domain[[self.target]]
 
         cols_data = df_raw.columns[1:]
         df_data = df_raw[cols_data]
@@ -223,10 +218,12 @@ class Dataset_solar_radiation(Dataset):
         df_target_source_domain = df_source_domain[[self.target]]
 
         if self.scale:
-            # train_data = df_data[border1s[0]:border2s[0]]
-            # self.scaler.fit(train_data.values)
-            # data = self.scaler.transform(df_data.values)
-            # self.target_scaler.fit(df_target.values)
+            '''
+            train_data = df_data[border1s[0]:border2s[0]]
+            self.scaler.fit(train_data.values)
+            data = self.scaler.transform(df_data.values)
+            self.target_scaler.fit(df_target.values)
+            '''
 
             train_data = df_data_source_domain[border1s[0]:border2s[0]]
             self.scaler.fit(train_data.values)
@@ -249,8 +246,8 @@ class Dataset_solar_radiation(Dataset):
             data_stamp = data_stamp.transpose(1, 0)
 
         if self.features == 'M' or self.features == 'MS':
-            self.data_x = data[border1:border2,:len(self.feature_cols)]
-            self.data_y = data[border1:border2,:len(self.feature_cols)]
+            self.data_x = data[border1:border2, :len(self.feature_cols)]
+            self.data_y = data[border1:border2, :len(self.feature_cols)]
         elif self.features == 'S':
             self.data_x = data[border1:border2, -1:]
             self.data_y = data[border1:border2, -1:]

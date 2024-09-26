@@ -7,6 +7,31 @@ from layers.Embed import DataEmbedding
 import numpy as np
 
 
+class MLP(nn.Module):
+    def __init__(self,in_size,out_size,hidden_sizes=[128,128], dropout=0.1):
+        super(MLP,self).__init__()
+
+        self.hidden_layers = nn.ModuleList()
+        in_features = in_size
+        for hidden_size in hidden_sizes:
+            self.hidden_layers.append(nn.Linear(in_features, hidden_size))
+            self.hidden_layers.append(nn.ReLU())
+            in_features = hidden_size
+
+        self.fc_output = nn.Linear(hidden_sizes[-1],out_size)
+        self.dropout = nn.Dropout(dropout)
+        self.relu = nn.ReLU()
+
+    def forward(self,x):
+        for layer in self.hidden_layers:
+            x = self.dropout(x)
+            x = layer(x)
+
+        output = self.fc_output(x)
+        output = self.dropout(output)
+        return output
+
+
 class Model(nn.Module):
     """
     Vanilla Transformer
@@ -62,7 +87,7 @@ class Model(nn.Module):
             )
             # self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
 
-            self.output_projection = nn.Linear(configs.d_model, configs.pred_len, bias=True)
+            self.output_projection = MLP(configs.d_model,configs.c_out,configs.hidden_size,configs.dropout)
 
         if self.task_name == 'imputation':
             self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
@@ -114,7 +139,7 @@ class Model(nn.Module):
         output = self.projection(output)  # (batch_size, num_classes)
         return output
 
-    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast=None, mask=None):
+    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None, mask=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec)
             return dec_out[:, -self.pred_len:, :]  # [B, L, D]

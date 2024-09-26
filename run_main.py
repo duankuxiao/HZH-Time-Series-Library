@@ -56,6 +56,9 @@ def main(args):
         device_ids = args.devices.split(',')
         args.device_ids = [int(id_) for id_ in device_ids]
         args.gpu = args.device_ids[0]
+    if args.feature_cols is not None:
+        args.enc_in = len(args.feature_cols)
+        args.dec_in = len(args.feature_cols)
 
     if 'TimeLLM' in args.model:
         args.learning_rate = 0.01
@@ -93,8 +96,6 @@ def main(args):
             exp.train(setting)
 
 
-
-
             print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
             exp.test(setting)
             torch.cuda.empty_cache()
@@ -112,12 +113,14 @@ if __name__ == '__main__':
     # from pv_configs import args
     # from solar_radiation_configs import args
     from price_configs import args
+
     args.model_id = 'price'
-    args.model = 'DLinear'  # [Autoformer, TimeLLM, TimeLLMForecast, TimeLLMX, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST]
+    args.model = 'TimeLLM'  # [Autoformer, TimeLLM, TimeLLMForecast, TimeLLMX, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST]
     args.is_training = 1
     # args.features = 'S'
     args.scale = True
-    args.feature_cols = ['Temperature','Wind_speed','Global_horizontal_irradiance','Price']
-    args.enc_in = len(args.feature_cols)
-    args.dec_in = len(args.feature_cols)
+    args.feature_cols = ['Temperature','Global_horizontal_irradiance','Sell_volume','Buy_volume','Total_volume','Sell_volume_block_orders','Sell_volume_contracted_block_orders',
+                         'Buy_volume_block_orders','Buy_volume_contracted_block_orders','Price']
+
+
     main(args)

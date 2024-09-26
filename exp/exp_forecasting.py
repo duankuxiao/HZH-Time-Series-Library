@@ -18,7 +18,6 @@ from torch.optim import lr_scheduler
 
 warnings.filterwarnings('ignore')
 
-
 class Exp_Forecast(Exp_Basic):
     def __init__(self, args):
         super(Exp_Forecast, self).__init__(args)
@@ -234,6 +233,7 @@ class Exp_Forecast(Exp_Basic):
         trues = []
 
         self.model.eval()
+
         with torch.no_grad():
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark, x_forecast) in enumerate(test_loader):
                 batch_x = batch_x.float().to(self.device)
@@ -258,6 +258,7 @@ class Exp_Forecast(Exp_Basic):
 
                     else:
                         outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
+
 
                 f_dim = -self.args.pred_dim
                 outputs = outputs[:, -self.args.pred_len:, f_dim:]
@@ -297,6 +298,7 @@ class Exp_Forecast(Exp_Basic):
         preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
         trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
         print('test shape:', preds.shape, trues.shape)
+
 
         # dtw calculation
         if self.args.use_dtw:

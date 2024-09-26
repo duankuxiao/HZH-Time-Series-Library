@@ -12,7 +12,7 @@ class Dataset_PV_hour_llm(Dataset):
     def __init__(self, root_path, flag='train', size=None,
                  features='S', data_path='PV_power.csv',
                  target='PV', scale=True, timeenc=0, freq='h', percent=100,
-                 seasonal_patterns=None,forecast_dim=2,feature_cols=['Temperature']):
+                 seasonal_patterns=None,forecast_dim=2,feature_cols=None):
         self.forecast_dim = forecast_dim
         self.feature_cols = feature_cols
 
@@ -53,7 +53,10 @@ class Dataset_PV_hour_llm(Dataset):
         '''
         df_raw.columns: ['date', ...(other features), target feature]
         '''
+        if self.feature_cols is None:
+            self.feature_cols = df_raw.columns[1:]
         cols = self.feature_cols.copy()
+
         if self.target in cols:
             cols.remove(self.target)
         if 'date' in cols:
@@ -187,6 +190,8 @@ class Dataset_solar_radiation_llm(Dataset):
         '''
         df_raw.columns: ['date', ...(other features), target feature]
         '''
+        if self.feature_cols is None:
+            self.feature_cols = df_raw.columns[1:]
         cols = self.feature_cols.copy()
         if self.target in cols:
             cols.remove(self.target)

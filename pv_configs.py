@@ -37,7 +37,7 @@ parser.add_argument('--pred_len', type=int, default=24, help='prediction sequenc
 parser.add_argument('--seq_dim', type=int, default=11, help='input sequence length')
 parser.add_argument('--pred_dim', type=int, default=1, help='input sequence length')
 parser.add_argument('--forecast_dim', type=int, default=2, help='input sequence length')
-parser.add_argument('--feature_cols', type=list, default=['Temperature','Relative_humidity','Sun','Dew_point','Global_horizontal_irradiance','Sunshine_duration','PV'], help='input sequence length')
+parser.add_argument('--feature_cols', type=list, default=None, help="input features ['Temperature','Relative_humidity','Sun','Dew_point','Global_horizontal_irradiance','Sunshine_duration','PV']")
 
 
 parser.add_argument('--seasonal_patterns', type=str, default='Hourly', help='subset for M4')
