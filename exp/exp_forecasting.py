@@ -182,12 +182,12 @@ class Exp_Forecast(Exp_Basic):
 
             print("Epoch: {} cost time: {} min".format(epoch + 1, round((time.time() - epoch_time) / 60, 2)))
             train_loss = np.average(train_loss)
-            vali_loss = self.vali(vali_data, vali_loader, criterion)
-            test_loss = self.vali(test_data, test_loader, criterion)
 
-            print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f} Test Loss: {4:.7f}".format(
-                epoch + 1, train_steps, train_loss, vali_loss, test_loss))
+            vali_loss = self.vali(vali_data, vali_loader, criterion)
+            # test_loss = self.vali(test_data, test_loader, criterion)
+            print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f}".format(epoch + 1, train_steps, train_loss, vali_loss))
             early_stopping(vali_loss, self.model, path)
+
             if early_stopping.early_stop:
                 print("Early stopping")
                 break

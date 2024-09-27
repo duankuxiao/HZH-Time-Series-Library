@@ -210,7 +210,7 @@ class Model(nn.Module):
 
         self.word_embeddings = self.llm_model.get_input_embeddings().weight
         self.vocab_size = self.word_embeddings.shape[0]
-        self.num_tokens = 1000
+        self.num_tokens = 3000
         self.mapping_layer = nn.Linear(self.vocab_size, self.num_tokens)
 
         self.reprogramming_layer = ReprogrammingLayer(configs.dec_in, configs.n_heads, self.d_ff, self.d_llm)
@@ -265,8 +265,13 @@ class Model(nn.Module):
                 f"max value {max_values_str}, "
                 f"median value {median_values_str}, "
                 f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
-                f"top {self.top_k} lags are : {lags_values_str}<|<end_prompt>|>"
+                f"top {self.top_k} lags are : {lags_values_str}<|end_prompt|>"
             )
+
+            # prompt_ = (
+            #     f"<|start_prompt|>Dataset description: {self.description}"
+            #     f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information <|end_prompt|>"
+            # )
 
             prompt.append(prompt_)
 
@@ -275,10 +280,10 @@ class Model(nn.Module):
 
         source_embeddings = self.mapping_layer(self.word_embeddings.permute(1, 0)).permute(1, 0)
 
-        # enc_out, n_vars = self.patch_embedding(x_enc.to(torch.bfloat16))
         enc_out = self.reprogramming_layer(x_enc, source_embeddings, source_embeddings)  # source_embeddings [1000, 768]
 
         llama_enc_out = torch.cat([prompt_embeddings, enc_out], dim=1)
+        # llama_enc_out = enc_out
 
         dec_out = self.llm_model(inputs_embeds=llama_enc_out).last_hidden_state
         dec_out = self.output_projection(dec_out[:, -self.pred_len:, :])

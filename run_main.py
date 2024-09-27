@@ -71,9 +71,9 @@ def main(args):
             args.llm_layers = 6
             args.llm_dim = 4096
         elif 'BERT' in args.llm_model:
-            args.d_model = 16
-            args.d_ff = 64  # d_ff < llm_dim
-            args.llm_layers = 16
+            args.d_model = 32
+            args.d_ff = 128  # d_ff < llm_dim
+            args.llm_layers = 6
             args.llm_dim = 768
         else:
             raise ValueError('Unknown llm model')
@@ -115,8 +115,8 @@ if __name__ == '__main__':
     from solar_radiation_configs import args
     # from price_configs import args
 
-    args.model_id = 'sr'
-    args.model = 'TimeLLMX'  # [Autoformer, TimeLLM, TimeLLMForecast, TimeLLMX, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST]
+    args.model_id = 'targetprompt'
+    args.model = 'TimeLLM'  # [Autoformer, TimeLLM, TimeLLMForecast, TimeLLMX, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST]
     args.is_training = 1
     # args.features = 'S'
     args.scale = True

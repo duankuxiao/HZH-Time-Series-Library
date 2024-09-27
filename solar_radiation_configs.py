@@ -31,7 +31,7 @@ parser.add_argument('--use_multi_gpu', action='store_true', help='use multiple g
 parser.add_argument('--devices', type=str, default='0,1,2,3', help='device ids of multile gpus')
 
 # forecasting task
-parser.add_argument('--seq_len', type=int, default=72, help='input sequence length')
+parser.add_argument('--seq_len', type=int, default=168, help='input sequence length')
 parser.add_argument('--label_len', type=int, default=24, help='start token length')
 parser.add_argument('--pred_len', type=int, default=24, help='prediction sequence length')
 parser.add_argument('--seq_dim', type=int, default=9, help='input sequence length')

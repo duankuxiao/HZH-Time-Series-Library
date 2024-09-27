@@ -10,6 +10,7 @@ import torch
 
 warnings.filterwarnings('ignore')
 
+
 class Dataset_cumstom(Dataset):
     def __init__(self, root_path, flag='train', size=None,
                  features='S', data_path='PV_power.csv',
@@ -47,7 +48,7 @@ class Dataset_cumstom(Dataset):
 
     def __getitem__(self, index):
         s_begin = index % self.tot_len
-
+        # s_begin = (index // 24) * 24
         s_end = s_begin + self.seq_len
         r_begin = s_end - self.label_len
         r_end = r_begin + self.label_len + self.pred_len
@@ -183,11 +184,11 @@ class Dataset_solar_radiation(Dataset_cumstom):
         border1s = [0, num_train - self.seq_len, len(df_raw) - num_test - self.seq_len]
         border2s = [num_train, num_train + num_vali, len(df_raw)]
 
-        # num_train = int(8760 * 0.3)
-        # num_test = int(8760 * 0.7)
+        # num_train = int((8760+24) * 0.3)
+        # num_test = int((8760+24) * 0.7)
         # num_vali = len(df_raw) - num_train - num_test
-        # border1s = [0, 8760 - num_test - self.seq_len, 8760 - num_test - self.seq_len]
-        # border2s = [num_train, 8760, 8760]
+        # border1s = [0, 0, 8784 - num_test - self.seq_len]
+        # border2s = [num_train, num_train, 8784]
 
         border1 = border1s[self.set_type]
         border2 = border2s[self.set_type]

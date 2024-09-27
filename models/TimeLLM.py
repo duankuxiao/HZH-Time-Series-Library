@@ -211,7 +211,7 @@ class Model(nn.Module):
 
         self.word_embeddings = self.llm_model.get_input_embeddings().weight
         self.vocab_size = self.word_embeddings.shape[0]
-        self.num_tokens = 1000
+        self.num_tokens = 2000
         self.mapping_layer = nn.Linear(self.vocab_size, self.num_tokens)
 
         self.reprogramming_layer = ReprogrammingLayer(configs.d_model, configs.n_heads, self.d_ff, self.d_llm)
@@ -264,7 +264,7 @@ class Model(nn.Module):
                 f"max value {max_values_str}, "
                 f"median value {median_values_str}, "
                 f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
-                f"top {self.top_k} lags are : {lags_values_str}<|<end_prompt>|>"
+                f"top {self.top_k} lags are : {lags_values_str}<|end_prompt|>"
             )
 
             prompt.append(prompt_)
@@ -281,7 +281,6 @@ class Model(nn.Module):
         enc_out = self.reprogramming_layer(enc_out, source_embeddings, source_embeddings)
 
         llama_enc_out = torch.cat([prompt_embeddings, enc_out], dim=1)
-        # llama_enc_out = enc_out
 
         dec_out = self.llm_model(inputs_embeds=llama_enc_out).last_hidden_state
         dec_out = dec_out[:, :, :self.d_ff]
