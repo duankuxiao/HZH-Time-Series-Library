@@ -23,6 +23,7 @@ parser.add_argument('--freq', type=str, default='h', help='freq for time feature
                          'options:[s:secondly, t:minutely, h:hourly, d:daily, b:business days, w:weekly, m:monthly], '
                          'you can also use more detailed freq like 15min or 3h')
 parser.add_argument('--checkpoints', type=str, default='./results/', help='location of model checkpoints')
+parser.add_argument('--use_forecast', action='store_true', help='input forecast data', default=False)
 
 # GPU
 parser.add_argument('--use_gpu', type=bool, default=True, help='use gpu')
@@ -50,7 +51,7 @@ parser.add_argument('--distil', action='store_false',help='whether to use distil
 
 parser.add_argument('--enc_in', type=int, default=11, help='encoder input size (seq features dim)')
 parser.add_argument('--dec_in', type=int, default=11, help='decoder input size (forecast dim)')
-parser.add_argument('--c_out', type=int, default=11, help='output size (pred dim)')
+parser.add_argument('--c_out', type=int, default=1, help='output size (pred dim)')
 parser.add_argument('--d_model', type=int, default=512, help='dimension of model')
 parser.add_argument('--n_heads', type=int, default=8, help='num of heads')
 parser.add_argument('--e_layers', type=int, default=8, help='num of encoder layers')
@@ -81,6 +82,7 @@ parser.add_argument('--prompt_domain', type=int, default=1, help='')
 parser.add_argument('--llm_model', type=str, default='BERT', help='LLM model')  # LLAMA, GPT2, BERT
 parser.add_argument('--llm_dim', type=int, default=768, help='LLM model dimension')  # LLama7b:4096; GPT2-small:768; BERT-base:768
 parser.add_argument('--llm_layers', type=int, default=6, help='bert_layers=6 llama_layers=32')
+parser.add_argument('--use_prompt', action='store_true', help='input forecast data', default=True)
 
 # RNN
 parser.add_argument('--rnn_model', type=str, default='LSTM', help='RNN model')  # GRU, LSTM, seq2seq

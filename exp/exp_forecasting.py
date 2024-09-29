@@ -335,8 +335,8 @@ class Exp_Forecast(Exp_Basic):
         true_output = true.squeeze()[::stride, :].reshape(-1, 1)
 
         pred_res = pd.DataFrame({'pred': pred_output.flatten(), 'true': true_output.flatten()})
-        pred_res.loc[pred_res['true'] < 1e-4, 'true'] = 0
-        pred_res.loc[pred_res['true'] < 1e-4, 'pred'] = 0
+        pred_res.loc[pred_res['true'] < 1e-2, 'true'] = 0
+        pred_res.loc[pred_res['true'] < 1e-2, 'pred'] = 0
 
         [mse, rmse, mae, r2, corr] = results_evaluation(pred_res['true'].values, pred_res['pred'].values)
 

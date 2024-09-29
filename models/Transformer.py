@@ -44,6 +44,7 @@ class Model(nn.Module):
         self.task_name = configs.task_name
         self.pred_len = configs.pred_len
         self.output_attention = configs.output_attention
+        self.use_forecast = configs.use_forecast
         # Embedding
         self.enc_embedding = DataEmbedding(configs.enc_in, configs.d_model, configs.embed, configs.freq, configs.dropout)
         # Encoder
@@ -63,8 +64,10 @@ class Model(nn.Module):
         )
         # Decoder
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
-            self.dec_embedding = DataEmbedding(configs.dec_in, configs.d_model, configs.embed, configs.freq,
-                                               configs.dropout)
+            if self.use_forecast:
+                self.dec_embedding = DataEmbedding(configs.forecast_dim, configs.d_model, configs.embed, configs.freq, configs.dropout)
+            else:
+                self.dec_embedding = DataEmbedding(configs.dec_in, configs.d_model, configs.embed, configs.freq,configs.dropout)
             self.decoder = Decoder(
                 [
                     DecoderLayer(
@@ -98,12 +101,14 @@ class Model(nn.Module):
             self.dropout = nn.Dropout(configs.dropout)
             self.output_projection = nn.Linear(configs.d_model * configs.seq_len, configs.num_class)
 
-    def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
+    def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast):
         # Embedding
         enc_out = self.enc_embedding(x_enc, x_mark_enc)
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
-
-        dec_out = self.dec_embedding(x_dec, x_mark_dec)
+        if self.use_forecast:
+            dec_out = self.dec_embedding(x_forecast, x_mark_dec)
+        else:
+            dec_out = self.dec_embedding(x_dec, x_mark_dec)
         dec_out = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None)
         dec_out = self.output_projection(dec_out)
 
@@ -141,7 +146,7 @@ class Model(nn.Module):
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None, mask=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
-            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec)
+            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)
             return dec_out[:, -self.pred_len:, :]  # [B, L, D]
         if self.task_name == 'imputation':
             dec_out = self.imputation(x_enc, x_mark_enc, x_dec, x_mark_dec, mask)

@@ -40,7 +40,8 @@ class Model(nn.Module):
         self.d_llm = configs.llm_dim
         self.patch_len = configs.patch_len
         self.stride = configs.stride
-
+        self.use_prompt = configs.use_prompt
+        self.use_forecast = configs.use_forecast
         if configs.llm_model == 'LLAMA':
             # self.llama_config = LlamaConfig.from_pretrained('/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/')
             self.llama_config = LlamaConfig.from_pretrained(r'D:\LLM\llama')
@@ -214,6 +215,7 @@ class Model(nn.Module):
         self.mapping_layer = nn.Linear(self.vocab_size, self.num_tokens)
 
         self.reprogramming_layer = ReprogrammingLayer(configs.dec_in, configs.n_heads, self.d_ff, self.d_llm)
+        self.reprogramming_layer_forecast = ReprogrammingLayer(configs.forecast_dim, configs.n_heads, self.d_ff, self.d_llm)
 
         self.patch_nums = int((configs.seq_len - self.patch_len) / self.stride + 2)
         self.head_nf = self.d_ff * self.patch_nums
@@ -221,72 +223,89 @@ class Model(nn.Module):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             # self.output_projection = FlattenHead(configs.enc_in, self.head_nf, self.pred_len, head_dropout=configs.dropout)
             self.output_projection = nn.Linear(self.d_llm, configs.c_out)
-            self.linear_predict = nn.Linear(configs.rnn_dim, configs.pred_len)
+            if self.use_forecast:
+                self.linear_predict = nn.Linear(configs.seq_len + configs.pred_len, configs.pred_len)
+            else:
+                self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len)
+
 
         else:
             raise NotImplementedError
 
         self.normalize_layers = Normalize(configs.enc_in, affine=False)
+        self.normalize_layers_forecast = Normalize(configs.forecast_dim, affine=False)
+
 
         self.llm_model.to(device=self.device)
         self.mapping_layer.to(device=self.device)
         self.reprogramming_layer.to(device=self.device)
+        self.reprogramming_layer_forecast.to(device=self.device)
+
         self.output_projection.to(device=self.device)
+        self.linear_predict.to(device=self.device)
         self.patch_embedding.to(device=self.device)
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None, mask=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
-            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)
+            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
             return dec_out[:, -self.pred_len:, :]
         return None
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
         x_enc = self.normalize_layers(x_enc, 'norm')
+        if self.use_forecast:
+            x_forecast = self.normalize_layers_forecast(x_forecast[:,-self.pred_len:,:], 'norm')
+        if self.use_prompt:
+            x_target = x_enc[:, :, -1:]
+            min_values = torch.min(x_target, dim=1)[0]
+            max_values = torch.max(x_target, dim=1)[0]
+            medians = torch.median(x_target, dim=1).values
+            lags = self.calcute_lags(x_target)
+            trends = x_target.diff(dim=1).sum(dim=1)
 
-        B, T, N = x_enc.size()
+            prompt = []
+            for b in range(x_enc.shape[0]):
+                min_values_str = str(min_values[b].tolist()[0])
+                max_values_str = str(max_values[b].tolist()[0])
+                median_values_str = str(medians[b].tolist()[0])
+                lags_values_str = str(lags[b].tolist())
+                prompt_ = (
+                    f"<|start_prompt|>Dataset description: {self.description}"
+                    f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information; "
+                    "Input statistics: "
+                    f"min value {min_values_str}, "
+                    f"max value {max_values_str}, "
+                    f"median value {median_values_str}, "
+                    f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
+                    f"top {self.top_k} lags are : {lags_values_str}<|end_prompt|>"
+                )
 
-        min_values = torch.min(x_enc[:,:,-1:], dim=1)[0]
-        max_values = torch.max(x_enc[:,:,-1:], dim=1)[0]
-        medians = torch.median(x_enc[:,:,-1:], dim=1).values
-        lags = self.calcute_lags(x_enc[:,:,-1:])
-        trends = x_enc[:,:,-1:].diff(dim=1).sum(dim=1)
+                # prompt_ = (
+                #     f"<|start_prompt|>Dataset description: {self.description}"
+                #     f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information <|end_prompt|>"
+                # )
 
-        prompt = []
-        for b in range(x_enc.shape[0]):
-            min_values_str = str(min_values[b].tolist()[0])
-            max_values_str = str(max_values[b].tolist()[0])
-            median_values_str = str(medians[b].tolist()[0])
-            lags_values_str = str(lags[b].tolist())
-            prompt_ = (
-                f"<|start_prompt|>Dataset description: {self.description}"
-                f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information; "
-                "Input statistics: "
-                f"min value {min_values_str}, "
-                f"max value {max_values_str}, "
-                f"median value {median_values_str}, "
-                f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
-                f"top {self.top_k} lags are : {lags_values_str}<|end_prompt|>"
-            )
+                prompt.append(prompt_)
 
-            # prompt_ = (
-            #     f"<|start_prompt|>Dataset description: {self.description}"
-            #     f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information <|end_prompt|>"
-            # )
-
-            prompt.append(prompt_)
-
-        prompt = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
-        prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)
+            prompt = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
+            prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)
 
         source_embeddings = self.mapping_layer(self.word_embeddings.permute(1, 0)).permute(1, 0)
 
         enc_out = self.reprogramming_layer(x_enc, source_embeddings, source_embeddings)  # source_embeddings [1000, 768]
+        if self.use_forecast:
+            enc_out_forecast = self.reprogramming_layer_forecast(x_forecast, source_embeddings, source_embeddings)
 
-        llama_enc_out = torch.cat([prompt_embeddings, enc_out], dim=1)
-        # llama_enc_out = enc_out
+        llama_enc_out = enc_out
+        if self.use_forecast:
+            llama_enc_out = torch.cat([llama_enc_out, enc_out_forecast], dim=1)  # prompt_embeddings.shape,enc_out.shape, dec_out.shape
+
+        if self.use_prompt:
+            llama_enc_out = torch.cat([prompt_embeddings, llama_enc_out], dim=1)  # prompt_embeddings.shape,enc_out.shape, dec_out.shape
 
         dec_out = self.llm_model(inputs_embeds=llama_enc_out).last_hidden_state
-        dec_out = self.output_projection(dec_out[:, -self.pred_len:, :])
+        dec_out = self.linear_predict(dec_out.permute(0, 2, 1)).permute(0, 2, 1)
+        dec_out = self.output_projection(dec_out)
 
         dec_out = self.normalize_layers(dec_out, 'denorm')
         return dec_out

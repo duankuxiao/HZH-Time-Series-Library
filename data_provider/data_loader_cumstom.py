@@ -47,8 +47,8 @@ class Dataset_cumstom(Dataset):
         self.tot_len = len(self.data_x) - self.seq_len - self.pred_len + 1
 
     def __getitem__(self, index):
-        s_begin = index % self.tot_len
-        # s_begin = (index // 24) * 24
+        # s_begin = index % self.tot_len
+        s_begin = (index // 24) * 24
         s_end = s_begin + self.seq_len
         r_begin = s_end - self.label_len
         r_end = r_begin + self.label_len + self.pred_len
@@ -239,13 +239,19 @@ class Dataset_solar_radiation(Dataset_cumstom):
             self.data_x = data[border1:border2, -1:]
             self.data_y = data[border1:border2, -1:]
 
-        self.data_forecast = data[border1:border2, :2]
+        self.data_forecast = data[border1:border2, :self.forecast_dim]
         self.data_stamp = data_stamp
 
 
 if __name__ == '__main__':
     from utils.tools import heatmap
     folder = r'D:\Time-LLM-main\dataset\price'
-    data_file = 'Tokyo.csv'
-    data = pd.read_csv(os.path.join(folder, data_file),index_col=0)
-    heatmap(data)
+    # data_file = 'Tokyo.csv'
+    # data = pd.read_csv(os.path.join(folder, data_file),index_col=0)
+    # heatmap(data)
+
+    data_file = 'spot_index.csv'
+    data = pd.read_csv(os.path.join(folder, data_file))
+    df_repeated = data.loc[data.index.repeat(24)].reset_index(drop=True)
+    df_repeated.to_csv(os.path.join(folder, data_file[:-4] + '_24h.csv'), index=False)
+    print(df_repeated)

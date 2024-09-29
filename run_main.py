@@ -39,6 +39,8 @@ def get_setting(args,ii):
         setting += '_{}_llmd{}_llmf{}_tk{}'.format(args.llm_model, args.llm_dim, args.llm_layers, args.top_k)
     if 'RNN' in args.model:
         setting += '_{}_llmd{}_llmf{}'.format(args.rnn_model, args.rnn_dim, args.rnn_layers, )
+        if args.use_forecast:
+            setting += '_forecast'
     if args.percent != 100:
         setting = 'few-shot{}_'.format(args.percent) + setting
     if args.scale:
@@ -71,9 +73,9 @@ def main(args):
             args.llm_layers = 6
             args.llm_dim = 4096
         elif 'BERT' in args.llm_model:
-            args.d_model = 32
-            args.d_ff = 128  # d_ff < llm_dim
-            args.llm_layers = 6
+            args.d_model = 256
+            args.d_ff = 512  # d_ff < llm_dim
+            args.llm_layers = 2
             args.llm_dim = 768
         else:
             raise ValueError('Unknown llm model')
@@ -112,14 +114,16 @@ def main(args):
 
 if __name__ == '__main__':
     # from pv_configs import args
-    from solar_radiation_configs import args
-    # from price_configs import args
+    # from solar_radiation_configs import args
+    from price_configs import args
 
-    args.model_id = 'targetprompt'
-    args.model = 'TimeLLM'  # [Autoformer, TimeLLM, TimeLLMForecast, TimeLLMX, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST]
+    args.model_id = 'priceforecast'
+    args.model = 'Transformer'  # [Autoformer, TimeLLM, TimeLLMForecast, TimeLLMX, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST]
     args.is_training = 1
     # args.features = 'S'
     args.scale = True
+    args.use_prompt = False
+    args.use_forecast = True
     # args.feature_cols = ['Temperature','Global_horizontal_irradiance','Sell_volume','Buy_volume','Total_volume','Sell_volume_block_orders','Sell_volume_contracted_block_orders',
     #                      'Buy_volume_block_orders','Buy_volume_contracted_block_orders','Price']
 
