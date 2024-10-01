@@ -22,9 +22,9 @@ class Model(nn.Module):
             self.rnn_layer = nn.LSTM(configs.enc_in, configs.rnn_dim, configs.rnn_layers, batch_first=True)
 
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
-            self.linear_predict = nn.Linear(configs.rnn_dim, configs.pred_len)
+            self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len)
             # self.output_projection = nn.Linear(configs.rnn_dim, configs.c_out)
-            self.output_projection = nn.Linear(configs.seq_len, configs.pred_len)
+            self.output_projection = nn.Linear(configs.rnn_dim, configs.c_out)
 
         if self.task_name == 'classification' or self.task_name == 'anomaly_detection' or self.task_name == 'imputation':
             self.pred_len = configs.seq_len
@@ -38,10 +38,8 @@ class Model(nn.Module):
 
     def encoder(self, x):
         x,_ = self.rnn_layer(x)
-        x = self.linear_predict(x)
-        x = self.output_projection(x.permute(0, 2, 1))
-
-        # x = self.output_projection(x[:,-1:,:]).permute(0,2,1)
+        # x = self.linear_predict(x.permute(0, 2, 1)).permute(0, 2, 1)
+        x = self.output_projection(x)
         return x
 
     def forecast(self, x_enc):
@@ -64,7 +62,7 @@ class Model(nn.Module):
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             dec_out = self.forecast(x_enc)
-            return dec_out[:, :, :]  # [B, L, D]
+            return dec_out[:, -self.pred_len:, :]  # [B, L, D]
         if self.task_name == 'imputation':
             dec_out = self.imputation(x_enc)
             return dec_out  # [B, L, D]

@@ -21,7 +21,7 @@ class Model(nn.Module):
         # Embedding
         self.enc_embedding = DataEmbedding(configs.enc_in, configs.d_model, configs.embed, configs.freq,
                                            configs.dropout)
-        self.dec_embedding = DataEmbedding(configs.dec_in, configs.d_model, configs.embed, configs.freq,
+        self.dec_embedding = DataEmbedding(configs.c_out, configs.d_model, configs.embed, configs.freq,
                                            configs.dropout)
 
         # Encoder

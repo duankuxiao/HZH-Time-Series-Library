@@ -1,5 +1,5 @@
 import numpy as np
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, mean_absolute_percentage_error
 
 
 def empirical_correlation_coefficient(y_true, y_pred):
@@ -33,9 +33,10 @@ def results_evaluation(y_test_seq, y_pred_seq):
     mse = mean_squared_error(y_true=y_test_seq, y_pred=y_pred_seq)
     rmse = np.sqrt(mse)
     mae = mean_absolute_error(y_true=y_test_seq, y_pred=y_pred_seq)
+    mape = mean_absolute_percentage_error(y_true=y_test_seq, y_pred=y_pred_seq)
     r2 = r2_score(y_true=y_test_seq, y_pred=y_pred_seq,multioutput='uniform_average')  # multioutput='variance_weighted' 'uniform_average'
     corr = empirical_correlation_coefficient(y_true=y_test_seq,y_pred=y_pred_seq)
-    return [mse, rmse, mae, r2,corr]
+    return [mse, rmse, mae,mape, r2,corr]
 
 
 def RSE(pred, true):

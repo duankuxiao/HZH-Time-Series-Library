@@ -198,7 +198,7 @@ class LLMBlock(nn.Module):
         self.num_tokens = 2000
         self.mapping_layer = nn.Linear(self.vocab_size, self.num_tokens)
 
-        self.reprogramming_layer = ReprogrammingLayer(configs.d_model, configs.n_heads, self.d_ff, self.d_llm)
+        self.reprogramming_layer = ReprogrammingLayer(configs.rnn_dim, configs.n_heads, self.d_ff, self.d_llm)
 
         self.patch_nums = int((configs.seq_len - self.patch_len) / self.stride + 2)
         self.head_nf = self.d_ff * self.patch_nums
@@ -347,22 +347,14 @@ class Model(nn.Module):
             self.enc_embedding = DataEmbedding(configs.enc_in, configs.d_model, configs.embed, configs.freq, configs.dropout)
 
         self.normalize_layers_forecast = Normalize(configs.forecast_dim, affine=False)
+
         # Embedding
         # Encoder
-        self.encoder = Encoder(
-            [
-                EncoderLayer(
-                    AttentionLayer(
-                        FullAttention(False, configs.factor, attention_dropout=configs.dropout,
-                                      output_attention=configs.output_attention), configs.d_model, configs.n_heads),
-                    configs.d_model,
-                    configs.d_ff,
-                    dropout=configs.dropout,
-                    activation=configs.activation
-                ) for l in range(configs.e_layers)
-            ],
-            norm_layer=torch.nn.LayerNorm(configs.d_model)
-        )
+        if configs.rnn_model == 'GRU':
+            self.encoder = nn.GRU(configs.enc_in, configs.rnn_dim, configs.rnn_layers, batch_first=True)
+        elif configs.rnn_model == 'LSTM':
+            self.encoder = nn.LSTM(configs.enc_in, configs.rnn_dim, configs.rnn_layers, batch_first=True)
+
         # Decoder
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
 
@@ -387,8 +379,7 @@ class Model(nn.Module):
             x_enc = x_enc[:, :, 4:]
         x_enc = self.normalize_layers(x_enc,'norm')
         # Embedding
-        enc_out = self.enc_embedding(x_enc, x_mark_enc)
-        enc_out, attns = self.encoder(enc_out, attn_mask=None)
+        enc_out,_ = self.encoder(x_enc)
 
         dec_out = self.decoder(enc_out, x_mark_enc, x_dec, x_mark_dec, x_forecast)
         dec_out = self.output_projection(dec_out)

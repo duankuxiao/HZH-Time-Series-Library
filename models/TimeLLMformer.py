@@ -193,12 +193,17 @@ class LLMBlock(nn.Module):
 
         self.dropout = nn.Dropout(configs.dropout)
 
+        self.patch_embedding = PatchEmbedding(
+            configs.d_model, self.patch_len, self.stride, configs.dropout)
+
         self.word_embeddings = self.llm_model.get_input_embeddings().weight
         self.vocab_size = self.word_embeddings.shape[0]
         self.num_tokens = 2000
         self.mapping_layer = nn.Linear(self.vocab_size, self.num_tokens)
-
-        self.reprogramming_layer = ReprogrammingLayer(configs.d_model, configs.n_heads, self.d_ff, self.d_llm)
+        if self.use_forecast:
+            self.reprogramming_layer = ReprogrammingLayer(configs.enc_in-4, configs.n_heads, self.d_ff, self.d_llm)
+        else:
+            self.reprogramming_layer = ReprogrammingLayer(configs.enc_in, configs.n_heads, self.d_ff, self.d_llm)
 
         self.patch_nums = int((configs.seq_len - self.patch_len) / self.stride + 2)
         self.head_nf = self.d_ff * self.patch_nums
@@ -206,7 +211,7 @@ class LLMBlock(nn.Module):
         self.llm_model.to(device=self.device)
         self.mapping_layer.to(device=self.device)
         self.reprogramming_layer.to(device=self.device)
-
+        self.patch_embedding.to(device=self.device)
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None, mask=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
@@ -231,7 +236,6 @@ class LLMBlock(nn.Module):
                 lags_values_str = str(lags[b].tolist())
 
                 if self.use_forecast:
-                    x_forecast = x_forecast[:,-self.pred_len:,:]
                     prompt_ = (
                         f"<|start_prompt|>Dataset description: {self.description}"
                         f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information and the future indexes; "
@@ -242,10 +246,10 @@ class LLMBlock(nn.Module):
                         f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
                         f"top {self.top_k} lags are : {lags_values_str}, "
                         "Future indexes: "
-                        f"Day Ahead 24 hours {x_forecast[b, 0, 0]}, "
-                        f"Day Ahead Day Time {x_forecast[b, 0, 1]}, "
-                        f"Day Ahead Peak Time {x_forecast[b, 0, 2]}, "
-                        f"Total Transaction Volume {x_forecast[b, 0, 3]}<|end_prompt|>"
+                        f"Day Ahead 24 hours {x_forecast[b, 25, 0]}, "
+                        f"Day Ahead Day Time {x_forecast[b, 25, 1]}, "
+                        f"Day Ahead Peak Time {x_forecast[b, 25, 2]}, "
+                        f"Total Transaction Volume {x_forecast[b, 25, 3]}<|end_prompt|>"
                     )
                 else:
                     prompt_ = (
@@ -339,36 +343,44 @@ class Model(nn.Module):
         self.label_len = configs.label_len
         self.output_attention = configs.output_attention
         self.use_forecast = configs.use_forecast
+
         if self.use_forecast:
             self.normalize_layers = Normalize(configs.enc_in-4, affine=False)
-            self.enc_embedding = DataEmbedding(configs.enc_in-4, configs.d_model, configs.embed, configs.freq, configs.dropout)
         else:
             self.normalize_layers = Normalize(configs.enc_in, affine=False)
-            self.enc_embedding = DataEmbedding(configs.enc_in, configs.d_model, configs.embed, configs.freq, configs.dropout)
+
 
         self.normalize_layers_forecast = Normalize(configs.forecast_dim, affine=False)
-        # Embedding
+        self.input_embedding = nn.Linear(configs.llm_dim, configs.d_model)
         # Encoder
-        self.encoder = Encoder(
-            [
-                EncoderLayer(
-                    AttentionLayer(
-                        FullAttention(False, configs.factor, attention_dropout=configs.dropout,
-                                      output_attention=configs.output_attention), configs.d_model, configs.n_heads),
-                    configs.d_model,
-                    configs.d_ff,
-                    dropout=configs.dropout,
-                    activation=configs.activation
-                ) for l in range(configs.e_layers)
-            ],
-            norm_layer=torch.nn.LayerNorm(configs.d_model)
-        )
+        self.encoder = LLMBlock(configs)
         # Decoder
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
 
-            self.decoder = LLMBlock(configs)
-            self.output_projection = nn.Linear(configs.llm_dim, configs.c_out, bias=True)
+            self.dec_embedding = DataEmbedding(configs.c_out, configs.d_model, configs.embed, configs.freq,configs.dropout)
+            self.decoder = Decoder(
+                [
+                    DecoderLayer(
+                        AttentionLayer(
+                            FullAttention(True, configs.factor, attention_dropout=configs.dropout,
+                                          output_attention=False),
+                            configs.d_model, configs.n_heads),
+                        AttentionLayer(
+                            FullAttention(False, configs.factor, attention_dropout=configs.dropout,
+                                          output_attention=False),
+                            configs.d_model, configs.n_heads),
+                        configs.d_model,
+                        configs.d_ff,
+                        dropout=configs.dropout,
+                        activation=configs.activation,
+                    )
+                    for l in range(configs.d_layers)
+                ],
+                norm_layer=torch.nn.LayerNorm(configs.d_model),
+            )
+            self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
 
+            # self.output_projection = MLP(configs.d_model,configs.c_out,configs.hidden_size,configs.dropout)
 
         if self.task_name == 'imputation':
             self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
@@ -379,20 +391,20 @@ class Model(nn.Module):
             self.dropout = nn.Dropout(configs.dropout)
             self.output_projection = nn.Linear(configs.d_model * configs.seq_len, configs.num_class)
 
-        self.normalize_layers = Normalize(configs.enc_in, affine=False)
         self.normalize_layers_forecast = Normalize(configs.forecast_dim, affine=False)
 
-    def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
+    def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast):
+        # x_enc = self.normalize_layers(x_enc, 'norm')
+        # if self.use_forecast:
+        #     x_forecast = self.normalize_layers_forecast(x_forecast[:, -self.pred_len:, :], 'norm')
         if self.use_forecast:
             x_enc = x_enc[:, :, 4:]
-        x_enc = self.normalize_layers(x_enc,'norm')
-        # Embedding
-        enc_out = self.enc_embedding(x_enc, x_mark_enc)
-        enc_out, attns = self.encoder(enc_out, attn_mask=None)
-
-        dec_out = self.decoder(enc_out, x_mark_enc, x_dec, x_mark_dec, x_forecast)
+        enc_out = self.encoder(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
+        enc_out = self.input_embedding(enc_out)
+        dec_out = self.dec_embedding(x_dec, x_mark_dec)
+        dec_out = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None)
         dec_out = self.output_projection(dec_out)
-        dec_out = self.normalize_layers(dec_out,'denorm')
+        # dec_out = self.normalize_layers(dec_out, 'denorm')
 
         return dec_out
 

@@ -1,6 +1,6 @@
 from data_provider.data_loader import Dataset_ETT_hour, Dataset_ETT_minute, Dataset_Custom, Dataset_M4
 from torch.utils.data import DataLoader
-from data_provider.data_loader_cumstom import Dataset_PV_hour, Dataset_solar_radiation
+from data_provider.data_loader_cumstom import Dataset_PV_hour, Dataset_solar_radiation, Dataset_solar_radiation_daxiang
 from data_provider.data_loader_LLM import Dataset_PV_hour_llm, Dataset_solar_radiation_llm
 
 data_dict = {
@@ -14,7 +14,7 @@ data_dict = {
     'm4': Dataset_M4,
     'PV': Dataset_PV_hour,
     'PV7f': Dataset_PV_hour,
-    'Tokyo': Dataset_solar_radiation,  # Dataset_solar_radiation
+    'Tokyo': Dataset_solar_radiation,  # Dataset_solar_radiation Dataset_solar_radiation_daxiang
     'Naha': Dataset_solar_radiation,  # Dataset_solar_radiation
     'Sapporo': Dataset_solar_radiation,  # Dataset_solar_radiation
     'Sendai': Dataset_solar_radiation,  # Dataset_solar_radiation
@@ -75,6 +75,7 @@ def data_provider(args, flag):
             seasonal_patterns=args.seasonal_patterns,
             forecast_dim=args.forecast_dim,
             feature_cols=args.feature_cols,
+            c_out = args.c_out
         )
     data_loader = DataLoader(
         data_set,

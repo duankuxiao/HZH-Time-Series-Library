@@ -39,10 +39,13 @@ parser.add_argument('--seq_dim', type=int, default=9, help='input sequence lengt
 parser.add_argument('--pred_dim', type=int, default=1, help='input sequence length')
 parser.add_argument('--forecast_dim', type=int, default=4, help='input sequence length')
 parser.add_argument('--feature_cols', type=list, default=None,help="input features ['DA-24','DA-DT', 'DA-PT','TTV','Temperature','Relative_humidity','Precipitation','Dew_point','Vapor_pressure',"
-                                                                   "'Wind_speed','Sunshine_duration','Snowfall','Global_horizontal_irradiance','Sell_volume','Buy_volume',"
+                                                                   "'Wind_speed','Sunshine_duration','Snowfall','Global_horizontal_irradiance','System_price','Sell_volume','Buy_volume',"
                                                                    "'Total_volume','Sell_volume_block_orders','Sell_volume_contracted_block_orders','Buy_volume_block_orders',"
                                                                    "'Buy_volume_contracted_block_orders','Price']")
-
+# ['DA-24','DA-DT', 'DA-PT','TTV','Temperature','Relative_humidity','Precipitation','Dew_point','Vapor_pressure',
+#                         'Wind_speed','Sunshine_duration','Snowfall','Global_horizontal_irradiance','System_price','Sell_volume','Buy_volume',
+#                          'Total_volume','Sell_volume_block_orders','Sell_volume_contracted_block_orders','Buy_volume_block_orders',
+#                         'Buy_volume_contracted_block_orders','Price']
 
 parser.add_argument('--seasonal_patterns', type=str, default='Hourly', help='subset for M4')
 parser.add_argument('--inverse', action='store_true', help='inverse output data', default=False)
@@ -52,8 +55,8 @@ parser.add_argument('--top_k', type=int, default=5, help='for TimesBlock')
 parser.add_argument('--num_kernels', type=int, default=6, help='for Inception')
 parser.add_argument('--distil', action='store_false',help='whether to use distilling in encoder, using this argument means not using distilling',default=True)
 
-parser.add_argument('--enc_in', type=int, default=21, help='encoder input size (seq features dim)')
-parser.add_argument('--dec_in', type=int, default=21, help='decoder input size (forecast dim)')
+parser.add_argument('--enc_in', type=int, default=22, help='encoder input size (seq features dim)')
+parser.add_argument('--dec_in', type=int, default=22, help='decoder input size (forecast dim)')
 parser.add_argument('--c_out', type=int, default=1, help='output size (pred dim)')
 parser.add_argument('--d_model', type=int, default=512, help='dimension of model')
 parser.add_argument('--n_heads', type=int, default=8, help='num of heads')

@@ -67,7 +67,7 @@ class Model(nn.Module):
             if self.use_forecast:
                 self.dec_embedding = DataEmbedding(configs.forecast_dim, configs.d_model, configs.embed, configs.freq, configs.dropout)
             else:
-                self.dec_embedding = DataEmbedding(configs.dec_in, configs.d_model, configs.embed, configs.freq,configs.dropout)
+                self.dec_embedding = DataEmbedding(configs.c_out, configs.d_model, configs.embed, configs.freq,configs.dropout)
             self.decoder = Decoder(
                 [
                     DecoderLayer(
@@ -89,6 +89,7 @@ class Model(nn.Module):
                 norm_layer=torch.nn.LayerNorm(configs.d_model),
             )
             self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
+            self.linear_predict = nn.Linear(configs.pred_len, configs.pred_len)
 
             # self.output_projection = MLP(configs.d_model,configs.c_out,configs.hidden_size,configs.dropout)
 
@@ -105,14 +106,15 @@ class Model(nn.Module):
         # Embedding
         enc_out = self.enc_embedding(x_enc, x_mark_enc)
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
+
         if self.use_forecast:
             dec_out = self.dec_embedding(x_forecast, x_mark_dec)
         else:
             dec_out = self.dec_embedding(x_dec, x_mark_dec)
         dec_out = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None)
+        # dec_out = self.linear_predict(dec_out[:, -self.pred_len:, :].permute(0, 2, 1)).permute(0, 2, 1)
         dec_out = self.output_projection(dec_out)
 
-        # dec_out = self.output_projection(dec_out[:,-1:,:]).permute(0,2,1)
         return dec_out
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):

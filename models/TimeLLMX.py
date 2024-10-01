@@ -269,21 +269,35 @@ class Model(nn.Module):
                 max_values_str = str(max_values[b].tolist()[0])
                 median_values_str = str(medians[b].tolist()[0])
                 lags_values_str = str(lags[b].tolist())
-                prompt_ = (
-                    f"<|start_prompt|>Dataset description: {self.description}"
-                    f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information; "
-                    "Input statistics: "
-                    f"min value {min_values_str}, "
-                    f"max value {max_values_str}, "
-                    f"median value {median_values_str}, "
-                    f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
-                    f"top {self.top_k} lags are : {lags_values_str}<|end_prompt|>"
-                )
 
-                # prompt_ = (
-                #     f"<|start_prompt|>Dataset description: {self.description}"
-                #     f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information <|end_prompt|>"
-                # )
+                if self.use_forecast:
+                    x_forecast = x_forecast[:,-self.pred_len:,:]
+                    prompt_ = (
+                        f"<|start_prompt|>Dataset description: {self.description}"
+                        f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information and the future indexes; "
+                        "Input statistics: "
+                        f"min value {min_values_str}, "
+                        f"max value {max_values_str}, "
+                        f"median value {median_values_str}, "
+                        f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
+                        f"top {self.top_k} lags are : {lags_values_str}, "
+                        "Future indexes: "
+                        f"Day Ahead 24 hours {x_forecast[b,0,0]}, "
+                        f"Day Ahead Day Time {x_forecast[b,0,1]}, "
+                        f"Day Ahead Peak Time {x_forecast[b,0,2]}, "
+                        f"Total Transaction Volume {x_forecast[b,0,3]}<|end_prompt|>"
+                    )
+                else:
+                    prompt_ = (
+                        f"<|start_prompt|>Dataset description: {self.description}"
+                        f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information; "
+                        "Input statistics: "
+                        f"min value {min_values_str}, "
+                        f"max value {max_values_str}, "
+                        f"median value {median_values_str}, "
+                        f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
+                        f"top {self.top_k} lags are : {lags_values_str}<|end_prompt|>"
+                    )
 
                 prompt.append(prompt_)
 
@@ -297,14 +311,14 @@ class Model(nn.Module):
             enc_out_forecast = self.reprogramming_layer_forecast(x_forecast, source_embeddings, source_embeddings)
 
         llama_enc_out = enc_out
-        if self.use_forecast:
-            llama_enc_out = torch.cat([llama_enc_out, enc_out_forecast], dim=1)  # prompt_embeddings.shape,enc_out.shape, dec_out.shape
+        # if self.use_forecast:
+        #     llama_enc_out = torch.cat([llama_enc_out, enc_out_forecast], dim=1)  # prompt_embeddings.shape,enc_out.shape, dec_out.shape
 
         if self.use_prompt:
             llama_enc_out = torch.cat([prompt_embeddings, llama_enc_out], dim=1)  # prompt_embeddings.shape,enc_out.shape, dec_out.shape
 
         dec_out = self.llm_model(inputs_embeds=llama_enc_out).last_hidden_state
-        dec_out = self.linear_predict(dec_out.permute(0, 2, 1)).permute(0, 2, 1)
+        # dec_out = self.linear_predict(dec_out.permute(0, 2, 1)).permute(0, 2, 1)
         dec_out = self.output_projection(dec_out)
 
         dec_out = self.normalize_layers(dec_out, 'denorm')
@@ -343,9 +357,7 @@ class ReprogrammingLayer(nn.Module):
         value_embedding = self.value_projection(value_embedding).view(S, H, -1)  # [1000, 8, 128]
 
         out = self.reprogramming(target_embedding, source_embedding, value_embedding)  # [B, T, H, 128]
-
         out = out.reshape(B, T, -1)
-
         return self.out_projection(out)
 
     def reprogramming(self, target_embedding, source_embedding, value_embedding):

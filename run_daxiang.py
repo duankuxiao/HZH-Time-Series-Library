@@ -65,7 +65,7 @@ def main(args):
 
     if 'TimeLLM' in args.model:
         args.batch_size = 24
-        args.learning_rate = 0.001
+        args.learning_rate = 0.01
         args.content = load_content(args)
         if 'LLAMA' in args.llm_model:
             args.d_model = 16
@@ -73,9 +73,9 @@ def main(args):
             args.llm_layers = 6
             args.llm_dim = 4096
         elif 'BERT' in args.llm_model:
-            args.d_model = 64
-            args.d_ff = 128  # d_ff < llm_dim
-            args.llm_layers = 1
+            args.d_model = 256
+            args.d_ff = 512  # d_ff < llm_dim
+            args.llm_layers = 2
             args.llm_dim = 768
         else:
             raise ValueError('Unknown llm model')
@@ -118,32 +118,19 @@ def main(args):
 
 if __name__ == '__main__':
     # from pv_configs import args
-    # from solar_radiation_configs import args
-    from price_configs import args
+    from solar_radiation_configs import args
+    # from price_configs import args
     args.scale = True
 
-    args.model_id = 'price'
-    args.model = 'RNNTimeLLM'  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer,RNNTimeLLM, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST]
+    args.model_id = 'daxiang'
+    args.data_path = 'tokyo_data.csv'
+    args.target = 'temperature'
+    args.model = 'Informer'  # [Autoformer, TimeLLM, TimeLLMForecast, TimeLLMX, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST]
     args.is_training = 1
-    # args.features = 'S'
-    args.use_prompt = False
-    args.use_forecast = False  # False
-    args.forecast_dim = 4
-    args.e_layers = 2
-    args.d_layers = 1
-
-    args.rnn_dim = 256
-    args.rnn_layers = 3
-    args.feature_cols = ['System_price','Sell_volume','Buy_volume', 'Total_volume', 'Sell_volume_block_orders', 'Sell_volume_contracted_block_orders', 'Buy_volume_block_orders',
-     'Buy_volume_contracted_block_orders', 'Price']
-
-    # 'DA-24','DA-DT', 'DA-PT','TTV',
-
-    # ['DA-24','DA-DT', 'DA-PT','TTV','Temperature','Relative_humidity','Precipitation','Dew_point','Vapor_pressure',
-    #  'Wind_speed','Sunshine_duration','Snowfall','Global_horizontal_irradiance','System_price','Sell_volume','Buy_volume',
-    #  'Total_volume','Sell_volume_block_orders','Sell_volume_contracted_block_orders','Buy_volume_block_orders',
-    #  'Buy_volume_contracted_block_orders','Price']
-    # args.target = 'System_price'
+    args.seq_len = 24
+    args.pred_len = 1
+    args.d_model = 512
+    args.d_ff = 2048
+    args.e_layers = 8
+    args.feature_cols = ['sun_rise', 'radiation_time', 'rainfall', 'humidity', 'water_vapor_pressure', 'wind_speed', 'solar_radiation']  # solar_radiation  temperature
     main(args)
-
-

@@ -80,9 +80,8 @@ class Exp_Forecast(Exp_Basic):
                     else:
                         outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
 
-                f_dim = -self.args.pred_dim
-                outputs = outputs[:, -self.args.pred_len:, f_dim:]
-                batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
+                outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
+                batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:].to(self.device)
 
                 pred = outputs.detach().cpu()
                 true = batch_y.detach().cpu()
@@ -135,8 +134,6 @@ class Exp_Forecast(Exp_Basic):
                 dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
                 dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
 
-                f_dim = -self.args.pred_dim
-
                 # encoder - decoder
                 if self.args.use_amp:
                     with torch.cuda.amp.autocast():
@@ -145,8 +142,8 @@ class Exp_Forecast(Exp_Basic):
                         else:
                             outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
 
-                        outputs = outputs[:, -self.args.pred_len:, f_dim:]
-                        batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
+                        outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
+                        batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:].to(self.device)
                         loss = criterion(outputs, batch_y)
                         train_loss.append(loss.item())
                 else:
@@ -155,8 +152,8 @@ class Exp_Forecast(Exp_Basic):
                     else:
                         outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
 
-                    outputs = outputs[:, -self.args.pred_len:, f_dim:]
-                    batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
+                    outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
+                    batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:].to(self.device)
                     loss = criterion(outputs, batch_y)
                     train_loss.append(loss.item())
                 verbose_interval = (len(train_data) // 10) if len(train_data) > 10 else 1
@@ -260,9 +257,8 @@ class Exp_Forecast(Exp_Basic):
                         outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
 
 
-                f_dim = -self.args.pred_dim
-                outputs = outputs[:, -self.args.pred_len:, f_dim:]
-                batch_y = batch_y[:, -self.args.pred_len:, f_dim:]  # .to(self.device)
+                outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
+                batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:]  # .to(self.device)
                 outputs = outputs.detach().cpu().numpy()
                 batch_y = batch_y.detach().cpu().numpy()
                 if test_data.scale and self.args.inverse:
@@ -270,8 +266,8 @@ class Exp_Forecast(Exp_Basic):
                     outputs = test_data.inverse_transform(outputs.reshape(shape[0] * shape[1], -1)).reshape(shape)
                     batch_y = test_data.inverse_transform(batch_y.reshape(shape[0] * shape[1], -1)).reshape(shape)
 
-                outputs = outputs[:, :, f_dim:]
-                batch_y = batch_y[:, :, f_dim:]
+                outputs = outputs[:, :, -self.f_dim:]
+                batch_y = batch_y[:, :, -self.f_dim:]
 
                 pred = outputs
                 true = batch_y
@@ -315,7 +311,7 @@ class Exp_Forecast(Exp_Basic):
         else:
             dtw = -999
 
-        [mse, rmse, mae, r2, corr] = results_evaluation(trues.squeeze(), preds.squeeze())
+        [mse, rmse, mae,mape, r2, corr] = results_evaluation(trues.squeeze(), preds.squeeze())
         print('mae:{}, r2:{}, dtw:{}'.format(mae, r2, dtw))
         f = open(os.path.join('./results', "result_long_term_forecast.txt"), 'a')
         f.write(setting + "  \n")
@@ -331,17 +327,17 @@ class Exp_Forecast(Exp_Basic):
 
     def res_evaluation(self, pred, true, path):
         stride = self.args.pred_len
-        pred_output = pred.squeeze()[::stride, :].reshape(-1, 1)
-        true_output = true.squeeze()[::stride, :].reshape(-1, 1)
+        pred_output = np.squeeze(pred,axis=-1)[::stride, :].reshape(-1, 1)
+        true_output = np.squeeze(true,axis=-1)[::stride, :].reshape(-1, 1)
 
         pred_res = pd.DataFrame({'pred': pred_output.flatten(), 'true': true_output.flatten()})
         pred_res.loc[pred_res['true'] < 1e-2, 'true'] = 0
         pred_res.loc[pred_res['true'] < 1e-2, 'pred'] = 0
 
-        [mse, rmse, mae, r2, corr] = results_evaluation(pred_res['true'].values, pred_res['pred'].values)
+        [mse, rmse, mae, mape, r2, corr] = results_evaluation(pred_res['true'].values, pred_res['pred'].values)
 
         pred_res.to_csv(os.path.join(path, 'pred_results_{}.csv'.format(self.args.data)))
-        metrics_df = pd.DataFrame({'mae': mae, 'rmse': rmse, 'r2': r2}, index=[0])
+        metrics_df = pd.DataFrame({'mae': mae, 'mape':mape,'mse':mse,'rmse': rmse, 'r2': r2,'corr':corr}, index=[0])
         metrics_df.to_csv(os.path.join(path, 'metrics_results_{}.csv'.format(self.args.data)))
 
         print('RMSE: {} MAE: {} R2: {}'.format(rmse, mae, r2))
