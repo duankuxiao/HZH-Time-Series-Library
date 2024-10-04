@@ -62,9 +62,6 @@ def main(args):
         device_ids = args.devices.split(',')
         args.device_ids = [int(id_) for id_ in device_ids]
         args.gpu = args.device_ids[0]
-    if args.feature_cols is not None:
-        args.enc_in = len(args.feature_cols)
-        args.dec_in = len(args.feature_cols)
 
     if 'TimeLLM' in args.model:
         args.batch_size = 24

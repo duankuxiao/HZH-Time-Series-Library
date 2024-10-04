@@ -62,9 +62,7 @@ def main(args):
         device_ids = args.devices.split(',')
         args.device_ids = [int(id_) for id_ in device_ids]
         args.gpu = args.device_ids[0]
-    if args.feature_cols is not None:
-        args.enc_in = len(args.feature_cols)
-        args.dec_in = len(args.feature_cols)
+
 
     if 'TimeLLM' in args.model:
         args.batch_size = 24
@@ -150,8 +148,12 @@ if __name__ == '__main__':
     if 'RNN' in args.model:
         args.rnn_dim = 256
         args.rnn_layers = 3
-    args.feature_cols = ['System_price', 'Sell_volume', 'Buy_volume', 'Total_volume',
-                         'Sell_volume_block_orders', 'Sell_volume_contracted_block_orders', 'Buy_volume_block_orders', 'Buy_volume_contracted_block_orders',  'Price']
+    args.feature_cols = ['Electricity', 'Nuclear', 'Coal', 'Hydro', 'Geothermal', 'Biomass',
+       'Solar', 'Solar_curtailment', 'Wind', 'Wind_ccurtailment',
+       'Water_pumping', 'Interconnection', 'Total', 'Temperature',
+       'Relative_humidity', 'Precipitation', 'Dew_point', 'Vapor_pressure',
+       'Wind_speed', 'Sunshine_duration', 'Snowfall',
+       'Global_horizontal_irradiance']
 
     # ['date', 'Temperature', 'Relative_humidity', 'Precipitation',
     #  'Dew_point', 'Vapor_pressure', 'Wind_speed', 'Sunshine_duration',
