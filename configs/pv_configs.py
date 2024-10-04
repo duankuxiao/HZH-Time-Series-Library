@@ -14,7 +14,8 @@ args.pred_len = 72
 args.label_len = 24
 args.forecast_dim = 2
 args.features_cols = None
-# ['Temperature','Relative_humidity','Sun','Dew_point','Global_horizontal_irradiance','Sunshine_duration','PV']
+# ['Temperature','Relative_humidity','Sun','Wind_speed','Dew_point','Precipitation','Global_horizontal_irradiance','Sunshine_duration','PV']
 args.enc_in = 11
 args.dec_in = 11
 args.c_out = 1
+args.scale = True

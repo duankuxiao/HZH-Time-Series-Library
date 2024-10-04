@@ -19,5 +19,7 @@ args.moving_avg = 31
 args.enc_in = 4
 args.dec_in = 4
 args.c_out = 4
+args.scale = True
+
 # ['DA-24','DA-DT', 'DA-PT','TTV']
 

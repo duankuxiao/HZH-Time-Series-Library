@@ -16,5 +16,7 @@ args.features_cols = None
 args.enc_in = 29
 args.dec_in = 29
 args.c_out = 1
+args.scale = True
+
 
 

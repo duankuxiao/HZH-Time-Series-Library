@@ -63,6 +63,7 @@ def main(args):
         args.device_ids = [int(id_) for id_ in device_ids]
         args.gpu = args.device_ids[0]
 
+
     if 'TimeLLM' in args.model:
         args.batch_size = 24
         args.learning_rate = 0.01
@@ -111,18 +112,16 @@ def main(args):
 
 
 if __name__ == '__main__':
-    from configs.pv_configs import args
+    # from pv_configs import args
+    # from solar_radiation_configs import args
+    # from configs.price_configs import args
+    from configs.electricity_configs import args
 
-    args.scale = True
-    args.seq_len = 24 * 3
-    args.pred_len = 24 * 7
-    args.label_len = 24
+    args.model_id = 'price'
 
-    args.model_id = 'pv'
-
-    args.model = 'TimeLLMXX'  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TransformerTimeLLM, RNNTimeLLM, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,TimeLLMDLinear, DLinearTimeLLM]
+    args.model = 'RNN'  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TransformerTimeLLM, RNNTimeLLM, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,TimeLLMDLinear, DLinearTimeLLM]
     args.is_training = 1
-    args.features = 'MS'
+
     args.use_prompt = False
     args.use_forecast = False  # False
     args.forecast_dim = 4
@@ -135,16 +134,31 @@ if __name__ == '__main__':
         args.llm_layers = 6
 
     if args.model == 'Transformer':
-        args.d_model = 512
-        args.d_ff = 2048
-        args.e_layers = 8
+        args.d_model = 64
+        args.d_ff = 256
+        args.e_layers = 4
         args.d_layers = 1
 
     if 'RNN' in args.model:
         args.rnn_dim = 256
-        args.rnn_layers = 2
+        args.rnn_layers = 3
+    args.feature_cols = ['Electricity', 'Nuclear', 'Coal', 'Hydro', 'Geothermal', 'Biomass',
+       'Solar', 'Solar_curtailment', 'Wind', 'Wind_ccurtailment',
+       'Water_pumping', 'Interconnection', 'Total', 'Temperature',
+       'Relative_humidity', 'Precipitation', 'Dew_point', 'Vapor_pressure',
+       'Wind_speed', 'Sunshine_duration', 'Snowfall',
+       'Global_horizontal_irradiance']
 
-    args.feature_cols = ['Temperature','Relative_humidity','Sun','Wind_speed','Dew_point','Precipitation','Global_horizontal_irradiance','Sunshine_duration','PV']
+    # ['date', 'Temperature', 'Relative_humidity', 'Precipitation',
+    #  'Dew_point', 'Vapor_pressure', 'Wind_speed', 'Sunshine_duration',
+    #  'Snowfall', 'Global_horizontal_irradiance', 'System_price',
+    #  'Sell_volume', 'Buy_volume', 'Total_volume', 'Sell_volume_block_orders',
+    #  'Sell_volume_contracted_block_orders', 'Buy_volume_block_orders',
+    #  'Buy_volume_contracted_block_orders', 'Volumes', 'Number_of_contracts',
+    #  'Opening_price', 'Highest_price', 'Lowest_price', 'Last_price',
+    #  'Average_price', 'DA-24', 'DA-DT', 'DA-PT', 'TTV', 'Price']
+
+
     main(args)
 
 
