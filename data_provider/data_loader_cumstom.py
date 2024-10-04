@@ -15,7 +15,7 @@ class Dataset_cumstom(Dataset):
     def __init__(self, root_path, flag='train', size=None,
                  features='S', data_path='PV_power.csv',
                  target='PV', scale=True, timeenc=0, freq='h', percent=100,
-                 seasonal_patterns=None,forecast_dim=2,feature_cols=['Temperature'],c_out=1):
+                 seasonal_patterns=None, forecast_dim=2, feature_cols=['Temperature'], c_out=1):
         self.forecast_dim = forecast_dim
         self.feature_cols = feature_cols
         self.c_out = c_out
@@ -69,11 +69,37 @@ class Dataset_cumstom(Dataset):
     def inverse_transform(self, data):
         return self.target_scaler.inverse_transform(data)
 
+    def _get_data(self,df_raw,data,border1,border2):
+        df_stamp = df_raw[['date']][border1:border2]
+        df_stamp['date'] = pd.to_datetime(df_stamp.date)
+        if self.timeenc == 0:
+            df_stamp['month'] = df_stamp.date.apply(lambda row: row.month, 1)
+            df_stamp['day'] = df_stamp.date.apply(lambda row: row.day, 1)
+            df_stamp['weekday'] = df_stamp.date.apply(lambda row: row.weekday(), 1)
+            df_stamp['hour'] = df_stamp.date.apply(lambda row: row.hour, 1)
+            data_stamp = df_stamp.drop(['date'], 1).values
+        elif self.timeenc == 1:
+            data_stamp = time_features(pd.to_datetime(df_stamp['date'].values), freq=self.freq)
+            data_stamp = data_stamp.transpose(1, 0)
+
+        if self.features == 'M':
+            self.data_x = data[border1:border2, :len(self.feature_cols)]
+            self.data_y = data[border1:border2, -len(self.target):]
+        elif self.features == 'MS':
+            self.data_x = data[border1:border2, :len(self.feature_cols)]
+            self.data_y = data[border1:border2, -self.c_out:]
+        elif self.features == 'S':
+            self.data_x = data[border1:border2, -1:]
+            self.data_y = data[border1:border2, -1:]
+
+        self.data_forecast = data[border1:border2, :self.forecast_dim]
+        self.data_stamp = data_stamp
+
 
 class Dataset_PV_hour(Dataset_cumstom):
     def __init__(self, root_path, flag='train', size=None,
                  features='S', data_path='PV_power.csv',
-                 target='PV', scale=True, timeenc=0, freq='h', percent=100,
+                 target='PV', scale=True, timeenc=0, freq='d', percent=100,
                  seasonal_patterns=None,forecast_dim=2,feature_cols=['Temperature'],c_out=1):
         super(Dataset_PV_hour, self).__init__(root_path, flag, size, features,data_path,target,scale,timeenc,freq,percent,seasonal_patterns,forecast_dim,feature_cols,c_out)
 
@@ -119,31 +145,7 @@ class Dataset_PV_hour(Dataset_cumstom):
         else:
             data = df_data.values
             df_target = df_target.values
-
-        df_stamp = df_raw[['date']][border1:border2]
-        df_stamp['date'] = pd.to_datetime(df_stamp.date)
-        if self.timeenc == 0:
-            df_stamp['month'] = df_stamp.date.apply(lambda row: row.month, 1)
-            df_stamp['day'] = df_stamp.date.apply(lambda row: row.day, 1)
-            df_stamp['weekday'] = df_stamp.date.apply(lambda row: row.weekday(), 1)
-            df_stamp['hour'] = df_stamp.date.apply(lambda row: row.hour, 1)
-            data_stamp = df_stamp.drop(['date'], 1).values
-        elif self.timeenc == 1:
-            data_stamp = time_features(pd.to_datetime(df_stamp['date'].values), freq=self.freq)
-            data_stamp = data_stamp.transpose(1, 0)
-
-        if self.features == 'M':
-            self.data_x = data[border1:border2, :len(self.feature_cols)]
-            self.data_y = data[border1:border2, :len(self.feature_cols)]
-        elif self.features == 'MS':
-            self.data_x = data[border1:border2, :len(self.feature_cols)]
-            self.data_y = data[border1:border2, -self.c_out:]
-        elif self.features == 'S':
-            self.data_x = data[border1:border2, -1:]
-            self.data_y = data[border1:border2, -1:]
-
-        self.data_forecast = data[border1:border2, :self.forecast_dim]
-        self.data_stamp = data_stamp
+        self._get_data(df_raw, data, border1, border2)
 
 
 class Dataset_solar_radiation(Dataset_cumstom):
@@ -166,12 +168,21 @@ class Dataset_solar_radiation(Dataset_cumstom):
         if self.feature_cols is None:
             self.feature_cols = df_raw.columns[1:]
         cols = list(self.feature_cols.copy())
-        if self.target in cols:
-            cols.remove(self.target)
+
         if 'date' in cols:
             cols.remove('date')
-        df_raw = df_raw[['date'] + cols + [self.target]]
-        df_source_domain = df_source_domain[['date'] + cols + [self.target]]
+        if self.features == 'M':
+            for s in self.target:
+                if s in cols:
+                    cols.remove(s)
+            df_raw = df_raw[['date'] + cols + self.target]
+            df_source_domain = df_source_domain[['date'] + cols + self.target]
+
+        else:
+            if self.target in cols:
+                cols.remove(self.target)
+            df_raw = df_raw[['date'] + cols + [self.target]]
+            df_source_domain = df_source_domain[['date'] + cols + [self.target]]
 
         num_train = 8760 * 2 + 24  # int(len(df_raw) * 0.7)
         num_test = 8760  # int(len(df_raw) * 0.2)
@@ -208,31 +219,167 @@ class Dataset_solar_radiation(Dataset_cumstom):
 
         else:
             data = df_data.values
+        self._get_data(df_raw, data, border1, border2)
 
-        df_stamp = df_raw[['date']][border1:border2]
-        df_stamp['date'] = pd.to_datetime(df_stamp.date)
-        if self.timeenc == 0:
-            df_stamp['month'] = df_stamp.date.apply(lambda row: row.month, 1)
-            df_stamp['day'] = df_stamp.date.apply(lambda row: row.day, 1)
-            df_stamp['weekday'] = df_stamp.date.apply(lambda row: row.weekday(), 1)
-            df_stamp['hour'] = df_stamp.date.apply(lambda row: row.hour, 1)
-            data_stamp = df_stamp.drop(['date'], 1).values
-        elif self.timeenc == 1:
-            data_stamp = time_features(pd.to_datetime(df_stamp['date'].values), freq=self.freq)
-            data_stamp = data_stamp.transpose(1, 0)
+class Dataset_Pirce(Dataset_cumstom):
+    def __init__(self, root_path, flag='train', size=None,
+                 features='M', data_path='Price.csv',
+                 target='Tokyo', scale=True, timeenc=0, freq='h', percent=100,
+                 seasonal_patterns=None, forecast_dim=2, feature_cols=['System_price'], c_out=1):
+        super(Dataset_Pirce, self).__init__(root_path, flag, size, features,data_path,target,scale,timeenc,freq,percent,seasonal_patterns,forecast_dim,feature_cols,c_out)
 
+    def __read_data__(self):
+        self.scaler = StandardScaler()
+        self.target_scaler = StandardScaler()
+
+        df_source_domain = pd.read_csv(os.path.join(self.root_path, 'Price.csv'))
+        df_raw = pd.read_csv(os.path.join(self.root_path, self.data_path))
+
+        '''
+        df_raw.columns: ['date', ...(other features), target feature]
+        '''
+        if self.feature_cols is None:
+            self.feature_cols = df_raw.columns[1:]
+        cols = list(self.feature_cols.copy())
+
+        if 'date' in cols:
+            cols.remove('date')
         if self.features == 'M':
-            self.data_x = data[border1:border2, :len(self.feature_cols)]
-            self.data_y = data[border1:border2, :len(self.feature_cols)]
-        elif self.features == 'MS':
-            self.data_x = data[border1:border2, :len(self.feature_cols)]
-            self.data_y = data[border1:border2, -self.c_out:]
-        elif self.features == 'S':
-            self.data_x = data[border1:border2, -1:]
-            self.data_y = data[border1:border2, -1:]
+            for s in self.target:
+                if s in cols:
+                    cols.remove(s)
+            df_raw = df_raw[['date'] + cols + self.target]
+            df_source_domain = df_source_domain[['date'] + cols + self.target]
 
-        self.data_forecast = data[border1:border2, :self.forecast_dim]
-        self.data_stamp = data_stamp
+        else:
+            if self.target in cols:
+                cols.remove(self.target)
+            df_raw = df_raw[['date'] + cols + [self.target]]
+            df_source_domain = df_source_domain[['date'] + cols + [self.target]]
+
+        num_train = (8760 * 2 + 24) * 2  # int(len(df_raw) * 0.7)
+        num_test = 8760 * 2  # int(len(df_raw) * 0.2)
+        num_vali = len(df_raw) - num_train - num_test
+        border1s = [0, num_train - self.seq_len, len(df_raw) - num_test - self.seq_len]
+        border2s = [num_train, num_train + num_vali, len(df_raw)]
+
+        border1 = border1s[self.set_type]
+        border2 = border2s[self.set_type]
+
+        if self.set_type == 0:
+            border2 = (border2 - self.seq_len) * self.percent // 100 + self.seq_len
+
+        cols_data = df_raw.columns[1:]
+        df_data = df_raw[cols_data]
+        if self.features == 'M':
+            df_target = df_raw[self.target]
+            df_target_source_domain = df_source_domain[self.target]
+
+        else:
+            df_target = df_raw[[self.target]]
+            df_target_source_domain = df_source_domain[[self.target]]
+
+        cols_data_source_domain = df_source_domain.columns[1:]
+        df_data_source_domain = df_source_domain[cols_data_source_domain]
+
+        if self.scale:
+            '''
+            train_data = df_data[border1s[0]:border2s[0]]
+            self.scaler.fit(train_data.values)
+            data = self.scaler.transform(df_data.values)
+            self.target_scaler.fit(df_target.values)
+            '''
+
+            train_data = df_data_source_domain[border1s[0]:border2s[0]]
+            self.scaler.fit(train_data.values)
+            data = self.scaler.transform(df_data.values)
+            self.target_scaler.fit(df_target_source_domain.values)
+
+        else:
+            data = df_data.values
+
+        self._get_data(df_raw, data, border1, border2)
+
+
+class Dataset_Index(Dataset_cumstom):
+    def __init__(self, root_path, flag='train', size=None,
+                 features='M', data_path='sopt_index.csv',
+                 target='DA-24', scale=True, timeenc=0, freq='h', percent=100,
+                 seasonal_patterns=None, forecast_dim=2, feature_cols=['DA-24'], c_out=1):
+        super(Dataset_Index, self).__init__(root_path, flag, size, features,data_path,target,scale,timeenc,freq,percent,seasonal_patterns,forecast_dim,feature_cols,c_out)
+
+    def __read_data__(self):
+        self.scaler = StandardScaler()
+        self.target_scaler = StandardScaler()
+
+        df_source_domain = pd.read_csv(os.path.join(self.root_path, 'spot_index.csv'))
+        df_raw = pd.read_csv(os.path.join(self.root_path, self.data_path))
+
+        '''
+        df_raw.columns: ['date', ...(other features), target feature]
+        '''
+        if self.feature_cols is None:
+            self.feature_cols = df_raw.columns[1:]
+        cols = list(self.feature_cols.copy())
+
+        if 'date' in cols:
+            cols.remove('date')
+        if self.features == 'M':
+            for s in self.target:
+                if s in cols:
+                    cols.remove(s)
+            df_raw = df_raw[['date'] + cols + self.target]
+            df_source_domain = df_source_domain[['date'] + cols + self.target]
+
+        else:
+            if self.target in cols:
+                cols.remove(self.target)
+            df_raw = df_raw[['date'] + cols + [self.target]]
+            df_source_domain = df_source_domain[['date'] + cols + [self.target]]
+
+        num_train = 366  # int(len(df_raw) * 0.7)
+        num_test = 365  # int(len(df_raw) * 0.2)
+        num_vali = len(df_raw) - num_train - num_test
+        border1s = [0, num_train - self.seq_len, len(df_raw) - num_test - self.seq_len]
+        border2s = [num_train, num_train + num_vali, len(df_raw)]
+
+        border1 = border1s[self.set_type]
+        border2 = border2s[self.set_type]
+
+        if self.set_type == 0:
+            border2 = (border2 - self.seq_len) * self.percent // 100 + self.seq_len
+
+        cols_data = df_raw.columns[1:]
+        df_data = df_raw[cols_data]
+        if self.features == 'M':
+            df_target = df_raw[self.target]
+            df_target_source_domain = df_source_domain[self.target]
+
+        else:
+            df_target = df_raw[[self.target]]
+            df_target_source_domain = df_source_domain[[self.target]]
+
+        cols_data_source_domain = df_source_domain.columns[1:]
+        df_data_source_domain = df_source_domain[cols_data_source_domain]
+
+        if self.scale:
+            '''
+            train_data = df_data[border1s[0]:border2s[0]]
+            self.scaler.fit(train_data.values)
+            data = self.scaler.transform(df_data.values)
+            self.target_scaler.fit(df_target.values)
+            '''
+
+            train_data = df_data_source_domain[border1s[0]:border2s[0]]
+            self.scaler.fit(train_data.values)
+            data = self.scaler.transform(df_data.values)
+            self.target_scaler.fit(df_target_source_domain.values)
+
+        else:
+            data = df_data.values
+
+        self._get_data(df_raw, data, border1, border2)
+
 
 class Dataset_solar_radiation_daxiang(Dataset_cumstom):
     def __init__(self, root_path, flag='train', size=None,
@@ -324,13 +471,24 @@ class Dataset_solar_radiation_daxiang(Dataset_cumstom):
 
 if __name__ == '__main__':
     from utils.tools import heatmap
-    folder = r'D:\Time-LLM-main\dataset\price'
-    # data_file = 'Tokyo.csv'
-    # data = pd.read_csv(os.path.join(folder, data_file),index_col=0)
-    # heatmap(data)
+    folder = r'D:\Time-LLM-main\dataset\pv'
+    data_file = 'PV_hour.csv'
+    data = pd.read_csv(os.path.join(folder, data_file),index_col=0)
+    # print(data.columns)
+    # # data = data[['Temperature', 'Relative_humidity',  'Wind_speed', 'Global_horizontal_irradiance', 'System_price', 'Sell_volume', 'Buy_volume', 'Total_volume',
+    # #                      'Sell_volume_block_orders', 'Sell_volume_contracted_block_orders', 'Buy_volume_block_orders', 'Buy_volume_contracted_block_orders',  'Price']]
+    # data = data[['Temperature','Relative_humidity','Precipitation','Dew_point','Vapor_pressure','Wind_speed','Sunshine_duration','Snowfall','Global_horizontal_irradiance']]
+    data_path = 'pv'
+    heatmap(data,data_path)
 
-    data_file = 'spot_index.csv'
-    data = pd.read_csv(os.path.join(folder, data_file))
-    df_repeated = data.loc[data.index.repeat(24)].reset_index(drop=True)
-    df_repeated.to_csv(os.path.join(folder, data_file[:-4] + '_24h.csv'), index=False)
-    print(df_repeated)
+    # data_file = 'spot_index.csv'
+    # data = pd.read_csv(os.path.join(folder, data_file))
+    # df_repeated = data.loc[data.index.repeat(24)].reset_index(drop=True)
+    # df_repeated.to_csv(os.path.join(folder, data_file[:-4] + '_24h.csv'), index=False)
+    # print(df_repeated)
+
+    # data_file = 'intraday_30min.csv'
+    # df = pd.read_csv(os.path.join(folder, data_file))
+    # data = df.iloc[::2, :]
+    # print(data)
+    # data.to_csv(os.path.join(folder, data_file[:-4] + '_1h.csv'))

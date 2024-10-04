@@ -38,7 +38,7 @@ class Model(nn.Module):
 
     def encoder(self, x):
         x,_ = self.rnn_layer(x)
-        # x = self.linear_predict(x.permute(0, 2, 1)).permute(0, 2, 1)
+        x = self.linear_predict(x.permute(0, 2, 1)).permute(0, 2, 1)
         x = self.output_projection(x)
         return x
 

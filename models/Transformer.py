@@ -55,7 +55,7 @@ class Model(nn.Module):
                         FullAttention(False, configs.factor, attention_dropout=configs.dropout,
                                       output_attention=configs.output_attention), configs.d_model, configs.n_heads),
                     configs.d_model,
-                    configs.d_ff,
+                    configs.d_model * 4,
                     dropout=configs.dropout,
                     activation=configs.activation
                 ) for l in range(configs.e_layers)
@@ -80,7 +80,7 @@ class Model(nn.Module):
                                           output_attention=False),
                             configs.d_model, configs.n_heads),
                         configs.d_model,
-                        configs.d_ff,
+                        configs.d_model * 4,
                         dropout=configs.dropout,
                         activation=configs.activation,
                     )

@@ -65,17 +65,11 @@ def main(args):
 
     if 'TimeLLM' in args.model:
         args.batch_size = 24
-        args.learning_rate = 0.01
+        args.learning_rate = 0.001
         args.content = load_content(args)
         if 'LLAMA' in args.llm_model:
-            args.d_model = 16
-            args.d_ff = 64
-            args.llm_layers = 6
             args.llm_dim = 4096
         elif 'BERT' in args.llm_model:
-            args.d_model = 256
-            args.d_ff = 512  # d_ff < llm_dim
-            args.llm_layers = 2
             args.llm_dim = 768
         else:
             raise ValueError('Unknown llm model')
@@ -118,17 +112,43 @@ def main(args):
 
 if __name__ == '__main__':
     # from pv_configs import args
-    from configs.solar_radiation_configs import args
-    # from price_configs import args
+    # from solar_radiation_configs import args
+    from configs.price_configs import args
+    # from index_configs import args
     args.scale = True
 
-    args.model_id = 'daxiang'
-
-    args.model = 'Informer'  # [Autoformer, TimeLLM, TimeLLMForecast, TimeLLMX, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST]
+    args.model_id = 'price'
+    args.model = 'TimeLLMX'  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, RNNTimeLLM, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST]
     args.is_training = 1
-    args.seq_len = 168
-    args.pred_len = 24
-    args.d_model = 512
-    args.d_ff = 2048
-    args.e_layers = 8
+    args.features = 'M'
+
+    args.d_model = 64
+    args.d_ff = 128
+    args.e_layers = 2
+    args.d_layers = 1
+    args.llm_layers = 2
+
+    args.rnn_dim = 256
+    args.rnn_layers = 1
+    args.feature_cols = ['Sell_volume', 'Buy_volume', 'Total_volume', 'System_price', 'Hokkaido', 'Tohoku', 'Tokyo', 'Chubu', 'Hokuriku', 'Kansai', 'Chugoku', 'Shikoku',
+                         'Kyusyu', 'Sell_volume_block_orders', 'Sell_volume_contracted_block_orders', 'Buy_volume_block_orders', 'Buy_volume_contracted_block_orders',
+                         'Opening_price', 'Highest_price', 'Lowest_price', 'Last_price', 'Average_price', 'Volumes', 'Number_of_contracts']
+    args.target = ['System_price','Hokkaido','Tohoku', 'Tokyo', 'Chubu', 'Hokuriku', 'Kansai', 'Chugoku', 'Shikoku','Kyusyu','Opening_price', 'Highest_price','Lowest_price', 'Last_price', 'Average_price',]
+
+    # args.feature_cols = ['Sell_volume', 'Buy_volume', 'Total_volume', 'System_price', 'Hokkaido', 'Tohoku', 'Tokyo', 'Chubu', 'Hokuriku', 'Kansai', 'Chugoku', 'Shikoku',
+    #                      'Kyusyu', 'Sell_volume_block_orders', 'Sell_volume_contracted_block_orders', 'Buy_volume_block_orders', 'Buy_volume_contracted_block_orders',
+    #                      'Opening_price', 'Highest_price','Lowest_price', 'Last_price', 'Average_price', 'Volumes', 'Number_of_contracts']
+    # args.target = ['Opening_price', 'Highest_price', 'Lowest_price','Last_price', 'Average_price']
+
+    args.enc_in = len(args.feature_cols)
+    args.dec_in = len(args.feature_cols)
+    args.c_out = len(args.target)
+
+    # ['DA-24','DA-DT', 'DA-PT','TTV','Temperature','Relative_humidity','Precipitation','Dew_point','Vapor_pressure',
+    #  'Wind_speed','Sunshine_duration','Snowfall','Global_horizontal_irradiance','System_price','Sell_volume','Buy_volume',
+    #  'Total_volume','Sell_volume_block_orders','Sell_volume_contracted_block_orders','Buy_volume_block_orders',
+    #  'Buy_volume_contracted_block_orders','Price']
+    # args.target = 'System_price'
     main(args)
+
+

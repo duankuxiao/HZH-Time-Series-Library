@@ -168,16 +168,16 @@ def visual(true, preds=None, name='./pic/test.pdf'):
     plt.legend()
     plt.savefig(name, bbox_inches='tight')
 
-def heatmap(data):
+def heatmap(data,data_path):
     data_coor = data.corr()
     mask = np.zeros_like(data_coor, dtype=bool)
     mask[np.triu_indices_from(mask)] = True
     print(data_coor)
-    plt.rcParams.update({'font.size': 18})
-    plt.subplots(figsize=(24, 24), dpi=1080, facecolor='w')
-    fig = sns.heatmap(data_coor, annot=True, mask=mask, vmin=-1, vmax=1, square=True, cmap="viridis", fmt='.2f', annot_kws={"size": 18},
+    plt.rcParams.update({'font.size': 8})
+    plt.subplots(figsize=(18, 22), dpi=1080, facecolor='w')
+    fig = sns.heatmap(data_coor, annot=True, mask=mask, vmin=-1, vmax=1, square=True, cmap="viridis", fmt='.2f', annot_kws={"size": 8},
                       cbar_kws={'shrink': 0.85, 'aspect': 13})
-    plt.savefig('heatmap.png')
-    plt.xticks(fontsize=18)
-    plt.yticks(fontsize=18)
+    plt.savefig('{}.png'.format(data_path))
+    plt.xticks(fontsize=8)
+    plt.yticks(fontsize=8)
     plt.show()

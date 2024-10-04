@@ -14,7 +14,7 @@ parser.add_argument('--model', type=str, default='DLinear',
 # data loader
 parser.add_argument('--data', type=str, default='PV', help='dataset type')
 parser.add_argument('--root_path', type=str, default='./dataset/PV', help='root path of the data file')
-parser.add_argument('--data_path', type=str, default='PV_hour_7f.csv', help='data file PV_hour.csv or PV_hour_7f.csv')
+parser.add_argument('--data_path', type=str, default='PV_hour.csv', help='data file PV_hour.csv or PV_hour_7f.csv')
 parser.add_argument('--features', type=str, default='MS', help='forecasting task, options:[M, S, MS]; '
                          'M:multivariate predict multivariate, S: univariate predict univariate, ' 'MS:multivariate predict univariate')
 parser.add_argument('--target', type=str, default='PV', help='target feature in S or MS task')

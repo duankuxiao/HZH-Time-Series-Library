@@ -13,7 +13,7 @@ class Dataset_cumstom(Dataset):
     def __init__(self, root_path, flag='train', size=None,
                  features='S', data_path='PV_power.csv',
                  target='PV', scale=True, timeenc=0, freq='h', percent=100,
-                 seasonal_patterns=None, forecast_dim=2, feature_cols=['Temperature']):
+                 seasonal_patterns=None, forecast_dim=2, feature_cols=['Temperature'],c_out=1):
         self.forecast_dim = forecast_dim
         self.feature_cols = feature_cols
 
@@ -78,8 +78,8 @@ class Dataset_PV_hour_llm(Dataset_cumstom):
     def __init__(self, root_path, flag='train', size=None,
                  features='S', data_path='PV_power.csv',
                  target='PV', scale=True, timeenc=0, freq='h', percent=100,
-                 seasonal_patterns=None,forecast_dim=2,feature_cols=None):
-        super(Dataset_PV_hour_llm, self).__init__(root_path, flag, size, features,data_path, target,scale,timeenc,freq,percent,seasonal_patterns,forecast_dim,feature_cols)
+                 seasonal_patterns=None,forecast_dim=2,feature_cols=None,c_out=1):
+        super(Dataset_PV_hour_llm, self).__init__(root_path, flag, size, features,data_path, target,scale,timeenc,freq,percent,seasonal_patterns,forecast_dim,feature_cols,c_out)
 
     def __read_data__(self):
         self.scaler = StandardScaler()
@@ -158,8 +158,8 @@ class Dataset_PV_hour_llm(Dataset_cumstom):
 class Dataset_solar_radiation_llm(Dataset_cumstom):
     def __init__(self, root_path, flag='train', size=None, features='S', data_path='Tokyo.csv',
                  target='Global_horizontal_irradiance', scale=True, timeenc=0, freq='h', percent=100,
-                 seasonal_patterns=None,forecast_dim=2,feature_cols=['Temperature']):
-        super(Dataset_solar_radiation_llm, self).__init__(root_path, flag, size, features,data_path, target,scale,timeenc,freq,percent,seasonal_patterns,forecast_dim,feature_cols)
+                 seasonal_patterns=None,forecast_dim=2,feature_cols=['Temperature'],c_out=1):
+        super(Dataset_solar_radiation_llm, self).__init__(root_path, flag, size, features,data_path, target,scale,timeenc,freq,percent,seasonal_patterns,forecast_dim,feature_cols,c_out)
 
 
     def __read_data__(self):

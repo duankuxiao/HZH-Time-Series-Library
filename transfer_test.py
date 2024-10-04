@@ -8,7 +8,7 @@ from utils.tools import load_content
 import random
 import numpy as np
 from pred_results import res_evaluation
-from run_main import get_setting
+from run_tokyo_price import get_setting
 
 def transfer_test(args,path):
     args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False

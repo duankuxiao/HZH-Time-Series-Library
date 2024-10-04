@@ -1,6 +1,6 @@
 from data_provider.data_loader import Dataset_ETT_hour, Dataset_ETT_minute, Dataset_Custom, Dataset_M4
 from torch.utils.data import DataLoader
-from data_provider.data_loader_cumstom import Dataset_PV_hour, Dataset_solar_radiation, Dataset_solar_radiation_daxiang
+from data_provider.data_loader_cumstom import Dataset_PV_hour, Dataset_solar_radiation, Dataset_solar_radiation_daxiang, Dataset_Pirce, Dataset_Index
 from data_provider.data_loader_LLM import Dataset_PV_hour_llm, Dataset_solar_radiation_llm
 
 data_dict = {
@@ -20,6 +20,8 @@ data_dict = {
     'Sendai': Dataset_solar_radiation,  # Dataset_solar_radiation
     'Fukuoka': Dataset_solar_radiation,  # Dataset_solar_radiation
     'Osaka': Dataset_solar_radiation,  # Dataset_solar_radiation
+    'Price':Dataset_Pirce,
+    'Index': Dataset_Index,
 
 }
 
@@ -27,11 +29,11 @@ data_dict = {
 def data_provider(args, flag):
     Data = data_dict[args.data]
 
-    # if 'TimeLLM' in args.model:
-    #     Data = Dataset_solar_radiation_llm  # Dataset_solar_radiation_llm
-    #
-    # if 'TimeLLM' in args.model and args.data == 'PV':
-    #     Data = Dataset_PV_hour_llm  # Dataset_PV_hour_llm
+    if args.model == 'TimeLLM':
+        Data = Dataset_solar_radiation_llm  # Dataset_solar_radiation_llm
+
+    if args.model == 'TimeLLM' and args.data == 'PV':
+        Data = Dataset_PV_hour_llm  # Dataset_PV_hour_llm
 
     timeenc = 0 if args.embed != 'timeF' else 1
     percent = args.percent

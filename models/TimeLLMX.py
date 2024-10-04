@@ -227,8 +227,6 @@ class Model(nn.Module):
                 self.linear_predict = nn.Linear(configs.seq_len + configs.pred_len, configs.pred_len)
             else:
                 self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len)
-
-
         else:
             raise NotImplementedError
 
@@ -252,7 +250,7 @@ class Model(nn.Module):
         return None
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
-        x_enc = self.normalize_layers(x_enc, 'norm')
+        # x_enc = self.normalize_layers(x_enc, 'norm')
         if self.use_forecast:
             x_forecast = self.normalize_layers_forecast(x_forecast[:,-self.pred_len:,:], 'norm')
         if self.use_prompt:
@@ -305,14 +303,14 @@ class Model(nn.Module):
             prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)
 
         source_embeddings = self.mapping_layer(self.word_embeddings.permute(1, 0)).permute(1, 0)
-
         enc_out = self.reprogramming_layer(x_enc, source_embeddings, source_embeddings)  # source_embeddings [1000, 768]
+
         if self.use_forecast:
             enc_out_forecast = self.reprogramming_layer_forecast(x_forecast, source_embeddings, source_embeddings)
 
         llama_enc_out = enc_out
-        # if self.use_forecast:
-        #     llama_enc_out = torch.cat([llama_enc_out, enc_out_forecast], dim=1)  # prompt_embeddings.shape,enc_out.shape, dec_out.shape
+        if self.use_forecast:
+            llama_enc_out = torch.cat([llama_enc_out, enc_out_forecast], dim=1)  # prompt_embeddings.shape,enc_out.shape, dec_out.shape
 
         if self.use_prompt:
             llama_enc_out = torch.cat([prompt_embeddings, llama_enc_out], dim=1)  # prompt_embeddings.shape,enc_out.shape, dec_out.shape
@@ -321,7 +319,7 @@ class Model(nn.Module):
         # dec_out = self.linear_predict(dec_out.permute(0, 2, 1)).permute(0, 2, 1)
         dec_out = self.output_projection(dec_out)
 
-        dec_out = self.normalize_layers(dec_out, 'denorm')
+        # dec_out = self.normalize_layers(dec_out, 'denorm')
         return dec_out
 
     def calcute_lags(self, x_enc):

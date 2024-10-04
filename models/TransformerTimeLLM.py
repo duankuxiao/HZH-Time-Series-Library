@@ -1,38 +1,18 @@
-from math import sqrt
-
-import torch
-import torch.nn as nn
+import torch.nn.functional as F
 from layers.Transformer_EncDec import Decoder, DecoderLayer, Encoder, EncoderLayer, ConvLayer
 from layers.SelfAttention_Family import FullAttention, AttentionLayer
 from layers.Embed import DataEmbedding
-import torch.nn.functional as F
 
+import torch
+import torch.nn as nn
 from transformers import LlamaConfig, LlamaModel, LlamaTokenizer, GPT2Config, GPT2Model, GPT2Tokenizer, BertConfig, \
     BertModel, BertTokenizer, AutoTokenizer
 from layers.Embed import PatchEmbedding
-import transformers
 from layers.StandardNorm import Normalize
-
-transformers.logging.set_verbosity_error()
-
-
-class FlattenHead(nn.Module):
-    def __init__(self, n_vars, nf, target_window, head_dropout=0):
-        super().__init__()
-        self.n_vars = n_vars
-        self.flatten = nn.Flatten(start_dim=-2)
-        self.linear = nn.Linear(nf, target_window)
-        self.dropout = nn.Dropout(head_dropout)
-
-    def forward(self, x):
-        x = self.flatten(x)
-        x = self.linear(x)
-        x = self.dropout(x)
-        return x
+from math import sqrt
 
 
 class LLMBlock(nn.Module):
-
     def __init__(self, configs, patch_len=16, stride=8):
         super(LLMBlock, self).__init__()
         self.device = configs.device
@@ -44,8 +24,10 @@ class LLMBlock(nn.Module):
         self.d_llm = configs.llm_dim
         self.patch_len = configs.patch_len
         self.stride = configs.stride
+
         self.use_prompt = configs.use_prompt
         self.use_forecast = configs.use_forecast
+
         if configs.llm_model == 'LLAMA':
             # self.llama_config = LlamaConfig.from_pretrained('/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/')
             self.llama_config = LlamaConfig.from_pretrained(r'D:\LLM\llama')
@@ -213,27 +195,26 @@ class LLMBlock(nn.Module):
 
         self.word_embeddings = self.llm_model.get_input_embeddings().weight
         self.vocab_size = self.word_embeddings.shape[0]
-        self.num_tokens = 3000
+        self.num_tokens = 2000
         self.mapping_layer = nn.Linear(self.vocab_size, self.num_tokens)
 
-        self.reprogramming_layer = ReprogrammingLayer(configs.c_out, configs.n_heads, self.d_ff, self.d_llm)
-        self.reprogramming_layer_forecast = ReprogrammingLayer(configs.forecast_dim, configs.n_heads, self.d_ff, self.d_llm)
+        self.reprogramming_layer = ReprogrammingLayer(configs.d_model, configs.n_heads, self.d_ff, self.d_llm)
+
+        self.patch_nums = int((configs.seq_len - self.patch_len) / self.stride + 2)
+        self.head_nf = self.d_ff * self.patch_nums
 
         self.llm_model.to(device=self.device)
         self.mapping_layer.to(device=self.device)
         self.reprogramming_layer.to(device=self.device)
-        self.reprogramming_layer_forecast.to(device=self.device)
+
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None, mask=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
-            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
-            return dec_out[:, -self.pred_len:, :]
+            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)
+            return dec_out
         return None
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
-        # x_enc = self.normalize_layers(x_enc, 'norm')
-        if self.use_forecast:
-            x_forecast = self.normalize_layers_forecast(x_forecast[:,-self.pred_len:,:], 'norm')
         if self.use_prompt:
             x_target = x_enc[:, :, -1:]
             min_values = torch.min(x_target, dim=1)[0]
@@ -261,10 +242,10 @@ class LLMBlock(nn.Module):
                         f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
                         f"top {self.top_k} lags are : {lags_values_str}, "
                         "Future indexes: "
-                        f"Day Ahead 24 hours {x_forecast[b,0,0]}, "
-                        f"Day Ahead Day Time {x_forecast[b,0,1]}, "
-                        f"Day Ahead Peak Time {x_forecast[b,0,2]}, "
-                        f"Total Transaction Volume {x_forecast[b,0,3]}<|end_prompt|>"
+                        f"Day Ahead 24 hours {x_forecast[b, 0, 0]}, "
+                        f"Day Ahead Day Time {x_forecast[b, 0, 1]}, "
+                        f"Day Ahead Peak Time {x_forecast[b, 0, 2]}, "
+                        f"Total Transaction Volume {x_forecast[b, 0, 3]}<|end_prompt|>"
                     )
                 else:
                     prompt_ = (
@@ -284,14 +265,10 @@ class LLMBlock(nn.Module):
             prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)
 
         source_embeddings = self.mapping_layer(self.word_embeddings.permute(1, 0)).permute(1, 0)
+
         enc_out = self.reprogramming_layer(x_enc, source_embeddings, source_embeddings)  # source_embeddings [1000, 768]
 
-        if self.use_forecast:
-            enc_out_forecast = self.reprogramming_layer_forecast(x_forecast, source_embeddings, source_embeddings)
-
         llama_enc_out = enc_out
-        if self.use_forecast:
-            llama_enc_out = torch.cat([llama_enc_out, enc_out_forecast], dim=1)  # prompt_embeddings.shape,enc_out.shape, dec_out.shape
 
         if self.use_prompt:
             llama_enc_out = torch.cat([prompt_embeddings, llama_enc_out], dim=1)  # prompt_embeddings.shape,enc_out.shape, dec_out.shape
@@ -332,78 +309,15 @@ class ReprogrammingLayer(nn.Module):
         value_embedding = self.value_projection(value_embedding).view(S, H, -1)  # [1000, 8, 128]
 
         out = self.reprogramming(target_embedding, source_embedding, value_embedding)  # [B, T, H, 128]
+
         out = out.reshape(B, T, -1)
+
         return self.out_projection(out)
 
     def reprogramming(self, target_embedding, source_embedding, value_embedding):
         B, L, H, E = target_embedding.shape
 
         scale = 1. / sqrt(E)
-
-        scores = torch.einsum("blhe,she->bhls", target_embedding, source_embedding)
-
-        A = self.dropout(torch.softmax(scale * scores, dim=-1))
-        reprogramming_embedding = torch.einsum("bhls,she->blhe", A, value_embedding)
-
-        return reprogramming_embedding
-
-
-class Attention(nn.Module):
-    def __init__(self, d_llm, d_model,n_heads,d_keys=None,attention_dropout=0.1):
-        super().__init__()
-        self.query_projection = nn.Linear(d_llm, d_keys * n_heads)
-        self.key_projection = nn.Linear(d_model, d_keys * n_heads)
-        self.value_projection = nn.Linear(d_model, d_keys * n_heads)
-        self.dropout = nn.Dropout(attention_dropout)
-
-    def forward(self, query, key, value):
-        query = self.query_projection(query)
-        key = self.key_projection(key)
-        value = self.value_projection(value)
-
-        out = self.reprogramming(query, key, value)
-        return out
-
-    def reprogramming(self, target_embedding, source_embedding, value_embedding):
-        B, L, E = target_embedding.shape
-        scale = 1. / sqrt(E)
-        scores = torch.einsum("ble,bls->bl", target_embedding, source_embedding)
-        A = self.dropout(torch.softmax(scale * scores, dim=-1))
-        reprogramming_embedding = torch.einsum("bl,bls->bls", A, value_embedding)
-        return reprogramming_embedding
-
-
-class CrossAttention(nn.Module):
-    def __init__(self, d_llm, d_model, n_heads, d_keys=None, attention_dropout=0.1):
-        super(CrossAttention, self).__init__()
-
-        self.query_projection = nn.Linear(d_llm, d_keys * n_heads)
-        self.key_projection = nn.Linear(d_model, d_keys * n_heads)
-        self.value_projection = nn.Linear(d_model, d_keys * n_heads)
-        self.out_projection = nn.Linear(d_keys * n_heads, d_model)
-        self.n_heads = n_heads
-        self.dropout = nn.Dropout(attention_dropout)
-
-    def forward(self, target_embedding, source_embedding, value_embedding):
-        B, L, _ = target_embedding.shape  # [80, 18, 32]
-        S, _ = source_embedding.shape  # [1000, 768]
-        H = self.n_heads
-
-        target_embedding = self.query_projection(target_embedding).view(B, L, H, -1)  # [80, 18, 8, 128]
-        source_embedding = self.key_projection(source_embedding).view(S, H, -1)  # [1000, 8, 128]
-        value_embedding = self.value_projection(value_embedding).view(S, H, -1)  # [1000, 8, 128]
-
-        out = self.reprogramming(target_embedding, source_embedding, value_embedding)  # [80, 18, 8, 128]
-
-        out = out.reshape(B, L, -1)  # [80, 18, 1024]
-
-        return self.out_projection(out)  # [80, 18, 768]
-
-    def reprogramming(self, target_embedding, source_embedding, value_embedding):
-        B, L, H, E = target_embedding.shape
-
-        scale = 1. / sqrt(E)
-
         scores = torch.einsum("blhe,she->bhls", target_embedding, source_embedding)
 
         A = self.dropout(torch.softmax(scale * scores, dim=-1))
@@ -422,12 +336,18 @@ class Model(nn.Module):
         super(Model, self).__init__()
         self.task_name = configs.task_name
         self.pred_len = configs.pred_len
+        self.label_len = configs.label_len
         self.output_attention = configs.output_attention
         self.use_forecast = configs.use_forecast
+        if self.use_forecast:
+            self.normalize_layers = Normalize(configs.enc_in-4, affine=False)
+            self.enc_embedding = DataEmbedding(configs.enc_in-4, configs.d_model, configs.embed, configs.freq, configs.dropout)
+        else:
+            self.normalize_layers = Normalize(configs.enc_in, affine=False)
+            self.enc_embedding = DataEmbedding(configs.enc_in, configs.d_model, configs.embed, configs.freq, configs.dropout)
 
-        # Encoder
+        self.normalize_layers_forecast = Normalize(configs.forecast_dim, affine=False)
         # Embedding
-        self.enc_embedding = DataEmbedding(configs.enc_in-1, configs.d_model, configs.embed, configs.freq, configs.dropout)
         # Encoder
         self.encoder = Encoder(
             [
@@ -443,37 +363,13 @@ class Model(nn.Module):
             ],
             norm_layer=torch.nn.LayerNorm(configs.d_model)
         )
-        self.LLM_encoder = LLMBlock(configs)
-
-        # self.attention = Attention(configs.llm_dim, configs.enc_in-1,configs.n_heads, configs.d_ff)
-        self.attention = CrossAttention(configs.llm_dim, configs.enc_in-1,configs.n_heads, configs.d_ff)
         # Decoder
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
-            self.dec_embedding = DataEmbedding(configs.llm_dim, configs.d_model, configs.embed, configs.freq, configs.dropout)
 
-            # Embedding
-            self.decoder = Decoder(
-                [
-                    DecoderLayer(
-                        AttentionLayer(
-                            FullAttention(True, configs.factor, attention_dropout=configs.dropout,
-                                          output_attention=False),
-                            configs.d_model, configs.n_heads),
-                        AttentionLayer(
-                            FullAttention(False, configs.factor, attention_dropout=configs.dropout,
-                                          output_attention=False),
-                            configs.d_model, configs.n_heads),
-                        configs.d_model,
-                        4 * configs.d_model,
-                        dropout=configs.dropout,
-                        activation=configs.activation,
-                    )
-                    for l in range(configs.d_layers)
-                ],
-                norm_layer=torch.nn.LayerNorm(configs.d_model),
-            )
-            self.out_projection = nn.Linear(configs.d_model, configs.c_out)
-            self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len+configs.label_len)
+            self.decoder = LLMBlock(configs)
+            self.output_projection = nn.Linear(configs.llm_dim, configs.pred_len, bias=True)
+            self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len, bias=True)
+
         if self.task_name == 'imputation':
             self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
         if self.task_name == 'anomaly_detection':
@@ -483,21 +379,21 @@ class Model(nn.Module):
             self.dropout = nn.Dropout(configs.dropout)
             self.output_projection = nn.Linear(configs.d_model * configs.seq_len, configs.num_class)
 
+        self.normalize_layers = Normalize(configs.enc_in, affine=False)
+        self.normalize_layers_forecast = Normalize(configs.forecast_dim, affine=False)
+
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
-        x_enc_other = x_enc[:,:,:-1]
-        x_enc_target = x_enc[:,:,-1:]
+        if self.use_forecast:
+            x_enc = x_enc[:, :, 4:]
+        # x_enc = self.normalize_layers(x_enc,'norm')
+        # Embedding
+        enc_out = self.enc_embedding(x_enc, x_mark_enc)
+        enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
-        enc_out_target = self.LLM_encoder(x_enc_target, x_mark_enc, x_dec, x_mark_dec, x_forecast)
-        enc_out_other,attn = self.encoder(self.enc_embedding(x_enc_other,x_mark_enc))
-
-        dec_in = torch.cat((x_enc_other, enc_out_target), dim=-1)
-        dec_in = self.linear_predict(enc_out_target.permute(0,2,1)).permute(0,2,1)
-        dec_in = self.dec_embedding(dec_in, x_mark_dec)
-
-        dec_out = self.decoder(dec_in, enc_out_other, x_mask=None, cross_mask=None)
-        dec_out = self.out_projection(dec_out)
-
-        # dec_out = self.linear_predict(dec_out[:, -self.pred_len:, :].permute(0, 2, 1)).permute(0, 2, 1)
+        dec_out = self.decoder(enc_out, x_mark_enc, x_dec, x_mark_dec, x_forecast)
+        dec_out = self.output_projection(dec_out)
+        # dec_out = self.linear_predict(dec_out)
+        # dec_out = self.normalize_layers(dec_out,'denorm')
 
         return dec_out
 

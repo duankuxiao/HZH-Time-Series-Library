@@ -1,6 +1,6 @@
 import os
 import torch
-from models import Autoformer, TimeLLM, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TimeLLMX,TimeLLMXX, RNN,TimeLLMForecast, PatchTST, TimeLLMformer, RNNTimeLLM
+from models import Autoformer, TimeLLM, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TimeLLMX,TransformerTimeLLM, RNN,TimeLLMForecast, PatchTST, TimeLLMformer, RNNTimeLLM,TimeLLMDLinear,DLinearTimeLLM,TimeLLMXX
 
 
 class Exp_Basic(object):
@@ -18,10 +18,14 @@ class Exp_Basic(object):
             'TimeMixer': TimeMixer,
             'TimeLLMX': TimeLLMX,
             'TimeLLMXX': TimeLLMXX,
+
+            'TransformerTimeLLM': TransformerTimeLLM,
             'RNN': RNN,
             'PatchTST':PatchTST,
             'TimeLLMformer': TimeLLMformer,
-            'RNNTimeLLM':RNNTimeLLM
+            'RNNTimeLLM':RNNTimeLLM,
+            'TimeLLMDLinear':TimeLLMDLinear,
+            'DLinearTimeLLM':DLinearTimeLLM
         }
         if args.model == 'Mamba':
             print('Please make sure you have successfully installed mamba_ssm')

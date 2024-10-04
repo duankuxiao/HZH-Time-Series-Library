@@ -37,8 +37,11 @@ def get_setting(args,ii):
 
     if 'TimeLLM' in args.model:
         setting += '_{}_llmd{}_llmf{}_tk{}'.format(args.llm_model, args.llm_dim, args.llm_layers, args.top_k)
+        if args.use_prompt:
+            setting += '_prompt'
     if 'RNN' in args.model:
         setting += '_{}_llmd{}_llmf{}'.format(args.rnn_model, args.rnn_dim, args.rnn_layers, )
+
     if args.use_forecast:
         setting += '_forecast'
     if args.percent != 100:
@@ -65,17 +68,11 @@ def main(args):
 
     if 'TimeLLM' in args.model:
         args.batch_size = 24
-        args.learning_rate = 0.001
+        args.learning_rate = 0.01
         args.content = load_content(args)
         if 'LLAMA' in args.llm_model:
-            args.d_model = 16
-            args.d_ff = 64
-            args.llm_layers = 6
             args.llm_dim = 4096
         elif 'BERT' in args.llm_model:
-            args.d_model = 64
-            args.d_ff = 128  # d_ff < llm_dim
-            args.llm_layers = 1
             args.llm_dim = 768
         else:
             raise ValueError('Unknown llm model')
@@ -117,33 +114,40 @@ def main(args):
 
 
 if __name__ == '__main__':
-    # from pv_configs import args
-    # from solar_radiation_configs import args
-    from price_configs import args
-    args.scale = True
+    from configs.pv_configs import args
 
-    args.model_id = 'price'
-    args.model = 'RNNTimeLLM'  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer,RNNTimeLLM, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST]
+    args.scale = True
+    args.seq_len = 24 * 3
+    args.pred_len = 24 * 7
+    args.label_len = 24
+
+    args.model_id = 'pv'
+
+    args.model = 'TimeLLMXX'  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TransformerTimeLLM, RNNTimeLLM, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,TimeLLMDLinear, DLinearTimeLLM]
     args.is_training = 1
-    # args.features = 'S'
+    args.features = 'MS'
     args.use_prompt = False
     args.use_forecast = False  # False
     args.forecast_dim = 4
-    args.e_layers = 2
-    args.d_layers = 1
 
-    args.rnn_dim = 256
-    args.rnn_layers = 3
-    args.feature_cols = ['System_price','Sell_volume','Buy_volume', 'Total_volume', 'Sell_volume_block_orders', 'Sell_volume_contracted_block_orders', 'Buy_volume_block_orders',
-     'Buy_volume_contracted_block_orders', 'Price']
+    if 'TimeLLM' in args.model:
+        args.d_model = 64
+        args.d_ff = 128
+        args.e_layers = 4
+        args.d_layers = 1
+        args.llm_layers = 6
 
-    # 'DA-24','DA-DT', 'DA-PT','TTV',
+    if args.model == 'Transformer':
+        args.d_model = 512
+        args.d_ff = 2048
+        args.e_layers = 8
+        args.d_layers = 1
 
-    # ['DA-24','DA-DT', 'DA-PT','TTV','Temperature','Relative_humidity','Precipitation','Dew_point','Vapor_pressure',
-    #  'Wind_speed','Sunshine_duration','Snowfall','Global_horizontal_irradiance','System_price','Sell_volume','Buy_volume',
-    #  'Total_volume','Sell_volume_block_orders','Sell_volume_contracted_block_orders','Buy_volume_block_orders',
-    #  'Buy_volume_contracted_block_orders','Price']
-    # args.target = 'System_price'
+    if 'RNN' in args.model:
+        args.rnn_dim = 256
+        args.rnn_layers = 2
+
+    args.feature_cols = ['Temperature','Relative_humidity','Sun','Wind_speed','Dew_point','Precipitation','Global_horizontal_irradiance','Sunshine_duration','PV']
     main(args)
 
 

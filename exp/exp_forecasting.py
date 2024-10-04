@@ -275,18 +275,19 @@ class Exp_Forecast(Exp_Basic):
                 preds.append(pred)
                 trues.append(true)
                 verbose_interval = (len(test_data) // 2) if len(test_data) > 2 else 1
-
-                if (i + 1) % verbose_interval == 0:
-                    input = batch_x.detach().cpu().numpy()
-                    if test_data.scale and self.args.inverse:
-                        shape = input.shape
-                        input = test_data.inverse_transform(input.reshape(shape[0] * shape[1], -1)).reshape(shape)
-                    gt = np.concatenate((input[0, :, -1], true[0, :, -1]), axis=0)
-                    pd = np.concatenate((input[0, :, -1], pred[0, :, -1]), axis=0)
-                    res_path = os.path.join(folder_path + '/test_results/')
-                    if not os.path.exists(res_path):
-                        os.makedirs(res_path)
-                    visual(gt, pd, os.path.join(res_path, str(i) + '.pdf'))
+                verbose = False
+                if verbose:
+                    if (i + 1) % verbose_interval == 0:
+                        input = batch_x.detach().cpu().numpy()
+                        if test_data.scale and self.args.inverse:
+                            shape = input.shape
+                            input = test_data.inverse_transform(input.reshape(shape[0] * shape[1], -1)).reshape(shape)
+                        gt = np.concatenate((input[0, :, -1], true[0, :, -1]), axis=0)
+                        pd = np.concatenate((input[0, :, -1], pred[0, :, -1]), axis=0)
+                        res_path = os.path.join(folder_path + '/test_results/')
+                        if not os.path.exists(res_path):
+                            os.makedirs(res_path)
+                        visual(gt, pd, os.path.join(res_path, str(i) + '.pdf'))
 
         preds = np.concatenate(preds, axis=0)
         trues = np.concatenate(trues, axis=0)
@@ -311,7 +312,7 @@ class Exp_Forecast(Exp_Basic):
         else:
             dtw = -999
 
-        [mse, rmse, mae,mape, r2, corr] = results_evaluation(trues.squeeze(), preds.squeeze())
+        [mse, rmse, mae, mape, r2, corr] = results_evaluation(trues.flatten(), preds.flatten())
         print('mae:{}, r2:{}, dtw:{}'.format(mae, r2, dtw))
         f = open(os.path.join('./results', "result_long_term_forecast.txt"), 'a')
         f.write(setting + "  \n")
@@ -322,17 +323,20 @@ class Exp_Forecast(Exp_Basic):
         np.save(os.path.join(folder_path, 'metrics_{}.npy'.format(self.args.data)), np.array([mae, mse, rmse, r2, corr]))
         np.save(os.path.join(folder_path, 'pred_{}.npy'.format(self.args.data)), preds)
         np.save(os.path.join(folder_path, 'true_{}.npy'.format(self.args.data)), trues)
-        self.res_evaluation(preds, trues, folder_path)
+        if self.args.features == 'M' :
+            self.price_res_evaluation(trues, preds, folder_path)
+        else:
+            self.res_evaluation(trues,preds, folder_path)
         return
 
-    def res_evaluation(self, pred, true, path):
+    def res_evaluation(self,true, pred, path):
         stride = self.args.pred_len
         pred_output = np.squeeze(pred,axis=-1)[::stride, :].reshape(-1, 1)
         true_output = np.squeeze(true,axis=-1)[::stride, :].reshape(-1, 1)
 
         pred_res = pd.DataFrame({'pred': pred_output.flatten(), 'true': true_output.flatten()})
-        pred_res.loc[pred_res['true'] < 1e-2, 'true'] = 0
-        pred_res.loc[pred_res['true'] < 1e-2, 'pred'] = 0
+        pred_res.loc[pred_res['true'] < 1e-3, 'true'] = 0
+        pred_res.loc[pred_res['true'] < 1e-3, 'pred'] = 0
 
         [mse, rmse, mae, mape, r2, corr] = results_evaluation(pred_res['true'].values, pred_res['pred'].values)
 
@@ -341,3 +345,41 @@ class Exp_Forecast(Exp_Basic):
         metrics_df.to_csv(os.path.join(path, 'metrics_results_{}.csv'.format(self.args.data)))
 
         print('RMSE: {} MAE: {} R2: {}'.format(rmse, mae, r2))
+
+    def price_res_evaluation(self,true,pred,path):
+        stride = self.args.pred_len
+        true = true[::stride,:,:].reshape(-1,len(self.args.target))
+        pred = pred[::stride,:,:].reshape(-1,len(self.args.target))
+        columns_list = []
+        for i in self.args.target:
+            columns_list.append('{}_true'.format(i))
+            columns_list.append('{}_pred'.format(i))
+        res_df = pd.DataFrame(columns=columns_list)
+        mse_list, rmse_list, mae_list, r2_list, corr_list,mape_list = [], [], [], [], [], []
+        for i in self.args.target:
+            res_df['{}_pred'.format(i)] = pred[:, self.args.target.index(i)]
+            res_df['{}_true'.format(i)] = true[:, self.args.target.index(i)]
+
+            [mse, rmse, mae, mape, r2, corr] = results_evaluation(true[:, self.args.target.index(i)], pred[:, self.args.target.index(i)])
+            print('{} mse:{}, rmse:{} mae:{} r2:{} corr:{}'.format(i, mse, rmse, mae, r2, corr))
+            np.save(os.path.join(path, 'metrics_{}.npy'.format(i)), np.array([mse, rmse, mae, r2, corr]))
+
+            mse_list.append(mse)
+            rmse_list.append(rmse)
+            mae_list.append(mae)
+            mape_list.append(mape)
+            r2_list.append(r2)
+            corr_list.append(corr)
+
+        res_metrics_df = pd.DataFrame(columns=['mse', 'rmse', 'mae','mape', 'r2', 'corr'],
+                                      index=[i for i in self.args.target])
+        res_metrics_df['mse'] = mse_list
+        res_metrics_df['rmse'] = rmse_list
+        res_metrics_df['mae'] = mae_list
+        res_metrics_df['mape'] = mape_list
+        res_metrics_df['r2'] = r2_list
+        res_metrics_df['corr'] = corr_list
+        res_metrics_df.loc['mean'] = res_metrics_df.mean()
+        print(res_metrics_df.loc['mean'])
+        res_df.to_csv(os.path.join(path, 'pred_res.csv'))
+        res_metrics_df.to_csv(os.path.join(path, 'res_metrics_df.csv'))

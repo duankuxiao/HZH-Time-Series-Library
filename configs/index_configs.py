@@ -12,16 +12,16 @@ parser.add_argument('--model', type=str, default='TimeLLMForecast',
                     help='model name, options: [Autoformer, TimeLLM,TimeLLMForecast, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerX, RNN]')
 
 # data loader
-parser.add_argument('--data', type=str, default='Tokyo', help='dataset type')
+parser.add_argument('--data', type=str, default='Index', help='dataset type')
 parser.add_argument('--root_path', type=str, default='./dataset/price', help='root path of the data file')
-parser.add_argument('--data_path', type=str, default='Tokyo.csv', help='data file')
-parser.add_argument('--features', type=str, default='MS', help='forecasting task, options:[M, S, MS]; '
-                         'M:multivariate predict multivariate, S: univariate predict univariate, ' 'MS:multivariate predict univariate')
-parser.add_argument('--target', type=str, default='Price', help='target feature in S or MS task')
+parser.add_argument('--data_path', type=str, default='spot_index.csv', help='data file')
+parser.add_argument('--features', type=str, default='M', help='forecasting task, options:[M, S, MS]; '
+                                                              'M:multivariate predict multivariate, S: univariate predict univariate, ' 'MS:multivariate predict univariate')
+parser.add_argument('--target', default=['DA-24','DA-DT','DA-PT','TTV'], help='target feature in S or MS task')
 parser.add_argument('--loader', type=str, default='modal', help='dataset type')
-parser.add_argument('--freq', type=str, default='h', help='freq for time features encoding, '
-                         'options:[s:secondly, t:minutely, h:hourly, d:daily, b:business days, w:weekly, m:monthly], '
-                         'you can also use more detailed freq like 15min or 3h')
+parser.add_argument('--freq', type=str, default='d', help='freq for time features encoding, '
+                                                          'options:[s:secondly, t:minutely, h:hourly, d:daily, b:business days, w:weekly, m:monthly], '
+                                                          'you can also use more detailed freq like 15min or 3h')
 parser.add_argument('--checkpoints', type=str, default='./results/', help='location of model checkpoints')
 parser.add_argument('--use_forecast', action='store_true', help='input forecast data', default=False)
 
@@ -32,16 +32,14 @@ parser.add_argument('--use_multi_gpu', action='store_true', help='use multiple g
 parser.add_argument('--devices', type=str, default='0,1,2,3', help='device ids of multile gpus')
 
 # forecasting task
-parser.add_argument('--seq_len', type=int, default=72, help='input sequence length')
-parser.add_argument('--label_len', type=int, default=24, help='start token length')
-parser.add_argument('--pred_len', type=int, default=24, help='prediction sequence length')
-parser.add_argument('--seq_dim', type=int, default=9, help='input sequence length')
-parser.add_argument('--pred_dim', type=int, default=1, help='input sequence length')
-parser.add_argument('--forecast_dim', type=int, default=4, help='input sequence length')
-parser.add_argument('--feature_cols', type=list, default=None,help="input features ['DA-24','DA-DT', 'DA-PT','TTV','Temperature','Relative_humidity','Precipitation','Dew_point','Vapor_pressure',"
-                                                                   "'Wind_speed','Sunshine_duration','Snowfall','Global_horizontal_irradiance','System_price','Sell_volume','Buy_volume',"
-                                                                   "'Total_volume','Sell_volume_block_orders','Sell_volume_contracted_block_orders','Buy_volume_block_orders',"
-                                                                   "'Buy_volume_contracted_block_orders','Price']")
+parser.add_argument('--seq_len', type=int, default=30, help='input sequence length')
+parser.add_argument('--label_len', type=int, default=30, help='start token length')
+parser.add_argument('--pred_len', type=int, default=30, help='prediction sequence length')
+parser.add_argument('--seq_dim', type=int, default=4, help='input sequence length')
+parser.add_argument('--pred_dim', type=int, default=4, help='input sequence length')
+parser.add_argument('--forecast_dim', type=int, default=0, help='input sequence length')
+parser.add_argument('--feature_cols', type=list, default=['DA-24','DA-DT','DA-PT','TTV'],
+                    help="input features ['DA-24','DA-DT','DA-PT','TTV']")
 # ['DA-24','DA-DT', 'DA-PT','TTV','Temperature','Relative_humidity','Precipitation','Dew_point','Vapor_pressure',
 #                         'Wind_speed','Sunshine_duration','Snowfall','Global_horizontal_irradiance','System_price','Sell_volume','Buy_volume',
 #                          'Total_volume','Sell_volume_block_orders','Sell_volume_contracted_block_orders','Buy_volume_block_orders',
@@ -53,11 +51,11 @@ parser.add_argument('--inverse', action='store_true', help='inverse output data'
 # model define
 parser.add_argument('--top_k', type=int, default=5, help='for TimesBlock')
 parser.add_argument('--num_kernels', type=int, default=6, help='for Inception')
-parser.add_argument('--distil', action='store_false',help='whether to use distilling in encoder, using this argument means not using distilling',default=True)
+parser.add_argument('--distil', action='store_false', help='whether to use distilling in encoder, using this argument means not using distilling', default=True)
 
-parser.add_argument('--enc_in', type=int, default=22, help='encoder input size (seq features dim)')
-parser.add_argument('--dec_in', type=int, default=22, help='decoder input size (forecast dim)')
-parser.add_argument('--c_out', type=int, default=1, help='output size (pred dim)')
+parser.add_argument('--enc_in', type=int, default=4, help='encoder input size (seq features dim)')
+parser.add_argument('--dec_in', type=int, default=4, help='decoder input size (forecast dim)')
+parser.add_argument('--c_out', type=int, default=4, help='output size (pred dim)')
 parser.add_argument('--d_model', type=int, default=512, help='dimension of model')
 parser.add_argument('--n_heads', type=int, default=8, help='num of heads')
 parser.add_argument('--e_layers', type=int, default=8, help='num of encoder layers')
@@ -66,7 +64,7 @@ parser.add_argument('--d_ff', type=int, default=2048, help='dimension of fcn')
 parser.add_argument('--hidden_size', nargs='+', default=[256], help='output mlp layer')
 
 # Autoformer
-parser.add_argument('--moving_avg', type=int, default=25, help='window size of moving average for Autoformer')
+parser.add_argument('--moving_avg', type=int, default=31, help='window size of moving average for Autoformer')
 # TimeMixer
 parser.add_argument('--down_sampling_window', type=int, default=1, help='down sampling window size for TimeMixer')
 parser.add_argument('--down_sampling_layers', type=int, default=0, help='num of down sampling layers for TimeMixer')
@@ -88,7 +86,7 @@ parser.add_argument('--prompt_domain', type=int, default=1, help='')
 parser.add_argument('--llm_model', type=str, default='BERT', help='LLM model')  # LLAMA, GPT2, BERT
 parser.add_argument('--llm_dim', type=int, default=768, help='LLM model dimension')  # LLama7b:4096; GPT2-small:768; BERT-base:768
 parser.add_argument('--llm_layers', type=int, default=6, help='bert_layers=6 llama_layers=32')
-parser.add_argument('--use_prompt', action='store_true', help='input forecast data', default=True)
+parser.add_argument('--use_prompt', action='store_true', help='input forecast data', default=False)
 
 # RNN
 parser.add_argument('--rnn_model', type=str, default='LSTM', help='RNN model')  # GRU, LSTM, seq2seq

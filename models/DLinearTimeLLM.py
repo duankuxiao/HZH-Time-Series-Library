@@ -2,6 +2,7 @@ import torch.nn.functional as F
 from layers.Transformer_EncDec import Decoder, DecoderLayer, Encoder, EncoderLayer, ConvLayer
 from layers.SelfAttention_Family import FullAttention, AttentionLayer
 from layers.Embed import DataEmbedding
+from layers.Autoformer_EncDec import series_decomp
 
 import torch
 import torch.nn as nn
@@ -198,80 +199,32 @@ class LLMBlock(nn.Module):
         self.num_tokens = 2000
         self.mapping_layer = nn.Linear(self.vocab_size, self.num_tokens)
 
-        self.reprogramming_layer = ReprogrammingLayer(configs.rnn_dim, configs.n_heads, self.d_ff, self.d_llm)
+        self.reprogramming_layer_seasonal = ReprogrammingLayer(configs.enc_in, configs.n_heads, self.d_ff, self.d_llm)
+        self.reprogramming_layer_trend = ReprogrammingLayer(configs.enc_in, configs.n_heads, self.d_ff, self.d_llm)
 
         self.patch_nums = int((configs.seq_len - self.patch_len) / self.stride + 2)
         self.head_nf = self.d_ff * self.patch_nums
 
         self.llm_model.to(device=self.device)
         self.mapping_layer.to(device=self.device)
-        self.reprogramming_layer.to(device=self.device)
+        self.reprogramming_layer_seasonal.to(device=self.device)
+        self.reprogramming_layer_trend.to(device=self.device)
 
 
-    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None, mask=None):
+    def forward(self, seasonal_output,trend_output):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
-            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)
+            dec_out = self.forecast(seasonal_output,trend_output)
             return dec_out
         return None
 
-    def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
-        if self.use_prompt:
-            x_target = x_enc[:, :, -1:]
-            min_values = torch.min(x_target, dim=1)[0]
-            max_values = torch.max(x_target, dim=1)[0]
-            medians = torch.median(x_target, dim=1).values
-            lags = self.calcute_lags(x_target)
-            trends = x_target.diff(dim=1).sum(dim=1)
-
-            prompt = []
-            for b in range(x_enc.shape[0]):
-                min_values_str = str(min_values[b].tolist()[0])
-                max_values_str = str(max_values[b].tolist()[0])
-                median_values_str = str(medians[b].tolist()[0])
-                lags_values_str = str(lags[b].tolist())
-
-                if self.use_forecast:
-                    x_forecast = x_forecast[:,-self.pred_len:,:]
-                    prompt_ = (
-                        f"<|start_prompt|>Dataset description: {self.description}"
-                        f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information and the future indexes; "
-                        "Input statistics: "
-                        f"min value {min_values_str}, "
-                        f"max value {max_values_str}, "
-                        f"median value {median_values_str}, "
-                        f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
-                        f"top {self.top_k} lags are : {lags_values_str}, "
-                        "Future indexes: "
-                        f"Day Ahead 24 hours {x_forecast[b, 0, 0]}, "
-                        f"Day Ahead Day Time {x_forecast[b, 0, 1]}, "
-                        f"Day Ahead Peak Time {x_forecast[b, 0, 2]}, "
-                        f"Total Transaction Volume {x_forecast[b, 0, 3]}<|end_prompt|>"
-                    )
-                else:
-                    prompt_ = (
-                        f"<|start_prompt|>Dataset description: {self.description}"
-                        f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information; "
-                        "Input statistics: "
-                        f"min value {min_values_str}, "
-                        f"max value {max_values_str}, "
-                        f"median value {median_values_str}, "
-                        f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
-                        f"top {self.top_k} lags are : {lags_values_str}<|end_prompt|>"
-                    )
-
-                prompt.append(prompt_)
-
-            prompt = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
-            prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)
+    def forecast(self, seasonal_output, trend_output):
 
         source_embeddings = self.mapping_layer(self.word_embeddings.permute(1, 0)).permute(1, 0)
 
-        enc_out = self.reprogramming_layer(x_enc, source_embeddings, source_embeddings)  # source_embeddings [1000, 768]
+        seasonal_enc_out = self.reprogramming_layer_seasonal(seasonal_output, source_embeddings, source_embeddings)  # source_embeddings [1000, 768]
+        trend_enc_out = self.reprogramming_layer_trend(trend_output, source_embeddings, source_embeddings)  # source_embeddings [1000, 768]
 
-        llama_enc_out = enc_out
-
-        if self.use_prompt:
-            llama_enc_out = torch.cat([prompt_embeddings, llama_enc_out], dim=1)  # prompt_embeddings.shape,enc_out.shape, dec_out.shape
+        llama_enc_out = torch.cat([seasonal_enc_out, trend_enc_out], dim=1)  # prompt_embeddings.shape,enc_out.shape, dec_out.shape
 
         dec_out = self.llm_model(inputs_embeds=llama_enc_out).last_hidden_state
         return dec_out
@@ -327,106 +280,120 @@ class ReprogrammingLayer(nn.Module):
 
 class Model(nn.Module):
     """
-    Vanilla Transformer
-    with O(L^2) complexity
-    Paper link: https://proceedings.neurips.cc/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf
+    Paper link: https://arxiv.org/pdf/2205.13504.pdf
     """
 
-    def __init__(self, configs):
+    def __init__(self, configs, individual=False):
+        """
+        individual: Bool, whether shared model among different variates.
+        """
         super(Model, self).__init__()
         self.task_name = configs.task_name
-        self.pred_len = configs.pred_len
-        self.label_len = configs.label_len
-        self.output_attention = configs.output_attention
-        self.use_forecast = configs.use_forecast
-        if self.use_forecast:
-            self.normalize_layers = Normalize(configs.enc_in-4, affine=False)
-            self.enc_embedding = DataEmbedding(configs.enc_in-4, configs.d_model, configs.embed, configs.freq, configs.dropout)
+        self.seq_len = configs.seq_len
+        if self.task_name == 'classification' or self.task_name == 'anomaly_detection' or self.task_name == 'imputation':
+            self.pred_len = configs.seq_len
         else:
-            self.normalize_layers = Normalize(configs.enc_in, affine=False)
-            self.enc_embedding = DataEmbedding(configs.enc_in, configs.d_model, configs.embed, configs.freq, configs.dropout)
+            self.pred_len = configs.pred_len
+        self.decoder = LLMBlock(configs)
+        self.decompsition = series_decomp(configs.moving_avg)
+        self.individual = individual
+        self.channels = configs.enc_in
 
-        self.normalize_layers_forecast = Normalize(configs.forecast_dim, affine=False)
+        if self.individual:
+            self.Linear_Seasonal = nn.ModuleList()
+            self.Linear_Trend = nn.ModuleList()
 
-        # Embedding
-        # Encoder
-        if configs.rnn_model == 'GRU':
-            self.encoder = nn.GRU(configs.enc_in, configs.rnn_dim, configs.rnn_layers, batch_first=True)
-        elif configs.rnn_model == 'LSTM':
-            self.encoder = nn.LSTM(configs.enc_in, configs.rnn_dim, configs.rnn_layers, batch_first=True)
+            for i in range(self.channels):
+                self.Linear_Seasonal.append(
+                    nn.Linear(self.seq_len, self.pred_len))
+                self.Linear_Trend.append(
+                    nn.Linear(self.seq_len, self.pred_len))
 
-        # Decoder
-        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
+                self.Linear_Seasonal[i].weight = nn.Parameter(
+                    (1 / self.seq_len) * torch.ones([self.pred_len, self.seq_len]))
+                self.Linear_Trend[i].weight = nn.Parameter(
+                    (1 / self.seq_len) * torch.ones([self.pred_len, self.seq_len]))
+        else:
+            self.Linear_Seasonal = nn.Linear(self.seq_len, self.pred_len)
+            self.Linear_Trend = nn.Linear(self.seq_len, self.pred_len)
 
-            self.decoder = LLMBlock(configs)
-            self.output_projection = nn.Linear(configs.llm_dim, configs.c_out, bias=True)
+            self.Linear_Seasonal.weight = nn.Parameter(
+                (1 / self.seq_len) * torch.ones([self.pred_len, self.seq_len]))
+            self.Linear_Trend.weight = nn.Parameter(
+                (1 / self.seq_len) * torch.ones([self.pred_len, self.seq_len]))
 
-
-        if self.task_name == 'imputation':
-            self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
-        if self.task_name == 'anomaly_detection':
-            self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
         if self.task_name == 'classification':
             self.act = F.gelu
             self.dropout = nn.Dropout(configs.dropout)
-            self.output_projection = nn.Linear(configs.d_model * configs.seq_len, configs.num_class)
+            self.projection = nn.Linear(
+                configs.enc_in * configs.seq_len, configs.num_class)
 
-        self.normalize_layers = Normalize(configs.enc_in, affine=False)
-        self.normalize_layers_forecast = Normalize(configs.forecast_dim, affine=False)
+    def encoder(self, x):
+        seasonal_init, trend_init = self.decompsition(x)
+        seasonal_init, trend_init = seasonal_init.permute(
+            0, 2, 1), trend_init.permute(0, 2, 1)
+        if self.individual:
+            seasonal_output = torch.zeros([seasonal_init.size(0), seasonal_init.size(1), self.pred_len],
+                                          dtype=seasonal_init.dtype).to(seasonal_init.device)
+            trend_output = torch.zeros([trend_init.size(0), trend_init.size(1), self.pred_len],
+                                       dtype=trend_init.dtype).to(trend_init.device)
+            for i in range(self.channels):
+                seasonal_output[:, i, :] = self.Linear_Seasonal[i](
+                    seasonal_init[:, i, :])
+                trend_output[:, i, :] = self.Linear_Trend[i](
+                    trend_init[:, i, :])
+        else:
+            seasonal_output = self.Linear_Seasonal(seasonal_init)
+            trend_output = self.Linear_Trend(trend_init)
+        x = seasonal_output + trend_output
+        return x.permute(0, 2, 1)
 
-    def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
-        if self.use_forecast:
-            x_enc = x_enc[:, :, 4:]
-        # x_enc = self.normalize_layers(x_enc,'norm')
-        # Embedding
-        enc_out,_ = self.encoder(x_enc)
+    def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast,):
+        seasonal_init, trend_init = self.decompsition(x_enc)
+        seasonal_init, trend_init = seasonal_init.permute(
+            0, 2, 1), trend_init.permute(0, 2, 1)
+        if self.individual:
+            seasonal_output = torch.zeros([seasonal_init.size(0), seasonal_init.size(1), self.pred_len],
+                                          dtype=seasonal_init.dtype).to(seasonal_init.device)
+            trend_output = torch.zeros([trend_init.size(0), trend_init.size(1), self.pred_len],
+                                       dtype=trend_init.dtype).to(trend_init.device)
+            for i in range(self.channels):
+                seasonal_output[:, i, :] = self.Linear_Seasonal[i](
+                    seasonal_init[:, i, :])
+                trend_output[:, i, :] = self.Linear_Trend[i](
+                    trend_init[:, i, :])
+        else:
+            seasonal_output = self.Linear_Seasonal(seasonal_init)
+            trend_output = self.Linear_Trend(trend_init)
 
-        dec_out = self.decoder(enc_out, x_mark_enc, x_dec, x_mark_dec, x_forecast)
-        dec_out = self.output_projection(dec_out)
-        # dec_out = self.normalize_layers(dec_out,'denorm')
-
+        dec_out = self.decoder(seasonal_output.permute(0,2,1),trend_output.permute(0,2,1))
         return dec_out
 
-    def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
-        # Embedding
-        enc_out = self.enc_embedding(x_enc, x_mark_enc)
-        enc_out, attns = self.encoder(enc_out, attn_mask=None)
-
-        dec_out = self.projection(enc_out)
-        return dec_out
+    def imputation(self, x_enc):
+        return self.encoder(x_enc)
 
     def anomaly_detection(self, x_enc):
-        # Embedding
-        enc_out = self.enc_embedding(x_enc, None)
-        enc_out, attns = self.encoder(enc_out, attn_mask=None)
+        return self.encoder(x_enc)
 
-        dec_out = self.projection(enc_out)
-        return dec_out
-
-    def classification(self, x_enc, x_mark_enc):
-        # Embedding
-        enc_out = self.enc_embedding(x_enc, None)
-        enc_out, attns = self.encoder(enc_out, attn_mask=None)
-
+    def classification(self, x_enc):
+        enc_out = self.encoder(x_enc)
         # Output
-        output = self.act(enc_out)  # the output transformer encoder/decoder embeddings don't include non-linearity
-        output = self.dropout(output)
-        output = output * x_mark_enc.unsqueeze(-1)  # zero-out padding embeddings
-        output = output.reshape(output.shape[0], -1)  # (batch_size, seq_length * d_model)
+        # (batch_size, seq_length * d_model)
+        output = enc_out.reshape(enc_out.shape[0], -1)
         output = self.projection(output)  # (batch_size, num_classes)
         return output
 
-    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None, mask=None):
+    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast, mask=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)
             return dec_out[:, -self.pred_len:, :]  # [B, L, D]
         if self.task_name == 'imputation':
-            dec_out = self.imputation(x_enc, x_mark_enc, x_dec, x_mark_dec, mask)
+            dec_out = self.imputation(x_enc)
             return dec_out  # [B, L, D]
         if self.task_name == 'anomaly_detection':
             dec_out = self.anomaly_detection(x_enc)
             return dec_out  # [B, L, D]
         if self.task_name == 'classification':
-            dec_out = self.classification(x_enc, x_mark_enc)
+            dec_out = self.classification(x_enc)
             return dec_out  # [B, N]
         return None
