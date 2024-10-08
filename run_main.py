@@ -120,7 +120,7 @@ if __name__ == '__main__':
     from configs.electricity_configs import args
     args.model_id = 'test_normal'
     args.features = 'M'
-    args.model = 'TimesNet'  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TransformerTimeLLM, RNNTimeLLM, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,TimeLLMDLinear, DLinearTimeLLM]
+    args.model = 'TimeLLMformer'  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TransformerTimeLLM, RNNTimeLLM, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,TimeLLMDLinear, DLinearTimeLLM]
     args.is_training = 1
 
     args.use_prompt = True
@@ -135,8 +135,8 @@ if __name__ == '__main__':
         args.d_model = 64
         args.d_ff = 128
         args.e_layers = 8
-        args.d_layers = 1
-        args.llm_layers = 2
+        args.d_layers = 4
+        args.llm_layers = 6
 
         args.rnn_dim = args.d_model
         args.rnn_dim = 64
