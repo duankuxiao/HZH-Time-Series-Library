@@ -38,14 +38,14 @@ def transfer_test(args, path):
 
 
 if __name__ == '__main__':
-
-    path = r'D:\Time-LLM-main\results\Electricity_TimeLLM_electricity_ftM_sl72_ll24_pl168_sd22_td1_dm32_nh8_el2_dl1_df64_fc3_dropout0.1_ebtimeF_test_0_BERT_llmd768_llmf6_tk5_scale'
+    path = r'D:\Time-LLM-main\results\res\Electricity_Transformer_electricity_ftM_sl72_ll24_pl168_sd22_td3_dm128_nh8_el6_dl2_df512_fc3_dropout0.1_ebtimeF_test_0_scale'
     args = load_config(os.path.join(path,'checkpoints','configs.pkl'))
 
-    for city in ['tokyo','hokkaido','tohoku']:
-    # for city in ['kansei', 'tohoku']:
+    # for city in ['tokyo','hokkaido','tohoku']:
+    for city in ['hokkaido']:
 
-        args.target = ['_Renewable_energy']  # ['Electricity', 'Renewable_energy', 'Coal']
+        # args.target = ['Coal']  # ['Electricity', 'Renewable_energy', 'Coal']  _Electricity  _Renewable_energy _Coal
+        args.target = ['Electricity', 'Renewable_energy', 'Coal']
         args.data_path = '{}.csv'.format(city)
         args.source_data_path = args.data_path
         args.features = 'M'

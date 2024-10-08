@@ -181,15 +181,16 @@ class Exp_Forecast(Exp_Basic):
             vali_loss = self.vali(vali_data, vali_loader, criterion)
             # test_loss = self.vali(test_data, test_loader, criterion)
             cost_time = round((time.time() - epoch_time) / 60, 2)
-            print("     Epoch: {} cost time: {} min  left time: {} min".format(epoch + 1, cost_time, left_time))
+            print("     Epoch: {} cost time: {} min".format(epoch + 1, cost_time))
             print("         Train Loss: {0:.7f} Vali Loss: {1:.7f}".format(train_loss, vali_loss))
             early_stopping(vali_loss, self.model, path)
 
             if early_stopping.early_stop:
                 print("Early stopping")
-                left_time = round(1 + (self.args.patience - early_stopping.counter) * cost_time / 60, 2)
-                print("          Left time: {} min".format(epoch + 1, cost_time, left_time))
+
                 break
+            left_time = round(1 + (self.args.patience - early_stopping.counter) * cost_time / 60, 2)
+            print("          Left time: {} min".format(epoch + 1, cost_time, left_time))
 
 
             if self.args.lradj != 'TST':
