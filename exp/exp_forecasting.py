@@ -311,6 +311,7 @@ class Exp_Forecast(Exp_Basic):
             dtw = np.array(dtw_list).mean()
         else:
             dtw = -999
+        trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
 
         [mse, rmse, mae, mape, r2, corr] = results_evaluation(trues.flatten(), preds.flatten())
         print('mae:{}, r2:{}, dtw:{}'.format(mae, r2, dtw))
@@ -320,16 +321,17 @@ class Exp_Forecast(Exp_Basic):
         f.write('\n')
         f.write('\n')
         f.close()
-        np.save(os.path.join(folder_path, 'metrics_{}.npy'.format(self.args.data)), np.array([mae, mse, rmse, r2, corr]))
-        np.save(os.path.join(folder_path, 'pred_{}.npy'.format(self.args.data)), preds)
-        np.save(os.path.join(folder_path, 'true_{}.npy'.format(self.args.data)), trues)
-        if self.args.features == 'M' :
-            self.price_res_evaluation(trues, preds, folder_path)
+        np.save(os.path.join(folder_path, 'metrics_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), np.array([mae, mse, rmse, r2, corr]))
+        np.save(os.path.join(folder_path, 'pred_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), preds)
+        np.save(os.path.join(folder_path, 'true_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), trues)
+
+        if self.args.features == 'M':
+            self.price_res_evaluation(trues, preds,trainable_params, folder_path)
         else:
-            self.res_evaluation(trues,preds, folder_path)
+            self.res_evaluation(trues,preds,trainable_params, folder_path)
         return
 
-    def res_evaluation(self,true, pred, path):
+    def res_evaluation(self,true, pred,trainable_params, path):
         stride = self.args.pred_len
         pred_output = np.squeeze(pred,axis=-1)[::stride, :].reshape(-1, 1)
         true_output = np.squeeze(true,axis=-1)[::stride, :].reshape(-1, 1)
@@ -340,13 +342,13 @@ class Exp_Forecast(Exp_Basic):
 
         [mse, rmse, mae, mape, r2, corr] = results_evaluation(pred_res['true'].values, pred_res['pred'].values)
 
-        pred_res.to_csv(os.path.join(path, 'pred_results_{}.csv'.format(self.args.data)))
-        metrics_df = pd.DataFrame({'mae': mae, 'mape':mape,'mse':mse,'rmse': rmse, 'r2': r2,'corr':corr}, index=[0])
-        metrics_df.to_csv(os.path.join(path, 'metrics_results_{}.csv'.format(self.args.data)))
+        pred_res.to_csv(os.path.join(path, 'pred_results_{}_{}.csv'.format(self.args.data,self.args.data_path[:-4])))
+        metrics_df = pd.DataFrame({'trainable_params':trainable_params,'mae': mae, 'mape':mape,'mse':mse,'rmse': rmse, 'r2': r2,'corr':corr}, index=[0])
+        metrics_df.to_csv(os.path.join(path, 'metrics_results_{}_{}.csv'.format(self.args.data,self.args.data_path[:-4])))
 
         print('RMSE: {} MAE: {} R2: {}'.format(rmse, mae, r2))
 
-    def price_res_evaluation(self,true,pred,path):
+    def price_res_evaluation(self,true,pred,trainable_params,path):
         stride = self.args.pred_len
         true = true[::stride,:,:].reshape(-1,len(self.args.target))
         pred = pred[::stride,:,:].reshape(-1,len(self.args.target))
@@ -371,8 +373,9 @@ class Exp_Forecast(Exp_Basic):
             r2_list.append(r2)
             corr_list.append(corr)
 
-        res_metrics_df = pd.DataFrame(columns=['mse', 'rmse', 'mae','mape', 'r2', 'corr'],
+        res_metrics_df = pd.DataFrame(columns=['trainable_params','mse', 'rmse', 'mae','mape', 'r2', 'corr'],
                                       index=[i for i in self.args.target])
+        res_metrics_df['trainable_params'] = trainable_params
         res_metrics_df['mse'] = mse_list
         res_metrics_df['rmse'] = rmse_list
         res_metrics_df['mae'] = mae_list
@@ -381,5 +384,5 @@ class Exp_Forecast(Exp_Basic):
         res_metrics_df['corr'] = corr_list
         res_metrics_df.loc['mean'] = res_metrics_df.mean()
         print(res_metrics_df.loc['mean'])
-        res_df.to_csv(os.path.join(path, 'pred_res.csv'))
-        res_metrics_df.to_csv(os.path.join(path, 'res_metrics_df.csv'))
+        res_df.to_csv(os.path.join(path, 'pred_res_{}.csv'.format(self.args.data_path[:-4])))
+        res_metrics_df.to_csv(os.path.join(path, 'res_metrics_df_{}.csv'.format(self.args.data_path[:-4])))

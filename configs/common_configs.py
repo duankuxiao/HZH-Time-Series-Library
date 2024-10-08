@@ -15,9 +15,11 @@ parser.add_argument('--model', type=str, default='DLinear',
 parser.add_argument('--data', type=str, default='electricity', help='dataset type')
 parser.add_argument('--root_path', type=str, default='./dataset/electricity', help='root path of the data file')
 parser.add_argument('--data_path', type=str, default='kyushu.csv', help='data file PV_hour.csv or PV_hour_7f.csv')
+parser.add_argument('--source_data_path', type=str, default='kyushu.csv', help='data file PV_hour.csv or PV_hour_7f.csv')
+
 parser.add_argument('--features', type=str, default='MS', help='forecasting task, options:[M, S, MS]; '
                          'M:multivariate predict multivariate, S: univariate predict univariate, ' 'MS:multivariate predict univariate')
-parser.add_argument('--target', type=str, default='Electricity', help='target feature in S or MS task')
+parser.add_argument('--target', type=list, default=['Electricity'], help='target feature in S or MS task')
 parser.add_argument('--loader', type=str, default='modal', help='dataset type')
 parser.add_argument('--freq', type=str, default='h', help='freq for time features encoding, '
                          'options:[s:secondly, t:minutely, h:hourly, d:daily, b:business days, w:weekly, m:monthly], '

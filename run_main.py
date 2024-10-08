@@ -16,7 +16,7 @@ np.random.seed(fix_seed)
 
 
 def get_setting(args,ii):
-    setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_dropout{}_eb{}_{}_{}'.format(
+    setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_td{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_dropout{}_eb{}_{}_{}'.format(
         args.model_id,
         args.model,
         args.data,
@@ -25,6 +25,7 @@ def get_setting(args,ii):
         args.label_len,
         args.pred_len,
         args.enc_in,
+        args.c_out,
         args.d_model,
         args.n_heads,
         args.e_layers,
@@ -40,7 +41,7 @@ def get_setting(args,ii):
         if args.use_prompt:
             setting += '_prompt'
     if 'RNN' in args.model:
-        setting += '_{}_llmd{}_llmf{}'.format(args.rnn_model, args.rnn_dim, args.rnn_layers, )
+        setting += '_{}_rnnd{}_rnnf{}'.format(args.rnn_model, args.rnn_dim, args.rnn_layers, )
 
     if args.use_forecast:
         setting += '_forecast'
@@ -78,6 +79,7 @@ def main(args):
     if args.feature_cols is not None:
         args.enc_in = len(args.feature_cols)
         args.dec_in = len(args.feature_cols)
+    args.c_out = len(args.target)
 
     if args.features == 'S':
         args.enc_in = 1
@@ -116,47 +118,45 @@ if __name__ == '__main__':
     # from solar_radiation_configs import args
     # from configs.price_configs import args
     from configs.electricity_configs import args
-
-    args.model_id = 'price'
-
-    args.model = 'RNN'  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TransformerTimeLLM, RNNTimeLLM, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,TimeLLMDLinear, DLinearTimeLLM]
+    args.model_id = 'test_normal'
+    args.features = 'M'
+    args.model = 'TimesNet'  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TransformerTimeLLM, RNNTimeLLM, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,TimeLLMDLinear, DLinearTimeLLM]
     args.is_training = 1
 
-    args.use_prompt = False
+    args.use_prompt = True
     args.use_forecast = False  # False
     args.forecast_dim = 4
+    args.d_model = 128
+    args.d_ff = 512
+    args.e_layers = 8
+    args.d_layers = 1
 
     if 'TimeLLM' in args.model:
         args.d_model = 64
         args.d_ff = 128
-        args.e_layers = 4
+        args.e_layers = 8
         args.d_layers = 1
-        args.llm_layers = 6
+        args.llm_layers = 2
+
+        args.rnn_dim = args.d_model
+        args.rnn_dim = 64
+        args.rnn_layers = 2
 
     if args.model == 'Transformer':
-        args.d_model = 64
-        args.d_ff = 256
-        args.e_layers = 4
-        args.d_layers = 1
+        args.d_model = 128
+        args.d_ff = 512
+        args.e_layers = 6
+        args.d_layers = 2
 
     if 'RNN' in args.model:
         args.rnn_dim = 256
         args.rnn_layers = 3
-    args.feature_cols = ['Electricity', 'Nuclear', 'Coal', 'Hydro', 'Geothermal', 'Biomass',
-       'Solar', 'Solar_curtailment', 'Wind', 'Wind_ccurtailment',
-       'Water_pumping', 'Interconnection', 'Total', 'Temperature',
-       'Relative_humidity', 'Precipitation', 'Dew_point', 'Vapor_pressure',
-       'Wind_speed', 'Sunshine_duration', 'Snowfall',
-       'Global_horizontal_irradiance']
 
-    # ['date', 'Temperature', 'Relative_humidity', 'Precipitation',
-    #  'Dew_point', 'Vapor_pressure', 'Wind_speed', 'Sunshine_duration',
-    #  'Snowfall', 'Global_horizontal_irradiance', 'System_price',
-    #  'Sell_volume', 'Buy_volume', 'Total_volume', 'Sell_volume_block_orders',
-    #  'Sell_volume_contracted_block_orders', 'Buy_volume_block_orders',
-    #  'Buy_volume_contracted_block_orders', 'Volumes', 'Number_of_contracts',
-    #  'Opening_price', 'Highest_price', 'Lowest_price', 'Last_price',
-    #  'Average_price', 'DA-24', 'DA-DT', 'DA-PT', 'TTV', 'Price']
+    args.feature_cols = ['Electricity','Renewable_energy', 'Nuclear', 'Coal', 'Hydro', 'Geothermal', 'Biomass','Solar', 'Solar_curtailment', 'Wind', 'Wind_ccurtailment','Water_pumping',
+                         'Interconnection', 'Temperature', 'Relative_humidity', 'Precipitation', 'Dew_point', 'Vapor_pressure', 'Wind_speed', 'Sunshine_duration',
+                         'Snowfall', 'Global_horizontal_irradiance']
+    args.target = ['Electricity','Renewable_energy','Coal']
+    # args.target = ['Coal']
 
 
     main(args)

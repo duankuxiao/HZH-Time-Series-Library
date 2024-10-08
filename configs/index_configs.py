@@ -1,10 +1,11 @@
-import argparse
-from common_configs import args
+from configs.common_configs import args
 
 args.model_comment = 'jepx_index'
 args.data = 'Index'
 args.root_path = './dataset/price'
 args.data_path = 'spot_index.csv'
+args.source_data_path = 'spot_index.csv'
+
 args.features = 'M'
 args.target = ['DA-24','DA-DT','DA-PT','TTV']
 args.freq = 'd'

@@ -1,11 +1,13 @@
-from common_configs import args
+from configs.common_configs import args
 
 args.model_comment = 'price'
 args.data = 'Price'
 args.root_path = './dataset/price'
 args.data_path = 'Tokyo.csv'
+args.source_data_path = 'Tokyo.csv'
+
 args.features = 'MS'
-args.target = 'Price'
+args.target = ['Price']
 args.num_train = 8760*2+24
 args.num_test = 8760
 args.seq_len = 24 * 3

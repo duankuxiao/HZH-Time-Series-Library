@@ -1,11 +1,12 @@
-from common_configs import args
+from configs.common_configs import args
 
 args.model_comment = 'electricity'
 args.data = 'electricity'
 args.root_path = './dataset/electricity'
 args.data_path = 'kyushu.csv'
-args.features = 'MS'
-args.target = 'Electricity'
+args.source_data_path = 'kyushu.csv'
+args.features = 'M'
+args.target = ['Electricity']
 args.num_train = 8760*2+24
 args.num_test = 8760
 args.seq_len = 24 * 3

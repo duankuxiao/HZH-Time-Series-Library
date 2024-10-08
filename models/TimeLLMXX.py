@@ -42,8 +42,7 @@ class LLMBlock(nn.Module):
         self.d_ff = configs.d_ff
         self.top_k = configs.top_k
         self.d_llm = configs.llm_dim
-        self.patch_len = configs.patch_len
-        self.stride = configs.stride
+
         self.use_prompt = configs.use_prompt
         self.use_forecast = configs.use_forecast
         if configs.llm_model == 'LLAMA':
@@ -422,12 +421,13 @@ class Model(nn.Module):
         super(Model, self).__init__()
         self.task_name = configs.task_name
         self.pred_len = configs.pred_len
+        self.c_out = configs.c_out
         self.output_attention = configs.output_attention
         self.use_forecast = configs.use_forecast
 
         # Encoder
         # Embedding
-        self.enc_embedding = DataEmbedding(configs.enc_in-1, configs.d_model, configs.embed, configs.freq, configs.dropout)
+        self.enc_embedding = DataEmbedding(configs.enc_in-self.c_out, configs.d_model, configs.embed, configs.freq, configs.dropout)
         # Encoder
         self.encoder = Encoder(
             [
@@ -446,7 +446,7 @@ class Model(nn.Module):
         self.LLM_encoder = LLMBlock(configs)
 
         # self.attention = Attention(configs.llm_dim, configs.enc_in-1,configs.n_heads, configs.d_ff)
-        self.attention = CrossAttention(configs.llm_dim, configs.enc_in-1,configs.n_heads, configs.d_ff)
+        self.attention = CrossAttention(configs.llm_dim, configs.enc_in-self.c_out,configs.n_heads, configs.d_ff)
         # Decoder
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             self.dec_embedding = DataEmbedding(configs.llm_dim, configs.d_model, configs.embed, configs.freq, configs.dropout)
@@ -484,20 +484,18 @@ class Model(nn.Module):
             self.output_projection = nn.Linear(configs.d_model * configs.seq_len, configs.num_class)
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
-        x_enc_other = x_enc[:,:,:-1]
-        x_enc_target = x_enc[:,:,-1:]
+        x_enc_other = x_enc[:,:,:-self.c_out]
+        x_enc_target = x_enc[:,:,-self.c_out:]
 
         enc_out_target = self.LLM_encoder(x_enc_target, x_mark_enc, x_dec, x_mark_dec, x_forecast)
         enc_out_other,attn = self.encoder(self.enc_embedding(x_enc_other,x_mark_enc))
 
-        dec_in = torch.cat((x_enc_other, enc_out_target), dim=-1)
         dec_in = self.linear_predict(enc_out_target.permute(0,2,1)).permute(0,2,1)
+        # dec_in = enc_out_target
         dec_in = self.dec_embedding(dec_in, x_mark_dec)
 
         dec_out = self.decoder(dec_in, enc_out_other, x_mask=None, cross_mask=None)
         dec_out = self.out_projection(dec_out)
-
-        # dec_out = self.linear_predict(dec_out[:, -self.pred_len:, :].permute(0, 2, 1)).permute(0, 2, 1)
 
         return dec_out
 

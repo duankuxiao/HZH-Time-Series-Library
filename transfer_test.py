@@ -10,7 +10,8 @@ import numpy as np
 from pred_results import res_evaluation
 from run_main import get_setting
 
-def transfer_test(args,path):
+
+def transfer_test(args, path):
     args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False
     args.device = torch.device('cuda' if torch.cuda.is_available() and args.use_gpu else 'cpu')
     args.inverse = True
@@ -38,11 +39,14 @@ def transfer_test(args,path):
 
 if __name__ == '__main__':
 
-    path = r'D:\Time-LLM-main\results\price\price_RNN_Tokyo_ftS_sl72_ll24_pl24_sd1_dm512_nh8_el8_dl1_df2048_fc3_dropout0.1_ebtimeF_test_0_LSTM_llmd256_llmf3_scale'
+    path = r'D:\Time-LLM-main\results\Electricity_TimeLLM_electricity_ftM_sl72_ll24_pl168_sd22_td1_dm32_nh8_el2_dl1_df64_fc3_dropout0.1_ebtimeF_test_0_BERT_llmd768_llmf6_tk5_scale'
     args = load_config(os.path.join(path,'checkpoints','configs.pkl'))
 
-    for city in ['Sapporo','Fukuoka']:
-        args.data = city  # Sapporo Sendai Tokyo Osaka Fukuoka Naha
-        args.data_path = '{}.csv'.format(args.data)
+    for city in ['tokyo','kansai','tohoku']:
+    # for city in ['kansei', 'tohoku']:
 
+        args.target = ['_Renewable_energy']  # ['Electricity', 'Renewable_energy', 'Coal']
+        args.data_path = '{}.csv'.format(city)
+        args.source_data_path = args.data_path
+        args.features = 'M'
         transfer_test(args, path)

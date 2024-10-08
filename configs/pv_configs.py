@@ -1,9 +1,11 @@
-from common_configs import args
+from configs.common_configs import args
 
 args.model_comment = 'PV forecast'
 args.data = 'PV'
 args.root_path = './dataset/PV'
 args.data_path = 'PV_hour.csv'
+args.source_data_path = 'PV_hour.csv'
+
 args.features = 'MS'
 args.target = ['DA-24','DA-DT','DA-PT','TTV']
 args.freq = 'd'

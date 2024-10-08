@@ -316,7 +316,7 @@ class Model(nn.Module):
             llama_enc_out = torch.cat([prompt_embeddings, llama_enc_out], dim=1)  # prompt_embeddings.shape,enc_out.shape, dec_out.shape
 
         dec_out = self.llm_model(inputs_embeds=llama_enc_out).last_hidden_state
-        # dec_out = self.linear_predict(dec_out.permute(0, 2, 1)).permute(0, 2, 1)
+        dec_out = self.linear_predict(dec_out.permute(0, 2, 1)).permute(0, 2, 1)
         dec_out = self.output_projection(dec_out)
 
         # dec_out = self.normalize_layers(dec_out, 'denorm')

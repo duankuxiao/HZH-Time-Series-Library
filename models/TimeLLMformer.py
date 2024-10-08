@@ -1,18 +1,38 @@
-import torch.nn.functional as F
-from layers.Transformer_EncDec import Decoder, DecoderLayer, Encoder, EncoderLayer, ConvLayer
-from layers.SelfAttention_Family import FullAttention, AttentionLayer
-from layers.Embed import DataEmbedding
+from math import sqrt
 
 import torch
 import torch.nn as nn
+from layers.Transformer_EncDec import Decoder, DecoderLayer, Encoder, EncoderLayer, ConvLayer
+from layers.SelfAttention_Family import FullAttention, AttentionLayer
+from layers.Embed import DataEmbedding
+import torch.nn.functional as F
+
 from transformers import LlamaConfig, LlamaModel, LlamaTokenizer, GPT2Config, GPT2Model, GPT2Tokenizer, BertConfig, \
     BertModel, BertTokenizer, AutoTokenizer
 from layers.Embed import PatchEmbedding
+import transformers
 from layers.StandardNorm import Normalize
-from math import sqrt
+
+transformers.logging.set_verbosity_error()
+
+
+class FlattenHead(nn.Module):
+    def __init__(self, n_vars, nf, target_window, head_dropout=0):
+        super().__init__()
+        self.n_vars = n_vars
+        self.flatten = nn.Flatten(start_dim=-2)
+        self.linear = nn.Linear(nf, target_window)
+        self.dropout = nn.Dropout(head_dropout)
+
+    def forward(self, x):
+        x = self.flatten(x)
+        x = self.linear(x)
+        x = self.dropout(x)
+        return x
 
 
 class LLMBlock(nn.Module):
+
     def __init__(self, configs, patch_len=16, stride=8):
         super(LLMBlock, self).__init__()
         self.device = configs.device
@@ -24,9 +44,7 @@ class LLMBlock(nn.Module):
         self.d_llm = configs.llm_dim
         self.patch_len = configs.patch_len
         self.stride = configs.stride
-
         self.use_prompt = configs.use_prompt
-        self.use_forecast = configs.use_forecast
 
         if configs.llm_model == 'LLAMA':
             # self.llama_config = LlamaConfig.from_pretrained('/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/')
@@ -200,17 +218,23 @@ class LLMBlock(nn.Module):
         self.vocab_size = self.word_embeddings.shape[0]
         self.num_tokens = 2000
         self.mapping_layer = nn.Linear(self.vocab_size, self.num_tokens)
-        if self.use_forecast:
-            self.reprogramming_layer = ReprogrammingLayer(configs.enc_in-4, configs.n_heads, self.d_ff, self.d_llm)
-        else:
-            self.reprogramming_layer = ReprogrammingLayer(configs.enc_in, configs.n_heads, self.d_ff, self.d_llm)
+
+        self.reprogramming_layer = ReprogrammingLayer(configs.d_model, configs.n_heads, self.d_ff, self.d_llm)
 
         self.patch_nums = int((configs.seq_len - self.patch_len) / self.stride + 2)
         self.head_nf = self.d_ff * self.patch_nums
 
+        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
+            self.output_projection = FlattenHead(configs.enc_in, self.head_nf, self.pred_len, head_dropout=configs.dropout)
+        else:
+            raise NotImplementedError
+
+        self.normalize_layers = Normalize(configs.enc_in, affine=False)
+
         self.llm_model.to(device=self.device)
         self.mapping_layer.to(device=self.device)
         self.reprogramming_layer.to(device=self.device)
+        self.output_projection.to(device=self.device)
         self.patch_embedding.to(device=self.device)
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None, mask=None):
@@ -220,64 +244,63 @@ class LLMBlock(nn.Module):
         return None
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
-        if self.use_prompt:
-            x_target = x_enc[:, :, -1:]
-            min_values = torch.min(x_target, dim=1)[0]
-            max_values = torch.max(x_target, dim=1)[0]
-            medians = torch.median(x_target, dim=1).values
-            lags = self.calcute_lags(x_target)
-            trends = x_target.diff(dim=1).sum(dim=1)
+        x_enc = self.normalize_layers(x_enc, 'norm')
 
-            prompt = []
-            for b in range(x_enc.shape[0]):
-                min_values_str = str(min_values[b].tolist()[0])
-                max_values_str = str(max_values[b].tolist()[0])
-                median_values_str = str(medians[b].tolist()[0])
-                lags_values_str = str(lags[b].tolist())
+        B, T, N = x_enc.size()
+        x_enc = x_enc.permute(0, 2, 1).contiguous().reshape(B * N, T, 1)
 
-                if self.use_forecast:
-                    prompt_ = (
-                        f"<|start_prompt|>Dataset description: {self.description}"
-                        f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information and the future indexes; "
-                        "Input statistics: "
-                        f"min value {min_values_str}, "
-                        f"max value {max_values_str}, "
-                        f"median value {median_values_str}, "
-                        f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
-                        f"top {self.top_k} lags are : {lags_values_str}, "
-                        "Future indexes: "
-                        f"Day Ahead 24 hours {x_forecast[b, 25, 0]}, "
-                        f"Day Ahead Day Time {x_forecast[b, 25, 1]}, "
-                        f"Day Ahead Peak Time {x_forecast[b, 25, 2]}, "
-                        f"Total Transaction Volume {x_forecast[b, 25, 3]}<|end_prompt|>"
-                    )
-                else:
-                    prompt_ = (
-                        f"<|start_prompt|>Dataset description: {self.description}"
-                        f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information; "
-                        "Input statistics: "
-                        f"min value {min_values_str}, "
-                        f"max value {max_values_str}, "
-                        f"median value {median_values_str}, "
-                        f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
-                        f"top {self.top_k} lags are : {lags_values_str}<|end_prompt|>"
-                    )
+        min_values = torch.min(x_enc, dim=1)[0]
+        max_values = torch.max(x_enc, dim=1)[0]
+        medians = torch.median(x_enc, dim=1).values
+        lags = self.calcute_lags(x_enc)
+        trends = x_enc.diff(dim=1).sum(dim=1)
 
-                prompt.append(prompt_)
+        prompt = []
+        for b in range(x_enc.shape[0]):
+            min_values_str = str(min_values[b].tolist()[0])
+            max_values_str = str(max_values[b].tolist()[0])
+            median_values_str = str(medians[b].tolist()[0])
+            lags_values_str = str(lags[b].tolist())
+            prompt_ = (
+                f"<|start_prompt|>Dataset description: {self.description}"
+                f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information; "
+                "Input statistics: "
+                f"min value {min_values_str}, "
+                f"max value {max_values_str}, "
+                f"median value {median_values_str}, "
+                f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
+                f"top {self.top_k} lags are : {lags_values_str}<|end_prompt|>"
+            )
 
-            prompt = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
-            prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)
+            prompt.append(prompt_)
+        # x_enc [B * N, T, 1]
+        x_enc = x_enc.reshape(B, N, T).permute(0, 2, 1).contiguous()  # [B, T, N]
+
+        prompt = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
+        prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)
 
         source_embeddings = self.mapping_layer(self.word_embeddings.permute(1, 0)).permute(1, 0)
 
-        enc_out = self.reprogramming_layer(x_enc, source_embeddings, source_embeddings)  # source_embeddings [1000, 768]
-
-        llama_enc_out = enc_out
+        x_enc = x_enc.permute(0, 2, 1).contiguous()
+        enc_out, n_vars = self.patch_embedding(x_enc.to(torch.bfloat16))
+        enc_out = self.reprogramming_layer(enc_out, source_embeddings, source_embeddings)
 
         if self.use_prompt:
-            llama_enc_out = torch.cat([prompt_embeddings, llama_enc_out], dim=1)  # prompt_embeddings.shape,enc_out.shape, dec_out.shape
+            llama_enc_out = torch.cat([prompt_embeddings, enc_out], dim=1)
+        else:
+            llama_enc_out = enc_out
 
         dec_out = self.llm_model(inputs_embeds=llama_enc_out).last_hidden_state
+        dec_out = dec_out[:, :, :self.d_ff]
+
+        dec_out = torch.reshape(
+            dec_out, (-1, n_vars, dec_out.shape[-2], dec_out.shape[-1]))
+        dec_out = dec_out.permute(0, 1, 3, 2).contiguous()
+
+        dec_out = self.output_projection(dec_out[:, :, :, -self.patch_nums:])
+        dec_out = dec_out.permute(0, 2, 1).contiguous()
+
+        dec_out = self.normalize_layers(dec_out, 'denorm')
         return dec_out
 
     def calcute_lags(self, x_enc):
@@ -304,30 +327,32 @@ class ReprogrammingLayer(nn.Module):
         self.dropout = nn.Dropout(attention_dropout)
 
     def forward(self, target_embedding, source_embedding, value_embedding):
-        B, T, N = target_embedding.shape
-        S, _ = source_embedding.shape
+        B, L, _ = target_embedding.shape  # [80, 18, 32]
+        S, _ = source_embedding.shape  # [1000, 768]
         H = self.n_heads
 
-        target_embedding = self.query_projection(target_embedding).view(B, T, H, -1)  # [8, 72, 8, 128]
+        target_embedding = self.query_projection(target_embedding).view(B, L, H, -1)  # [80, 18, 8, 128]
         source_embedding = self.key_projection(source_embedding).view(S, H, -1)  # [1000, 8, 128]
         value_embedding = self.value_projection(value_embedding).view(S, H, -1)  # [1000, 8, 128]
 
-        out = self.reprogramming(target_embedding, source_embedding, value_embedding)  # [B, T, H, 128]
+        out = self.reprogramming(target_embedding, source_embedding, value_embedding)  # [80, 18, 8, 128]
 
-        out = out.reshape(B, T, -1)
+        out = out.reshape(B, L, -1)  # [80, 18, 1024]
 
-        return self.out_projection(out)
+        return self.out_projection(out)  # [80, 18, 768]
 
     def reprogramming(self, target_embedding, source_embedding, value_embedding):
         B, L, H, E = target_embedding.shape
 
         scale = 1. / sqrt(E)
+
         scores = torch.einsum("blhe,she->bhls", target_embedding, source_embedding)
 
         A = self.dropout(torch.softmax(scale * scores, dim=-1))
         reprogramming_embedding = torch.einsum("bhls,she->blhe", A, value_embedding)
 
         return reprogramming_embedding
+
 
 class Model(nn.Module):
     """
@@ -340,24 +365,38 @@ class Model(nn.Module):
         super(Model, self).__init__()
         self.task_name = configs.task_name
         self.pred_len = configs.pred_len
-        self.label_len = configs.label_len
+        self.c_out = configs.c_out
         self.output_attention = configs.output_attention
         self.use_forecast = configs.use_forecast
 
-        if self.use_forecast:
-            self.normalize_layers = Normalize(configs.enc_in-4, affine=False)
-        else:
-            self.normalize_layers = Normalize(configs.enc_in, affine=False)
-
-
-        self.normalize_layers_forecast = Normalize(configs.forecast_dim, affine=False)
-        self.input_embedding = nn.Linear(configs.llm_dim, configs.d_model)
         # Encoder
-        self.encoder = LLMBlock(configs)
+        # Embedding
+        self.enc_embedding = DataEmbedding(configs.enc_in-self.c_out, configs.d_model, configs.embed, configs.freq, configs.dropout)
+        # Encoder
+        # self.encoder = Encoder(
+        #     [
+        #         EncoderLayer(
+        #             AttentionLayer(
+        #                 FullAttention(False, configs.factor, attention_dropout=configs.dropout,
+        #                               output_attention=configs.output_attention), configs.d_model, configs.n_heads),
+        #             configs.d_model,
+        #             4*configs.d_model,
+        #             dropout=configs.dropout,
+        #             activation=configs.activation
+        #         ) for l in range(configs.e_layers)
+        #     ],
+        #     norm_layer=torch.nn.LayerNorm(configs.d_model)
+        # )
+        self.encoder = nn.Linear(configs.enc_in - configs.c_out, configs.d_model)
+        # self.encoder = nn.LSTM(configs.enc_in - self.c_out, configs.d_model, configs.rnn_layers, batch_first=True)
+
+        self.LLM_encoder = LLMBlock(configs)
+
         # Decoder
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
+            self.dec_embedding = DataEmbedding(configs.c_out, configs.d_model, configs.embed, configs.freq, configs.dropout)
 
-            self.dec_embedding = DataEmbedding(configs.c_out, configs.d_model, configs.embed, configs.freq,configs.dropout)
+            # Embedding
             self.decoder = Decoder(
                 [
                     DecoderLayer(
@@ -370,7 +409,7 @@ class Model(nn.Module):
                                           output_attention=False),
                             configs.d_model, configs.n_heads),
                         configs.d_model,
-                        configs.d_ff,
+                        4 * configs.d_model,
                         dropout=configs.dropout,
                         activation=configs.activation,
                     )
@@ -378,10 +417,8 @@ class Model(nn.Module):
                 ],
                 norm_layer=torch.nn.LayerNorm(configs.d_model),
             )
-            self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
-
-            # self.output_projection = MLP(configs.d_model,configs.c_out,configs.hidden_size,configs.dropout)
-
+            self.out_projection = nn.Linear(configs.d_model, configs.c_out)
+            self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len+configs.label_len)
         if self.task_name == 'imputation':
             self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
         if self.task_name == 'anomaly_detection':
@@ -391,20 +428,30 @@ class Model(nn.Module):
             self.dropout = nn.Dropout(configs.dropout)
             self.output_projection = nn.Linear(configs.d_model * configs.seq_len, configs.num_class)
 
-        self.normalize_layers_forecast = Normalize(configs.forecast_dim, affine=False)
+    def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
+        # Normalization from Non-stationary Transformer
+        means = x_enc.mean(1, keepdim=True).detach()
+        x_enc = x_enc - means
+        stdev = torch.sqrt(
+            torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
+        x_enc /= stdev
 
-    def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast):
-        # x_enc = self.normalize_layers(x_enc, 'norm')
-        # if self.use_forecast:
-        #     x_forecast = self.normalize_layers_forecast(x_forecast[:, -self.pred_len:, :], 'norm')
-        if self.use_forecast:
-            x_enc = x_enc[:, :, 4:]
-        enc_out = self.encoder(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
-        enc_out = self.input_embedding(enc_out)
-        dec_out = self.dec_embedding(x_dec, x_mark_dec)
-        dec_out = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None)
-        dec_out = self.output_projection(dec_out)
-        # dec_out = self.normalize_layers(dec_out, 'denorm')
+        x_enc_other = x_enc[:,:,:-self.c_out]
+        x_enc_target = x_enc[:,:,-self.c_out:]
+
+        enc_out_target = self.LLM_encoder(x_enc_target, x_mark_enc, x_dec, x_mark_dec, x_forecast)
+        # enc_out_other,attn = self.encoder(self.enc_embedding(x_enc_other,x_mark_enc))
+        enc_out_other = self.encoder(x_enc_other)
+
+        dec_in = enc_out_target
+        dec_in = self.dec_embedding(dec_in, x_mark_dec[:,-self.pred_len:,:])
+
+        dec_out = self.decoder(dec_in, enc_out_other, x_mask=None, cross_mask=None)
+        dec_out = self.out_projection(dec_out)
+
+        # De-Normalization from Non-stationary Transformer
+        dec_out = dec_out * (stdev[:, 0, -self.configs.c_out:].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
+        dec_out = dec_out + (means[:, 0, -self.configs.c_out:].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
 
         return dec_out
 
