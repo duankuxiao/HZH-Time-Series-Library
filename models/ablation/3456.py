@@ -214,11 +214,7 @@ class LLMBlock(nn.Module):
         self.patch_embedding = PatchEmbedding(
             configs.d_model, self.patch_len, self.stride, configs.dropout)
 
-        self.word_embeddings = self.llm_model.get_input_embeddings().weight
-        self.vocab_size = self.word_embeddings.shape[0]
-        self.num_tokens = 2000
-        self.mapping_layer = nn.Linear(self.vocab_size, self.num_tokens)
-        self.reprogramming_layer = ReprogrammingLayer(configs.d_model, configs.n_heads, self.d_ff, self.d_llm)
+        self.input_projection = nn.Linear(configs.seq_len, self.d_llm)
 
         self.patch_nums = int((configs.seq_len - self.patch_len) / self.stride + 2)
         self.head_nf = self.d_ff * self.patch_nums
@@ -231,14 +227,13 @@ class LLMBlock(nn.Module):
         self.normalize_layers = Normalize(configs.enc_in, affine=False)
 
         self.llm_model.to(device=self.device)
-        self.mapping_layer.to(device=self.device)
-        self.reprogramming_layer.to(device=self.device)
+        self.input_projection.to(device=self.device)
         self.output_projection.to(device=self.device)
         self.patch_embedding.to(device=self.device)
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None, mask=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
-            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)
+            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
             return dec_out
         return None
 
@@ -278,11 +273,11 @@ class LLMBlock(nn.Module):
         prompt = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
         prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)
 
-        source_embeddings = self.mapping_layer(self.word_embeddings.permute(1, 0)).permute(1, 0)
-
         x_enc = x_enc.permute(0, 2, 1).contiguous()
         enc_out, n_vars = self.patch_embedding(x_enc.to(torch.bfloat16))
-        enc_out = self.reprogramming_layer(enc_out, source_embeddings, source_embeddings)
+
+        x_enc = x_enc.reshape(B * N, -1, T)
+        enc_out = self.input_projection(x_enc)
 
         if self.use_prompt:
             llama_enc_out = torch.cat([prompt_embeddings, enc_out], dim=1)
@@ -370,7 +365,7 @@ class Model(nn.Module):
 
         # Encoder
         # Embedding
-        self.enc_embedding = DataEmbedding(configs.enc_in-self.c_out, configs.d_model, configs.embed, configs.freq, configs.dropout)
+        self.enc_embedding = DataEmbedding(configs.enc_in - self.c_out, configs.d_model, configs.embed, configs.freq, configs.dropout)
 
         self.encoder = nn.Linear(configs.enc_in - configs.c_out, configs.d_model)
         self.LLM_encoder = LLMBlock(configs)
@@ -403,7 +398,7 @@ class Model(nn.Module):
             self.out_projection = nn.Linear(configs.d_model, configs.c_out)
             self.projection = nn.Linear(configs.d_model, configs.pred_len, bias=True)
             # self.out_projection = nn.Linear(configs.pred_len, configs.c_out)
-            self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len+configs.label_len)
+            self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len + configs.label_len)
 
         if self.task_name == 'imputation':
             self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
@@ -421,14 +416,14 @@ class Model(nn.Module):
         stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
         x_enc /= stdev
 
-        x_enc_other = x_enc[:,:,:-self.c_out]
-        x_enc_target = x_enc[:,:,-self.c_out:]
+        x_enc_other = x_enc[:, :, :-self.c_out]
+        x_enc_target = x_enc[:, :, -self.c_out:]
 
         enc_out_target = self.LLM_encoder(x_enc_target, x_mark_enc, x_dec, x_mark_dec, x_forecast)
         enc_out_other = self.encoder(x_enc_other)
 
         dec_in = enc_out_target
-        dec_in = self.dec_embedding(dec_in, x_mark_dec[:,-self.pred_len:,:])
+        dec_in = self.dec_embedding(dec_in, x_mark_dec[:, -self.pred_len:, :])
 
         dec_out = self.decoder(dec_in, enc_out_other, x_mask=None, cross_mask=None)
         dec_out = self.out_projection(dec_out)
@@ -470,7 +465,7 @@ class Model(nn.Module):
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None, mask=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
-            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)
+            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
             return dec_out[:, -self.pred_len:, :]  # [B, L, D]
         if self.task_name == 'imputation':
             dec_out = self.imputation(x_enc, x_mark_enc, x_dec, x_mark_dec, mask)

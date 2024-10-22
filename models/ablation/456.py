@@ -373,37 +373,30 @@ class Model(nn.Module):
         self.enc_embedding = DataEmbedding(configs.enc_in-self.c_out, configs.d_model, configs.embed, configs.freq, configs.dropout)
 
         self.encoder = nn.Linear(configs.enc_in - configs.c_out, configs.d_model)
-        self.LLM_encoder = LLMBlock(configs)
 
         # Decoder
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
-            self.dec_embedding = DataEmbedding(configs.c_out, configs.d_model, configs.embed, configs.freq, configs.dropout)
+            self.dec_embedding = DataEmbedding(configs.d_model + configs.c_out, configs.d_model, configs.embed, configs.freq, configs.dropout)
 
             # Embedding
-            self.decoder = Decoder(
+            self.decoder = Encoder(
                 [
-                    DecoderLayer(
-                        AttentionLayer(
-                            FullAttention(True, configs.factor, attention_dropout=configs.dropout,
-                                          output_attention=False),
-                            configs.d_model, configs.n_heads),
+                    EncoderLayer(
                         AttentionLayer(
                             FullAttention(False, configs.factor, attention_dropout=configs.dropout,
-                                          output_attention=False),
-                            configs.d_model, configs.n_heads),
+                                          output_attention=False), configs.d_model, configs.n_heads),
                         configs.d_model,
-                        4 * configs.d_model,
+                        configs.d_ff,
                         dropout=configs.dropout,
-                        activation=configs.activation,
-                    )
-                    for l in range(configs.d_layers)
+                        activation=configs.activation
+                    ) for l in range(configs.e_layers)
                 ],
-                norm_layer=torch.nn.LayerNorm(configs.d_model),
+                norm_layer=torch.nn.LayerNorm(configs.d_model)
             )
             self.out_projection = nn.Linear(configs.d_model, configs.c_out)
             self.projection = nn.Linear(configs.d_model, configs.pred_len, bias=True)
             # self.out_projection = nn.Linear(configs.pred_len, configs.c_out)
-            self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len+configs.label_len)
+            self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len)
 
         if self.task_name == 'imputation':
             self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
@@ -424,19 +417,19 @@ class Model(nn.Module):
         x_enc_other = x_enc[:,:,:-self.c_out]
         x_enc_target = x_enc[:,:,-self.c_out:]
 
-        enc_out_target = self.LLM_encoder(x_enc_target, x_mark_enc, x_dec, x_mark_dec, x_forecast)
         enc_out_other = self.encoder(x_enc_other)
 
-        dec_in = enc_out_target
+        dec_in = torch.cat((x_enc_target, enc_out_other), dim=-1)
+        dec_in = self.linear_predict(dec_in.permute(0,2,1)).permute(0,2,1)
+
         dec_in = self.dec_embedding(dec_in, x_mark_dec[:,-self.pred_len:,:])
 
-        dec_out = self.decoder(dec_in, enc_out_other, x_mask=None, cross_mask=None)
+        dec_out,_ = self.decoder(dec_in, attn_mask=None)
         dec_out = self.out_projection(dec_out)
 
         # De-Normalization from Non-stationary Transformer
         dec_out = dec_out * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len, 1))
         dec_out = dec_out + (means[:, :1, -self.c_out:].repeat(1, self.pred_len, 1))
-
         return dec_out
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):

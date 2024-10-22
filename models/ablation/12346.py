@@ -224,7 +224,7 @@ class LLMBlock(nn.Module):
         self.head_nf = self.d_ff * self.patch_nums
 
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
-            self.output_projection = FlattenHead(configs.enc_in, self.head_nf, self.pred_len, head_dropout=configs.dropout)
+            self.output_projection = FlattenHead(configs.enc_in, self.head_nf, self.seq_len, head_dropout=configs.dropout)
         else:
             raise NotImplementedError
 
@@ -373,6 +373,7 @@ class Model(nn.Module):
         self.enc_embedding = DataEmbedding(configs.enc_in-self.c_out, configs.d_model, configs.embed, configs.freq, configs.dropout)
 
         self.encoder = nn.Linear(configs.enc_in - configs.c_out, configs.d_model)
+
         self.LLM_encoder = LLMBlock(configs)
 
         # Decoder
@@ -380,30 +381,10 @@ class Model(nn.Module):
             self.dec_embedding = DataEmbedding(configs.c_out, configs.d_model, configs.embed, configs.freq, configs.dropout)
 
             # Embedding
-            self.decoder = Decoder(
-                [
-                    DecoderLayer(
-                        AttentionLayer(
-                            FullAttention(True, configs.factor, attention_dropout=configs.dropout,
-                                          output_attention=False),
-                            configs.d_model, configs.n_heads),
-                        AttentionLayer(
-                            FullAttention(False, configs.factor, attention_dropout=configs.dropout,
-                                          output_attention=False),
-                            configs.d_model, configs.n_heads),
-                        configs.d_model,
-                        4 * configs.d_model,
-                        dropout=configs.dropout,
-                        activation=configs.activation,
-                    )
-                    for l in range(configs.d_layers)
-                ],
-                norm_layer=torch.nn.LayerNorm(configs.d_model),
-            )
-            self.out_projection = nn.Linear(configs.d_model, configs.c_out)
+
+            self.out_projection = nn.Linear(configs.d_model+configs.c_out, configs.c_out)
             self.projection = nn.Linear(configs.d_model, configs.pred_len, bias=True)
-            # self.out_projection = nn.Linear(configs.pred_len, configs.c_out)
-            self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len+configs.label_len)
+            self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len)
 
         if self.task_name == 'imputation':
             self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
@@ -427,10 +408,8 @@ class Model(nn.Module):
         enc_out_target = self.LLM_encoder(x_enc_target, x_mark_enc, x_dec, x_mark_dec, x_forecast)
         enc_out_other = self.encoder(x_enc_other)
 
-        dec_in = enc_out_target
-        dec_in = self.dec_embedding(dec_in, x_mark_dec[:,-self.pred_len:,:])
-
-        dec_out = self.decoder(dec_in, enc_out_other, x_mask=None, cross_mask=None)
+        dec_in = torch.cat((enc_out_target,enc_out_other), dim=2)
+        dec_out = self.linear_predict(dec_in.permute(0,2,1)).permute(0,2,1)
         dec_out = self.out_projection(dec_out)
 
         # De-Normalization from Non-stationary Transformer

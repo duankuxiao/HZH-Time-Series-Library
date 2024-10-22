@@ -189,8 +189,8 @@ class Exp_Forecast(Exp_Basic):
                 print("Early stopping")
 
                 break
-            left_time = round(1 + (self.args.patience - early_stopping.counter) * cost_time / 60, 2)
-            print("          Left time: {} min".format(epoch + 1, cost_time, left_time))
+            left_time = 1 + (self.args.patience - early_stopping.counter) * cost_time
+            print("          Left time: {} min".format(left_time))
 
 
             if self.args.lradj != 'TST':
@@ -317,7 +317,7 @@ class Exp_Forecast(Exp_Basic):
             dtw = -999
         trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
 
-        [mse, rmse, mae, mape, r2, corr] = results_evaluation(trues.flatten(), preds.flatten())
+        [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(trues.flatten(), preds.flatten())
         print('mae:{}, r2:{}, dtw:{}'.format(mae, r2, dtw))
         f = open(os.path.join('./results', "result_long_term_forecast.txt"), 'a')
         f.write(setting + "  \n")
@@ -330,10 +330,10 @@ class Exp_Forecast(Exp_Basic):
         np.save(os.path.join(folder_path, 'true_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), trues)
 
         if self.args.features == 'M':
-            self.price_res_evaluation(trues, preds,trainable_params, folder_path)
+            pred_res,metrics_df = self.price_res_evaluation(trues, preds,trainable_params, folder_path)
         else:
-            self.res_evaluation(trues,preds,trainable_params, folder_path)
-        return
+            pred_res,metrics_df = self.res_evaluation(trues,preds,trainable_params, folder_path)
+        return pred_res,metrics_df
 
     def res_evaluation(self,true, pred,trainable_params, path):
         stride = self.args.pred_len
@@ -344,13 +344,14 @@ class Exp_Forecast(Exp_Basic):
         pred_res.loc[pred_res['true'] < 1e-3, 'true'] = 0
         pred_res.loc[pred_res['true'] < 1e-3, 'pred'] = 0
 
-        [mse, rmse, mae, mape, r2, corr] = results_evaluation(pred_res['true'].values, pred_res['pred'].values)
+        [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(pred_res['true'].values, pred_res['pred'].values)
 
         pred_res.to_csv(os.path.join(path, 'pred_results_{}_{}.csv'.format(self.args.data,self.args.data_path[:-4])))
-        metrics_df = pd.DataFrame({'trainable_params':trainable_params,'mae': mae, 'mape':mape,'mse':mse,'rmse': rmse, 'r2': r2,'corr':corr}, index=[0])
+        metrics_df = pd.DataFrame({'trainable_params':trainable_params,'mse':mse,'rmse': rmse,'nrmse':nrmse, 'mae': mae, 'mape': mape,'rae':rae,'r2': r2,'corr':corr}, index=[0])
         metrics_df.to_csv(os.path.join(path, 'metrics_results_{}_{}.csv'.format(self.args.data,self.args.data_path[:-4])))
 
         print('RMSE: {} MAE: {} R2: {}'.format(rmse, mae, r2))
+        return pred_res,metrics_df
 
     def price_res_evaluation(self,true,pred,trainable_params,path):
         stride = self.args.pred_len
@@ -362,26 +363,31 @@ class Exp_Forecast(Exp_Basic):
             columns_list.append('{}_pred'.format(i))
         res_df = pd.DataFrame(columns=columns_list)
         mse_list, rmse_list, mae_list, r2_list, corr_list,mape_list = [], [], [], [], [], []
+        nrmse_list,rae_list = [],[]
         for i in self.args.target:
             res_df['{}_pred'.format(i)] = pred[:, self.args.target.index(i)]
             res_df['{}_true'.format(i)] = true[:, self.args.target.index(i)]
 
-            [mse, rmse, mae, mape, r2, corr] = results_evaluation(true[:, self.args.target.index(i)], pred[:, self.args.target.index(i)])
+            [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(true[:, self.args.target.index(i)], pred[:, self.args.target.index(i)])
             print('{} mse:{}, rmse:{} mae:{} r2:{} corr:{}'.format(i, mse, rmse, mae, r2, corr))
             np.save(os.path.join(path, 'metrics_{}.npy'.format(i)), np.array([mse, rmse, mae, r2, corr]))
 
             mse_list.append(mse)
             rmse_list.append(rmse)
+            nrmse_list.append(nrmse)
             mae_list.append(mae)
             mape_list.append(mape)
+            rae_list.append(rae)
             r2_list.append(r2)
             corr_list.append(corr)
 
-        res_metrics_df = pd.DataFrame(columns=['trainable_params','mse', 'rmse', 'mae','mape', 'r2', 'corr'],
+        res_metrics_df = pd.DataFrame(columns=['trainable_params','mse', 'rmse','nrmse', 'mae','mape','rae', 'r2','corr'],
                                       index=[i for i in self.args.target])
         res_metrics_df['trainable_params'] = trainable_params
         res_metrics_df['mse'] = mse_list
         res_metrics_df['rmse'] = rmse_list
+        res_metrics_df['nrmse'] = nrmse_list
+        res_metrics_df['rae'] = rae_list
         res_metrics_df['mae'] = mae_list
         res_metrics_df['mape'] = mape_list
         res_metrics_df['r2'] = r2_list
@@ -390,3 +396,4 @@ class Exp_Forecast(Exp_Basic):
         print(res_metrics_df.loc['mean'])
         res_df.to_csv(os.path.join(path, 'pred_res_{}.csv'.format(self.args.data_path[:-4])))
         res_metrics_df.to_csv(os.path.join(path, 'res_metrics_df_{}.csv'.format(self.args.data_path[:-4])))
+        return res_df,res_metrics_df

@@ -7,31 +7,6 @@ from layers.Embed import DataEmbedding
 import numpy as np
 
 
-class MLP(nn.Module):
-    def __init__(self,in_size,out_size,hidden_sizes=[128,128], dropout=0.1):
-        super(MLP,self).__init__()
-
-        self.hidden_layers = nn.ModuleList()
-        in_features = in_size
-        for hidden_size in hidden_sizes:
-            self.hidden_layers.append(nn.Linear(in_features, hidden_size))
-            self.hidden_layers.append(nn.ReLU())
-            in_features = hidden_size
-
-        self.fc_output = nn.Linear(hidden_sizes[-1],out_size)
-        self.dropout = nn.Dropout(dropout)
-        self.relu = nn.ReLU()
-
-    def forward(self,x):
-        for layer in self.hidden_layers:
-            x = self.dropout(x)
-            x = layer(x)
-
-        output = self.fc_output(x)
-        output = self.dropout(output)
-        return output
-
-
 class Model(nn.Module):
     """
     Vanilla Transformer
@@ -43,19 +18,18 @@ class Model(nn.Module):
         super(Model, self).__init__()
         self.task_name = configs.task_name
         self.pred_len = configs.pred_len
-        self.output_attention = configs.output_attention
-        self.use_forecast = configs.use_forecast
         # Embedding
-        self.enc_embedding = DataEmbedding(configs.enc_in, configs.d_model, configs.embed, configs.freq, configs.dropout)
+        self.enc_embedding = DataEmbedding(configs.enc_in, configs.d_model, configs.embed, configs.freq,
+                                           configs.dropout)
         # Encoder
         self.encoder = Encoder(
             [
                 EncoderLayer(
                     AttentionLayer(
                         FullAttention(False, configs.factor, attention_dropout=configs.dropout,
-                                      output_attention=configs.output_attention), configs.d_model, configs.n_heads),
+                                      output_attention=False), configs.d_model, configs.n_heads),
                     configs.d_model,
-                    configs.d_model * 4,
+                    configs.d_ff,
                     dropout=configs.dropout,
                     activation=configs.activation
                 ) for l in range(configs.e_layers)
@@ -64,10 +38,8 @@ class Model(nn.Module):
         )
         # Decoder
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
-            if self.use_forecast:
-                self.dec_embedding = DataEmbedding(configs.forecast_dim, configs.d_model, configs.embed, configs.freq, configs.dropout)
-            else:
-                self.dec_embedding = DataEmbedding(configs.c_out, configs.d_model, configs.embed, configs.freq,configs.dropout)
+            self.dec_embedding = DataEmbedding(configs.c_out, configs.d_model, configs.embed, configs.freq,
+                                               configs.dropout)
             self.decoder = Decoder(
                 [
                     DecoderLayer(
@@ -80,41 +52,31 @@ class Model(nn.Module):
                                           output_attention=False),
                             configs.d_model, configs.n_heads),
                         configs.d_model,
-                        configs.d_model * 4,
+                        configs.d_ff,
                         dropout=configs.dropout,
                         activation=configs.activation,
                     )
                     for l in range(configs.d_layers)
                 ],
                 norm_layer=torch.nn.LayerNorm(configs.d_model),
+                projection=nn.Linear(configs.d_model, configs.c_out, bias=True)
             )
-            self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
-            self.linear_predict = nn.Linear(configs.pred_len, configs.pred_len)
-
-            # self.output_projection = MLP(configs.d_model,configs.c_out,configs.hidden_size,configs.dropout)
-
         if self.task_name == 'imputation':
-            self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
+            self.projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
         if self.task_name == 'anomaly_detection':
-            self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
+            self.projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
         if self.task_name == 'classification':
             self.act = F.gelu
             self.dropout = nn.Dropout(configs.dropout)
-            self.output_projection = nn.Linear(configs.d_model * configs.seq_len, configs.num_class)
+            self.projection = nn.Linear(configs.d_model * configs.seq_len, configs.num_class)
 
-    def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast):
+    def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
         # Embedding
         enc_out = self.enc_embedding(x_enc, x_mark_enc)
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
-        if self.use_forecast:
-            dec_out = self.dec_embedding(x_forecast, x_mark_dec)
-        else:
-            dec_out = self.dec_embedding(x_dec, x_mark_dec)
+        dec_out = self.dec_embedding(x_dec, x_mark_dec)
         dec_out = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None)
-        # dec_out = self.linear_predict(dec_out[:, -self.pred_len:, :].permute(0, 2, 1)).permute(0, 2, 1)
-        dec_out = self.output_projection(dec_out)
-
         return dec_out
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
@@ -146,9 +108,9 @@ class Model(nn.Module):
         output = self.projection(output)  # (batch_size, num_classes)
         return output
 
-    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None, mask=None):
+    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
-            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)
+            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec)
             return dec_out[:, -self.pred_len:, :]  # [B, L, D]
         if self.task_name == 'imputation':
             dec_out = self.imputation(x_enc, x_mark_enc, x_dec, x_mark_dec, mask)

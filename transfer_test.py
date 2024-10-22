@@ -33,20 +33,28 @@ def transfer_test(args, path):
 
     exp = Exp(args)  # set experiments
     print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-    exp.test(setting, test=1, path=path)
+    pred_res,metrics_df = exp.test(setting, test=1, path=path)
     torch.cuda.empty_cache()
+    return pred_res,metrics_df
 
 
 if __name__ == '__main__':
-    path = r'D:\Time-LLM-main\results\res\Electricity_Transformer_electricity_ftM_sl72_ll24_pl168_sd22_td3_dm128_nh8_el6_dl2_df512_fc3_dropout0.1_ebtimeF_test_0_scale'
+    import pandas as pd
+    path = r'D:\Time-LLM-main\results\res\tokyo_TimeLLM_electricity_ftS_sl72_ll24_pl168_sd1_td1_dm16_nh8_el1_dl4_df32_fc3_dropout0.1_ebtimeF_test_0_BERT_llmd768_llmf6_tk5_prompt_scale\coal'
     args = load_config(os.path.join(path,'checkpoints','configs.pkl'))
 
-    # for city in ['tokyo','hokkaido','tohoku']:
-    for city in ['hokkaido']:
-
-        # args.target = ['Coal']  # ['Electricity', 'Renewable_energy', 'Coal']  _Electricity  _Renewable_energy _Coal
-        args.target = ['Electricity', 'Renewable_energy', 'Coal']
+    renamed_dfs = []
+    for city in ['tokyo','hokkaido','tohoku','kyushu']:
+    # for city in ['kyushu']:
+        args.feature_cols = ['Coal']
+        args.target = args.feature_cols  # ['Electricity', 'Renewable_energy', 'Coal']  _Electricity  _Renewable_energy _Coal
+        # args.target = ['Electricity', 'Renewable_energy', 'Coal']
         args.data_path = '{}.csv'.format(city)
         args.source_data_path = args.data_path
         args.features = 'M'
-        transfer_test(args, path)
+        pred_res, metrics_df = transfer_test(args, path)
+        metrics_df.index = metrics_df.index +'_'+ city
+        renamed_dfs.append(metrics_df)
+        combined_df = pd.concat(renamed_dfs, axis=0)
+        combined_df.to_csv(os.path.join(path,'zero-shot_res_metrics.csv'))
+

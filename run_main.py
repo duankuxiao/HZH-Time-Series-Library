@@ -64,6 +64,7 @@ def main(args):
         args.device_ids = [int(id_) for id_ in device_ids]
         args.gpu = args.device_ids[0]
 
+    args.content = load_content(args)
 
     if 'TimeLLM' in args.model:
         args.batch_size = 24
@@ -118,46 +119,49 @@ if __name__ == '__main__':
     # from solar_radiation_configs import args
     # from configs.price_configs import args
     from configs.electricity_configs import args
-    args.model_id = 'test_normal'
+
+    args.model_id = '56'
+    # args.data_path = '{}.csv'.format(args.model_id)
+    # args.source_data_path = '{}.csv'.format(args.model_id)
     args.features = 'M'
-    args.model = 'TimesNet'  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TransformerTimeLLM, RNNTimeLLM, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,TimeLLMDLinear, DLinearTimeLLM]
+    args.model = 'Ablation'  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
     args.is_training = 1
 
     args.use_prompt = True
-    args.use_forecast = False  # False
-    args.forecast_dim = 4
-    args.d_model = 64
-    args.d_ff = 512
-    args.e_layers = 8
-    args.d_layers = 1
+
+    args.d_model = 32
+    args.d_ff = 64
+    args.e_layers = 4
+    args.d_layers = 4
+    args.llm_layers = 6
+
+    # args.d_model = 512
+    # args.d_ff = 2048
+    # args.e_layers = 4
+    # args.d_layers = 1
 
     if 'TimeLLM' in args.model:
-        args.d_model = 64
-        args.d_ff = 128
-        args.e_layers = 1
-        args.d_layers = 8
+        args.d_model = 32
+        args.d_ff = 64
+        args.e_layers = 4
+        args.d_layers = 4
         args.llm_layers = 6
 
-        args.rnn_dim = args.d_model
-        args.rnn_dim = 64
-        args.rnn_layers = 2
-
     if args.model == 'Transformer':
-        args.d_model = 128
-        args.d_ff = 512
-        args.e_layers = 6
-        args.d_layers = 2
+        args.d_model = 512
+        args.d_ff = 2048
+        args.e_layers = 8
+        args.d_layers = 3
 
     if 'RNN' in args.model:
-        args.rnn_dim = 256
-        args.rnn_layers = 3
+        args.rnn_dim = 512
+        args.rnn_layers = 2
 
     args.feature_cols = ['Electricity','Renewable_energy', 'Nuclear', 'Coal', 'Hydro', 'Geothermal', 'Biomass','Solar', 'Solar_curtailment', 'Wind', 'Wind_ccurtailment','Water_pumping',
                          'Interconnection', 'Temperature', 'Relative_humidity', 'Precipitation', 'Dew_point', 'Vapor_pressure', 'Wind_speed', 'Sunshine_duration',
                          'Snowfall', 'Global_horizontal_irradiance']
-    args.target = ['Electricity','Renewable_energy','Coal']
-    # args.target = ['Coal']
-
+    args.target = ['Electricity', 'Renewable_energy', 'Coal']
+    # args.target = ['Renewable_energy']
 
     main(args)
 

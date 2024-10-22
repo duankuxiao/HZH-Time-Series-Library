@@ -32,11 +32,31 @@ def empirical_correlation_coefficient(y_true, y_pred):
 def results_evaluation(y_test_seq, y_pred_seq):
     mse = mean_squared_error(y_true=y_test_seq, y_pred=y_pred_seq)
     rmse = np.sqrt(mse)
+    nrmse,_ = NRMSE(y_test_seq, y_pred_seq,rmse)
     mae = mean_absolute_error(y_true=y_test_seq, y_pred=y_pred_seq)
     mape = mean_absolute_percentage_error(y_true=y_test_seq, y_pred=y_pred_seq)
+    rae = RAE(y_test_seq, y_pred_seq)
     r2 = r2_score(y_true=y_test_seq, y_pred=y_pred_seq,multioutput='uniform_average')  # multioutput='variance_weighted' 'uniform_average'
     corr = empirical_correlation_coefficient(y_true=y_test_seq,y_pred=y_pred_seq)
-    return [mse, rmse, mae,mape, r2,corr]
+    return [mse, rmse,nrmse, mae,mape,rae, r2,corr]
+
+def NRMSE(y_true, y_pred,rmse):
+    # 标准化 RMSE (可以选择用真实值的范围或平均值)
+    nrmse_range = rmse / (np.max(y_true) - np.min(y_true))  # 使用范围标准化
+    nrmse_mean = rmse / np.mean(y_true)  # 使用平均值标准化
+    return nrmse_range, nrmse_mean
+
+def RAE(y_true, y_pred):
+    # 计算 MAE
+    mae = mean_absolute_error(y_true, y_pred)
+
+    # 计算基准模型误差，即使用均值作为预测值时的误差
+    y_mean = np.mean(y_true)
+    mae_baseline = np.mean(np.abs(y_true - y_mean))
+
+    # 计算 RAE
+    rae = mae / mae_baseline
+    return rae
 
 
 def RSE(pred, true):

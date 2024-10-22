@@ -14,6 +14,7 @@ class Model(nn.Module):
         individual: Bool, whether shared model among different variates.
         """
         super(Model, self).__init__()
+        self.c_out = configs.c_out
         self.task_name = configs.task_name
         self.seq_len = configs.seq_len
         if configs.rnn_model == 'GRU':
@@ -37,10 +38,19 @@ class Model(nn.Module):
             self.output_projection = nn.Linear(configs.enc_in * configs.seq_len, configs.num_class)
 
     def encoder(self, x):
-        x,_ = self.rnn_layer(x)
+        # Normalization from Non-stationary Transformer
+        means = x.mean(1, keepdim=True).detach()
+        x_enc = x - means
+        stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
+        x_enc /= stdev
+
+        x,_ = self.rnn_layer(x_enc)
         x = self.linear_predict(x.permute(0, 2, 1)).permute(0, 2, 1)
-        x = self.output_projection(x)
-        return x
+        dec_out = self.output_projection(x)
+        # De-Normalization from Non-stationary Transformer
+        dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+        dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+        return dec_out
 
     def forecast(self, x_enc):
         return self.encoder(x_enc)
