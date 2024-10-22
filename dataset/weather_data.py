@@ -246,3 +246,6 @@ if __name__ == '__main__':
 
     jma_data = get_JMA_data(start_date, end_date, city=city)
 
+
+
+

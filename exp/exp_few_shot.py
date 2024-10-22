@@ -60,7 +60,7 @@ class Exp_FewShot(Exp_Forecast):
         if self.args.use_amp:
             scaler = torch.cuda.amp.GradScaler()
 
-        for epoch in range(1):
+        for epoch in range(self.args.train_epochs):
             iter_count = 0
             train_loss = []
 
@@ -79,9 +79,6 @@ class Exp_FewShot(Exp_Forecast):
                 dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
                 dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
 
-                # f_dim = -1 if self.args.features == 'MS' else 0
-                f_dim = -1
-
                 # encoder - decoder
                 if self.args.use_amp:
                     with torch.amp.autocast():
@@ -90,8 +87,8 @@ class Exp_FewShot(Exp_Forecast):
                         else:
                             outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
 
-                        outputs = outputs[:, -self.args.pred_len:, f_dim:]
-                        batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
+                        outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
+                        batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:].to(self.device)
                         loss = criterion(outputs, batch_y)
                         train_loss.append(loss.item())
                 else:
@@ -100,8 +97,8 @@ class Exp_FewShot(Exp_Forecast):
                     else:
                         outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
 
-                    outputs = outputs[:, -self.args.pred_len:, f_dim:]
-                    batch_y = batch_y[:, -self.args.pred_len:, f_dim:].to(self.device)
+                    outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
+                    batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:].to(self.device)
                     loss = criterion(outputs, batch_y)
                     train_loss.append(loss.item())
                 verbose_interval = (len(train_data) // 10) if len(train_data) > 10 else 1
@@ -120,17 +117,19 @@ class Exp_FewShot(Exp_Forecast):
                     adjust_learning_rate(model_optim, scheduler, epoch + 1, self.args, printout=False)
                     scheduler.step()
 
-            print("Epoch: {} cost time: {} min".format(epoch + 1, round((time.time() - epoch_time) / 60, 2)))
             train_loss = np.average(train_loss)
             vali_loss = self.vali(vali_data, vali_loader, criterion)
-            test_loss = self.vali(test_data, test_loader, criterion)
-
-            print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f} Test Loss: {4:.7f}".format(
-                epoch + 1, train_steps, train_loss, vali_loss, test_loss))
+            # test_loss = self.vali(test_data, test_loader, criterion)
+            cost_time = round((time.time() - epoch_time) / 60, 2)
+            print("     Epoch: {} cost time: {} min".format(epoch + 1, cost_time))
+            print("         Train Loss: {0:.7f} Vali Loss: {1:.7f}".format(train_loss, vali_loss))
             early_stopping(vali_loss, self.model, path)
+
             if early_stopping.early_stop:
                 print("Early stopping")
                 break
+            left_time = 1 + (self.args.patience - early_stopping.counter) * cost_time
+            print("          Left time: {} min".format(left_time))
 
             if self.args.lradj != 'TST':
                 if self.args.lradj == 'COS':

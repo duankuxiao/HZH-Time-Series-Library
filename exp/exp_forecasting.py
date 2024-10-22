@@ -187,11 +187,10 @@ class Exp_Forecast(Exp_Basic):
 
             if early_stopping.early_stop:
                 print("Early stopping")
-
                 break
+
             left_time = 1 + (self.args.patience - early_stopping.counter) * cost_time
             print("          Left time: {} min".format(left_time))
-
 
             if self.args.lradj != 'TST':
                 if self.args.lradj == 'COS':
