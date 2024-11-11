@@ -29,7 +29,7 @@ def load_config(filepath):
     return config
 
 
-def adjust_learning_rate(optimizer, scheduler, epoch, args, printout=True):
+def adjust_learning_rate(optimizer, scheduler, epoch, args, printout=True,accelerator=None):
     if args.lradj == 'type1':
         lr_adjust = {epoch: args.learning_rate * (0.5 ** ((epoch - 1) // 1))}
     elif args.lradj == 'type2':
@@ -50,17 +50,21 @@ def adjust_learning_rate(optimizer, scheduler, epoch, args, printout=True):
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
         if printout:
-            print('Updating learning rate to {}'.format(lr))
+            if accelerator is not None:
+                accelerator.print('Updating learning rate to {}'.format(lr))
+            else:
+                print('Updating learning rate to {}'.format(lr))
 
 
 class EarlyStopping:
-    def __init__(self, patience=7, verbose=False, delta=0, save_mode=True):
+    def __init__(self,accelerator=None, patience=7, verbose=False, delta=0, save_mode=True):
+        self.accelerator = accelerator
         self.patience = patience
         self.verbose = verbose
         self.counter = 0
         self.best_score = None
         self.early_stop = False
-        self.val_loss_min = np.Inf
+        self.val_loss_min = np.inf
         self.delta = delta
         self.save_mode = save_mode
 
@@ -83,9 +87,12 @@ class EarlyStopping:
 
     def save_checkpoint(self, val_loss, model, path):
         if self.verbose:
-            print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
-
-        torch.save(model.state_dict(), path + '/' + 'checkpoint')
+            if self.accelerator is not None:
+                self.accelerator.print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
+                torch.save(model.state_dict(), path + '/' + 'checkpoint')
+            else:
+                print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
+                torch.save(model.state_dict(), path + '/' + 'checkpoint')
         self.val_loss_min = val_loss
 
 

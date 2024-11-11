@@ -1,6 +1,6 @@
 import os
 import torch
-from models import Autoformer, TimeLLM, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TimeLLMX, RNN, PatchTST,TimeLLMXX,TimeLLMXXRNN, TimeLLMformer, Ablation
+from models import Autoformer, TimeLLM, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TimeLLMX, RNN, PatchTST,TimeLLMXX, TimeLLMformer, Ablation
 
 
 class Exp_Basic(object):
@@ -18,7 +18,6 @@ class Exp_Basic(object):
             'TimeMixer': TimeMixer,
             'TimeLLMX': TimeLLMX,
             'TimeLLMXX': TimeLLMXX,
-            'TimeLLMXXRNN':TimeLLMXXRNN,
             'RNN': RNN,
             'PatchTST':PatchTST,
             'TimeLLMformer':TimeLLMformer,
@@ -30,7 +29,18 @@ class Exp_Basic(object):
             self.model_dict[Mamba] = Mamba
 
         self.f_dim = self.args.c_out
-        self.device = self._acquire_device()
+        if args.accelerate:
+            from accelerate import Accelerator, DeepSpeedPlugin
+            from accelerate import DistributedDataParallelKwargs
+
+            ddp_kwargs = DistributedDataParallelKwargs(find_unused_parameters=True)
+            deepspeed_plugin = DeepSpeedPlugin(hf_ds_config='./ds_config_zero2.json')
+            self.accelerator = Accelerator(kwargs_handlers=[ddp_kwargs], deepspeed_plugin=deepspeed_plugin, device_placement=True)
+            self.device = self.accelerator.device
+        else:
+            self.device = args.device if args.device is not None else self._acquire_device()
+            self.accelerator = None
+
         self.model = self._build_model().to(self.device)
 
     def _build_model(self):

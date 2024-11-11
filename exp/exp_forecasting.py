@@ -80,6 +80,8 @@ class Exp_Forecast(Exp_Basic):
                     else:
                         outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
 
+                if self.args.accelerate:
+                    outputs, batch_y = self.accelerator.gather_for_metrics((outputs, batch_y))
                 outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
                 batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:].to(self.device)
 
@@ -106,7 +108,7 @@ class Exp_Forecast(Exp_Basic):
         time_now = time.time()
 
         train_steps = len(train_loader)
-        early_stopping = EarlyStopping(patience=self.args.patience, verbose=True)
+        early_stopping = EarlyStopping(patience=self.args.patience, verbose=True,accelerator=self.accelerator)
 
         model_optim = self._select_optimizer()
         criterion = self._select_criterion()
@@ -114,6 +116,9 @@ class Exp_Forecast(Exp_Basic):
 
         if self.args.use_amp:
             scaler = torch.cuda.amp.GradScaler()
+        if self.args.accelerate:
+            self.model,train_loader,vali_loader, model_optim,scheduler = self.accelerator.prepare(self.model,train_loader,vali_loader,model_optim,scheduler)
+            self.accelerator.print(f"Process {self.accelerator.process_index} is using device {self.accelerator.device}")
 
         for epoch in range(self.args.train_epochs):
             iter_count = 0
@@ -124,15 +129,27 @@ class Exp_Forecast(Exp_Basic):
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark, x_forecast) in enumerate(train_loader):
                 iter_count += 1
                 model_optim.zero_grad()
-                batch_x = batch_x.float().to(self.device)
-                batch_y = batch_y.float().to(self.device)
-                batch_x_mark = batch_x_mark.float().to(self.device)
-                batch_y_mark = batch_y_mark.float().to(self.device)
-                x_forecast = x_forecast.float().to(self.device)
 
-                # decoder input
-                dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
-                dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
+                if self.args.accelerate:
+                    batch_x = batch_x.float()
+                    batch_y = batch_y.float()
+                    batch_x_mark = batch_x_mark.float()
+                    batch_y_mark = batch_y_mark.float()
+                    x_forecast = x_forecast.float()
+
+                    # decoder input
+                    dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
+                    dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float()
+                else:
+                    batch_x = batch_x.float().to(self.device)
+                    batch_y = batch_y.float().to(self.device)
+                    batch_x_mark = batch_x_mark.float().to(self.device)
+                    batch_y_mark = batch_y_mark.float().to(self.device)
+                    x_forecast = x_forecast.float().to(self.device)
+
+                    # decoder input
+                    dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
+                    dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
 
                 # encoder - decoder
                 if self.args.use_amp:
@@ -143,7 +160,10 @@ class Exp_Forecast(Exp_Basic):
                             outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
 
                         outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
-                        batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:].to(self.device)
+                        if self.args.accelerate:
+                            batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:]
+                        else:
+                            batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:].to(self.device)
                         loss = criterion(outputs, batch_y)
                         train_loss.append(loss.item())
                 else:
@@ -153,36 +173,47 @@ class Exp_Forecast(Exp_Basic):
                         outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
 
                     outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
-                    batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:].to(self.device)
+                    if self.args.accelerate:
+                        batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:]
+                    else:
+                        batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:].to(self.device)
                     loss = criterion(outputs, batch_y)
                     train_loss.append(loss.item())
-                verbose_interval = (len(train_data) // 10) if len(train_data) > 10 else 1
-                if (i + 1) % verbose_interval == 0:
-                    print("\titers: {0}, epoch: {1} | loss: {2:.7f}".format(i + 1, epoch + 1, loss.item()))
+                if self.args.accelerate:
+                    self.accelerator.print("\titers: {0}, epoch: {1} | loss: {2:.7f}".format(i + 1, epoch + 1, loss.item()))
                     speed = (time.time() - time_now) / iter_count
                     left_time = speed * ((self.args.train_epochs - epoch) * train_steps - i)
-                    print('\tspeed: {:.4f}s/iter; left time: {:.2f}min'.format(speed, left_time / 60))
-                    iter_count = 0
-                    time_now = time.time()
+                    self.accelerator.print('\tspeed: {:.4f}s/iter; left time: {:.2f}min'.format(speed, left_time / 60))
+                else:
+                    verbose_interval = (len(train_loader) // 5) if len(train_loader) > 5 else 1
+                    if (i + 1) % verbose_interval == 0:
+                        print("\titers: {0}, epoch: {1} | loss: {2:.7f}".format(i + 1, epoch + 1, loss.item()))
+                        speed = (time.time() - time_now) / iter_count
+                        left_time = speed * ((self.args.train_epochs - epoch) * train_steps - i)
+                        print('\tspeed: {:.4f}s/iter; left time: {:.2f}min'.format(speed, left_time / 60))
+                        iter_count = 0
+                        time_now = time.time()
 
                 if self.args.use_amp:
                     scaler.scale(loss).backward()
                     scaler.step(model_optim)
                     scaler.update()
                 else:
-                    loss.backward()
-                    model_optim.step()
+                    if self.args.accelerate:
+                        self.accelerator.backward(loss)
+                    else:
+                        loss.backward()
+                        model_optim.step()
 
                 if self.args.lradj == 'TST':
-                    adjust_learning_rate(model_optim, scheduler, epoch + 1, self.args, printout=False)
+                    adjust_learning_rate(model_optim, scheduler, epoch + 1, self.args, printout=False,accelerator=self.accelerator)
                     scheduler.step()
-
             train_loss = np.average(train_loss)
             vali_loss = self.vali(vali_data, vali_loader, criterion)
             # test_loss = self.vali(test_data, test_loader, criterion)
             cost_time = round((time.time() - epoch_time) / 60, 2)
-            print("     Epoch: {} cost time: {} min".format(epoch + 1, cost_time))
-            print("         Train Loss: {0:.7f} Vali Loss: {1:.7f}".format(train_loss, vali_loss))
+            print(" Epoch: {} cost time: {} min".format(epoch + 1, cost_time))
+            print("☆☆☆☆☆Train Loss: {0:.7f} Vali Loss: {1:.7f}".format(train_loss, vali_loss))
             early_stopping(vali_loss, self.model, path)
 
             if early_stopping.early_stop:
@@ -190,7 +221,7 @@ class Exp_Forecast(Exp_Basic):
                 break
 
             left_time = 1 + (self.args.patience - early_stopping.counter) * cost_time
-            print("          Left time: {} min".format(left_time))
+            print("  Left time: {} min".format(left_time))
 
             if self.args.lradj != 'TST':
                 if self.args.lradj == 'COS':
@@ -205,8 +236,14 @@ class Exp_Forecast(Exp_Basic):
             else:
                 print('Updating learning rate to {}'.format(scheduler.get_last_lr()[0]))
 
+        if self.args.accelerate:
+            self.accelerator.wait_for_everyone()
+
         best_model_path = path + '/' + 'checkpoint'
-        self.model.load_state_dict(torch.load(best_model_path))
+        if self.args.accelerate:
+            self.model = self.accelerator.load_state(best_model_path)
+        else:
+            self.model.load_state_dict(torch.load(best_model_path))
 
         return self.model
 
@@ -259,6 +296,9 @@ class Exp_Forecast(Exp_Basic):
                     else:
                         outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
 
+                if self.args.accelerate:
+                    self.accelerator.wait_for_everyone()
+                    outputs = self.accelerator.gather_for_metrics(outputs)
 
                 outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
                 batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:]  # .to(self.device)

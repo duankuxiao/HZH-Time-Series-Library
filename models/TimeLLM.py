@@ -43,14 +43,14 @@ class Model(nn.Module):
 
         if configs.llm_model == 'LLAMA':
             # self.llama_config = LlamaConfig.from_pretrained('/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/')
-            self.llama_config = LlamaConfig.from_pretrained(r'D:\LLM\llama')
+            self.llama_config = LlamaConfig.from_pretrained('./LLM/llama')
             self.llama_config.num_hidden_layers = configs.llm_layers
             self.llama_config.output_attentions = True
             self.llama_config.output_hidden_states = True
             try:
                 self.llm_model = LlamaModel.from_pretrained(
                     # "/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/",
-                    r'D:\LLM\llama',
+                    './LLM/llama',
                     trust_remote_code=True,
                     local_files_only=True,
                     config=self.llama_config,
@@ -69,7 +69,7 @@ class Model(nn.Module):
             try:
                 self.tokenizer = AutoTokenizer.from_pretrained(
                     # "/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/tokenizer.model",
-                    r'D:\LLM\llama',
+                    './LLM/llama',
                     trust_remote_code=True,
                     local_files_only=True
                 )
@@ -117,14 +117,14 @@ class Model(nn.Module):
                     local_files_only=False
                 )
         elif configs.llm_model == 'QWEN':
-            self.bert_config = BertConfig.from_pretrained(r'D:\LLM\qwen')
+            self.bert_config = BertConfig.from_pretrained('./LLM/qwen')
 
             self.bert_config.num_hidden_layers = configs.llm_layers
             self.bert_config.output_attentions = True
             self.bert_config.output_hidden_states = True
             try:
                 self.llm_model = BertModel.from_pretrained(
-                    r'D:\LLM\qwen',
+                    './LLM/qwen',
                     trust_remote_code=True,
                     local_files_only=True,
                     config=self.bert_config,
@@ -140,7 +140,7 @@ class Model(nn.Module):
 
             try:
                 self.tokenizer = BertTokenizer.from_pretrained(
-                    r'D:\LLM\qwen',
+                    r'./LLM/qwen',
                     trust_remote_code=True,
                     local_files_only=True
                 )
@@ -152,14 +152,14 @@ class Model(nn.Module):
                     local_files_only=False
                 )
         elif configs.llm_model == 'BERT':
-            self.bert_config = BertConfig.from_pretrained(r'D:\LLM\bert')
+            self.bert_config = BertConfig.from_pretrained('./LLM/bert')
 
             self.bert_config.num_hidden_layers = configs.llm_layers
             self.bert_config.output_attentions = True
             self.bert_config.output_hidden_states = True
             try:
                 self.llm_model = BertModel.from_pretrained(
-                    r'D:\LLM\bert',
+                    './LLM/bert',
                     trust_remote_code=True,
                     local_files_only=True,
                     config=self.bert_config,
@@ -175,7 +175,7 @@ class Model(nn.Module):
 
             try:
                 self.tokenizer = BertTokenizer.from_pretrained(
-                    r'D:\LLM\bert',
+                    './LLM/bert',
                     trust_remote_code=True,
                     local_files_only=True
                 )

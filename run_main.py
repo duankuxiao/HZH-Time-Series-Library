@@ -120,25 +120,21 @@ if __name__ == '__main__':
     # from configs.price_configs import args
     from configs.electricity_configs import args
 
-    args.model_id = '56'
+    args.model_id = 'test'
     # args.data_path = '{}.csv'.format(args.model_id)
     # args.source_data_path = '{}.csv'.format(args.model_id)
     args.features = 'M'
-    args.model = 'Ablation'  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
+    args.model = 'RNN'  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
+    args.llm_model = 'BERT'
     args.is_training = 1
-
+    args.accelerate = False
     args.use_prompt = True
 
     args.d_model = 32
     args.d_ff = 64
     args.e_layers = 4
     args.d_layers = 4
-    args.llm_layers = 6
-
-    # args.d_model = 512
-    # args.d_ff = 2048
-    # args.e_layers = 4
-    # args.d_layers = 1
+    args.llm_layers = 32
 
     if 'TimeLLM' in args.model:
         args.d_model = 32
