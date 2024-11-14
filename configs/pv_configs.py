@@ -7,7 +7,7 @@ args.data_path = 'PV_hour.csv'
 args.source_data_path = 'PV_hour.csv'
 
 args.features = 'MS'
-args.target = ['DA-24','DA-DT','DA-PT','TTV']
+args.target = ['PV']
 args.num_train = 8760+24
 args.num_test = 8760
 args.seq_len = 72
