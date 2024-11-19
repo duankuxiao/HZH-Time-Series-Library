@@ -339,7 +339,6 @@ class Exp_Forecast(Exp_Basic):
         trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
         print('test shape:', preds.shape, trues.shape)
 
-
         # dtw calculation
         if self.args.use_dtw:
             dtw_list = []
@@ -369,7 +368,7 @@ class Exp_Forecast(Exp_Basic):
         np.save(os.path.join(folder_path, 'true_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), trues)
 
         if self.args.features == 'M':
-            pred_res,metrics_df = self.price_res_evaluation(trues, preds,trainable_params, folder_path)
+            pred_res,metrics_df = self.res_evaluation_multi_target(trues, preds,trainable_params, folder_path)
         else:
             pred_res,metrics_df = self.res_evaluation(trues,preds,trainable_params, folder_path)
         return pred_res,metrics_df
@@ -392,7 +391,7 @@ class Exp_Forecast(Exp_Basic):
         print('RMSE: {} MAE: {} R2: {}'.format(rmse, mae, r2))
         return pred_res,metrics_df
 
-    def price_res_evaluation(self,true,pred,trainable_params,path):
+    def res_evaluation_multi_target(self,true,pred,trainable_params,path):
         stride = self.args.pred_len
         true = true[::stride,:,:].reshape(-1,len(self.args.target))
         pred = pred[::stride,:,:].reshape(-1,len(self.args.target))
