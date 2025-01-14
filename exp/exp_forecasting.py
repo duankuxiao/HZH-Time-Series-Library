@@ -120,6 +120,9 @@ class Exp_Forecast(Exp_Basic):
             self.model,train_loader,vali_loader, model_optim,scheduler = self.accelerator.prepare(self.model,train_loader,vali_loader,model_optim,scheduler)
             self.accelerator.print(f"Process {self.accelerator.process_index} is using device {self.accelerator.device}")
 
+        # Initialize a dictionary to store loss values
+        loss_records = {"epoch": [], "train_loss": [], "vali_loss": []}
+
         for epoch in range(self.args.train_epochs):
             iter_count = 0
             train_loss = []
@@ -210,6 +213,12 @@ class Exp_Forecast(Exp_Basic):
                     scheduler.step()
             train_loss = np.average(train_loss)
             vali_loss = self.vali(vali_data, vali_loader, criterion)
+
+            # Record loss values
+            loss_records["epoch"].append(epoch + 1)
+            loss_records["train_loss"].append(train_loss)
+            loss_records["vali_loss"].append(vali_loss)
+
             # test_loss = self.vali(test_data, test_loader, criterion)
             cost_time = round((time.time() - epoch_time) / 60, 2)
             print(" Epoch: {} cost time: {} min".format(epoch + 1, cost_time))
@@ -228,9 +237,9 @@ class Exp_Forecast(Exp_Basic):
                     scheduler.step()
                     print("lr = {:.10f}".format(model_optim.param_groups[0]['lr']))
                 else:
-                    if epoch == 0:
-                        self.args.learning_rate = model_optim.param_groups[0]['lr']
-                        print("lr = {:.10f}".format(model_optim.param_groups[0]['lr']))
+                    # if epoch == 0:
+                    #     self.args.learning_rate = model_optim.param_groups[0]['lr']
+                    #     print("lr = {:.10f}".format(model_optim.param_groups[0]['lr']))
                     adjust_learning_rate(model_optim, scheduler, epoch + 1, self.args, printout=True)
 
             else:
@@ -245,6 +254,11 @@ class Exp_Forecast(Exp_Basic):
         else:
             self.model.load_state_dict(torch.load(best_model_path))
 
+        # Convert loss records to DataFrame and save as CSV
+        folder_path = os.path.join(self.args.checkpoints, setting)
+        loss_df = pd.DataFrame(loss_records)
+        loss_df.to_csv(os.path.join(folder_path, "loss_records.csv"), index=False)
+        print("Loss records saved to:", os.path.join(folder_path, "loss_records.csv"))
         return self.model
 
     def test(self, setting, test=0, path=None):

@@ -119,46 +119,49 @@ if __name__ == '__main__':
     # from solar_radiation_configs import args
     # from configs.price_configs import args
     from configs.electricity_configs import args
+    for model in ['RNN', 'DLinear', 'iTransformer', 'TimesNet', 'TimeLLMformer']:
+        args.model_id = 'kyushu'
+        args.data_path = '{}.csv'.format(args.model_id)
+        args.source_data_path = '{}.csv'.format(args.model_id)
+        args.features = 'M'
+        args.model = model # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
+        args.llm_model = 'BERT'
+        args.is_training = 1
+        args.accelerate = False
+        args.use_prompt = True
 
-    args.model_id = 'test'
-    # args.data_path = '{}.csv'.format(args.model_id)
-    # args.source_data_path = '{}.csv'.format(args.model_id)
-    args.features = 'M'
-    args.model = 'RNN'  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
-    args.llm_model = 'BERT'
-    args.is_training = 1
-    args.accelerate = False
-    args.use_prompt = True
-
-    args.d_model = 32
-    args.d_ff = 64
-    args.e_layers = 4
-    args.d_layers = 4
-    args.llm_layers = 32
-
-    if 'TimeLLM' in args.model:
         args.d_model = 32
         args.d_ff = 64
         args.e_layers = 4
         args.d_layers = 4
-        args.llm_layers = 6
+        args.llm_layers = 32
 
-    if args.model == 'Transformer':
-        args.d_model = 512
-        args.d_ff = 2048
-        args.e_layers = 8
-        args.d_layers = 3
+        if args.model == 'TimeLLMformer':
+            args.lradj = 'PEMS'
 
-    if 'RNN' in args.model:
-        args.rnn_dim = 512
-        args.rnn_layers = 2
+        if 'TimeLLM' in args.model:
+            args.d_model = 32
+            args.d_ff = 64
+            args.e_layers = 4
+            args.d_layers = 4
+            args.llm_layers = 6
 
-    args.feature_cols = ['Electricity','Renewable_energy', 'Nuclear', 'Coal', 'Hydro', 'Geothermal', 'Biomass','Solar', 'Solar_curtailment', 'Wind', 'Wind_ccurtailment','Water_pumping',
-                         'Interconnection', 'Temperature', 'Relative_humidity', 'Precipitation', 'Dew_point', 'Vapor_pressure', 'Wind_speed', 'Sunshine_duration',
-                         'Snowfall', 'Global_horizontal_irradiance']
-    args.target = ['Electricity', 'Renewable_energy', 'Coal']
-    # args.target = ['Renewable_energy']
+        if args.model == 'Transformer':
+            args.d_model = 512
+            args.d_ff = 2048
+            args.e_layers = 8
+            args.d_layers = 3
 
-    main(args)
+        if 'RNN' in args.model:
+            args.rnn_dim = 512
+            args.rnn_layers = 2
+
+        args.feature_cols = ['Electricity','Renewable_energy', 'Nuclear', 'Coal', 'Hydro', 'Geothermal', 'Biomass','Solar', 'Solar_curtailment', 'Wind', 'Wind_ccurtailment','Water_pumping',
+                             'Interconnection', 'Temperature', 'Relative_humidity', 'Precipitation', 'Dew_point', 'Vapor_pressure', 'Wind_speed', 'Sunshine_duration',
+                             'Snowfall', 'Global_horizontal_irradiance']
+        args.target = ['Electricity', 'Renewable_energy', 'Coal']
+        # args.target = ['Renewable_energy']
+
+        main(args)
 
 

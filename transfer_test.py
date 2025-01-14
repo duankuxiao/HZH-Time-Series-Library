@@ -46,7 +46,9 @@ if __name__ == '__main__':
     renamed_dfs = []
     for city in ['tokyo','hokkaido','tohoku','kyushu']:
     # for city in ['kyushu']:
-        args.feature_cols = ['Coal']
+        args.feature_cols = ['Electricity', 'Renewable_energy', 'Coal']  # ['Electricity', 'Renewable_energy', 'Coal']
+        args.feature_cols = ['Coal']  # ['Electricity', 'Renewable_energy', 'Coal']
+
         args.target = args.feature_cols  # ['Electricity', 'Renewable_energy', 'Coal']  _Electricity  _Renewable_energy _Coal
         # args.target = ['Electricity', 'Renewable_energy', 'Coal']
         args.data_path = '{}.csv'.format(city)
@@ -56,5 +58,5 @@ if __name__ == '__main__':
         metrics_df.index = metrics_df.index +'_'+ city
         renamed_dfs.append(metrics_df)
         combined_df = pd.concat(renamed_dfs, axis=0)
-        combined_df.to_csv(os.path.join(path,'zero-shot_res_metrics.csv'))
+        combined_df.to_csv(os.path.join(path,'zero-shot_res_metrics.csv'.format()))
 
