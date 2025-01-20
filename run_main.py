@@ -70,9 +70,15 @@ def main(args):
         args.batch_size = 24
         args.learning_rate = 0.01
         args.content = load_content(args)
-        if 'LLAMA' in args.llm_model:
+        if args.llm_model == 'LLAMA8b':
             args.llm_dim = 4096
+        elif args.llm_model == 'LLAMA3b':
+            args.llm_dim = 3072
+        elif args.llm_model == 'LLAMA1b':
+            args.llm_dim = 2048
         elif 'BERT' in args.llm_model:
+            args.llm_dim = 768
+        elif 'GPT2' in args.llm_model:
             args.llm_dim = 768
         else:
             raise ValueError('Unknown llm model')
@@ -119,13 +125,16 @@ if __name__ == '__main__':
     # from solar_radiation_configs import args
     # from configs.price_configs import args
     from configs.electricity_configs import args
-    for model in ['RNN', 'DLinear', 'iTransformer', 'TimesNet', 'TimeLLMformer']:
-        args.model_id = 'kyushu'
-        args.data_path = '{}.csv'.format(args.model_id)
-        args.source_data_path = '{}.csv'.format(args.model_id)
+
+    # for model in ['RNN', 'DLinear', 'iTransformer', 'TimesNet','TimeLLM', 'TimeLLMformer']:
+    for model in ['TimeLLMformer']:
+
+        args.model_id = 'LLAMA'
+        # args.data_path = '{}.csv'.format(args.model_id)
+        # args.source_data_path = '{}.csv'.format(args.model_id)
         args.features = 'M'
-        args.model = model # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
-        args.llm_model = 'BERT'
+        args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
+        args.llm_model = 'LLAMA1b'
         args.is_training = 1
         args.accelerate = False
         args.use_prompt = True
@@ -138,8 +147,6 @@ if __name__ == '__main__':
 
         if args.model == 'TimeLLMformer':
             args.lradj = 'PEMS'
-
-        if 'TimeLLM' in args.model:
             args.d_model = 32
             args.d_ff = 64
             args.e_layers = 4
@@ -156,11 +163,37 @@ if __name__ == '__main__':
             args.rnn_dim = 512
             args.rnn_layers = 2
 
+        if args.model == 'DLinear':
+            args.d_model = 256
+            args.d_ff = 1024
+            args.e_layers = 4
+            args.d_layers = 1
+
+        if args.model == 'iTransformer':
+            args.d_model = 512
+            args.d_ff = 2048
+            args.e_layers = 4
+            args.d_layers = 1
+
+        if args.model == 'TimesNet':
+            args.d_model = 64
+            args.d_ff = 256
+            args.e_layers = 2
+            args.d_layers = 1
+
         args.feature_cols = ['Electricity','Renewable_energy', 'Nuclear', 'Coal', 'Hydro', 'Geothermal', 'Biomass','Solar', 'Solar_curtailment', 'Wind', 'Wind_ccurtailment','Water_pumping',
                              'Interconnection', 'Temperature', 'Relative_humidity', 'Precipitation', 'Dew_point', 'Vapor_pressure', 'Wind_speed', 'Sunshine_duration',
                              'Snowfall', 'Global_horizontal_irradiance']
         args.target = ['Electricity', 'Renewable_energy', 'Coal']
         # args.target = ['Renewable_energy']
+        if args.model == 'TimeLLM':
+            args.feature_cols = ['Electricity', 'Renewable_energy', 'Coal']
+            args.target = ['Electricity', 'Renewable_energy', 'Coal']
+            args.d_model = 16
+            args.d_ff = 32
+            args.e_layers = 1
+            args.d_layers = 1
+            args.llm_layers = 6
 
         main(args)
 

@@ -23,7 +23,7 @@ def data_provider(args, flag):
         Data = Dataset_cumstom
 
     if args.model == 'TimeLLM':
-        Data = Dataset_cumstom_llm  # Dataset_solar_radiation_llm
+        Data = Dataset_cumstom  # Dataset_solar_radiation_llm
 
     timeenc = 0 if args.embed != 'timeF' else 1
     percent = args.percent

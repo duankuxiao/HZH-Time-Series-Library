@@ -40,6 +40,8 @@ class Model(nn.Module):
         self.d_llm = configs.llm_dim
         self.patch_len = configs.patch_len
         self.stride = configs.stride
+        self.use_prompt = configs.use_prompt
+
 
         if configs.llm_model == 'LLAMA':
             # self.llama_config = LlamaConfig.from_pretrained('/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/')
@@ -249,38 +251,47 @@ class Model(nn.Module):
         medians = torch.median(x_enc, dim=1).values
         lags = self.calcute_lags(x_enc)
         trends = x_enc.diff(dim=1).sum(dim=1)
+        if self.use_prompt:
+            prompt = []
+            for b in range(x_enc.shape[0]):
+                min_values_str = str(min_values[b].tolist()[0])
+                max_values_str = str(max_values[b].tolist()[0])
+                median_values_str = str(medians[b].tolist()[0])
+                lags_values_str = str(lags[b].tolist())
+                # prompt_ = (
+                #     f"<|start_prompt|>Dataset description: {self.description}"
+                #     f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information; "
+                #     "Input statistics: "
+                #     f"min value {min_values_str}, "
+                #     f"max value {max_values_str}, "
+                #     f"median value {median_values_str}, "
+                #     f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
+                #     f"top {self.top_k} lags are : {lags_values_str}<|end_prompt|>"
+                # )
+                # prompt_ = (
+                #     f"<|start_prompt|>Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information <|end_prompt|> "
+                # )
 
-        prompt = []
-        for b in range(x_enc.shape[0]):
-            min_values_str = str(min_values[b].tolist()[0])
-            max_values_str = str(max_values[b].tolist()[0])
-            median_values_str = str(medians[b].tolist()[0])
-            lags_values_str = str(lags[b].tolist())
-            prompt_ = (
-                f"<|start_prompt|>Dataset description: {self.description}"
-                f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information; "
-                "Input statistics: "
-                f"min value {min_values_str}, "
-                f"max value {max_values_str}, "
-                f"median value {median_values_str}, "
-                f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
-                f"top {self.top_k} lags are : {lags_values_str}<|end_prompt|>"
-            )
+                prompt_ = (
+                    f"<|start_prompt|>Dataset description: {self.description}"
+                    f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information <|end_prompt|> "
+                )
 
-            prompt.append(prompt_)
+                prompt.append(prompt_)
         # x_enc [B * N, T, 1]
         x_enc = x_enc.reshape(B, N, T).permute(0, 2, 1).contiguous()  # [B, T, N]
-
-        prompt = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
-        prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)
+        if self.use_prompt:
+            prompt = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
+            prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)
 
         source_embeddings = self.mapping_layer(self.word_embeddings.permute(1, 0)).permute(1, 0)
 
         x_enc = x_enc.permute(0, 2, 1).contiguous()
         enc_out, n_vars = self.patch_embedding(x_enc.to(torch.bfloat16))
         enc_out = self.reprogramming_layer(enc_out, source_embeddings, source_embeddings)
-
-        llama_enc_out = torch.cat([prompt_embeddings, enc_out], dim=1)
+        llama_enc_out = enc_out
+        if self.use_prompt:
+            llama_enc_out = torch.cat([prompt_embeddings, enc_out], dim=1)
 
         dec_out = self.llm_model(inputs_embeds=llama_enc_out).last_hidden_state
         dec_out = dec_out[:, :, :self.d_ff]

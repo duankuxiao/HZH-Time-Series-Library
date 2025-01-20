@@ -46,16 +46,16 @@ class LLMBlock(nn.Module):
         self.stride = configs.stride
         self.use_prompt = configs.use_prompt
 
-        if configs.llm_model == 'LLAMA':
+        if configs.llm_model == 'LLAMA8b':
             # self.llama_config = LlamaConfig.from_pretrained('/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/')
-            self.llama_config = LlamaConfig.from_pretrained(r'D:\LLM\llama')
+            self.llama_config = LlamaConfig.from_pretrained(r'D:\LLM\llama8b')
             self.llama_config.num_hidden_layers = configs.llm_layers
             self.llama_config.output_attentions = True
             self.llama_config.output_hidden_states = True
             try:
                 self.llm_model = LlamaModel.from_pretrained(
                     # "/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/",
-                    r'D:\LLM\llama',
+                    r'D:\LLM\llama8b',
                     trust_remote_code=True,
                     local_files_only=True,
                     config=self.llama_config,
@@ -74,7 +74,7 @@ class LLMBlock(nn.Module):
             try:
                 self.tokenizer = AutoTokenizer.from_pretrained(
                     # "/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/tokenizer.model",
-                    r'D:\LLM\llama',
+                    r'D:\LLM\llama8b',
                     trust_remote_code=True,
                     local_files_only=True
                 )
@@ -86,15 +86,95 @@ class LLMBlock(nn.Module):
                     trust_remote_code=True,
                     local_files_only=False
                 )
+        elif configs.llm_model == 'LLAMA1b':
+            # self.llama_config = LlamaConfig.from_pretrained('/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/')
+            self.llama_config = LlamaConfig.from_pretrained(r'D:\LLM\llama1b')
+            self.llama_config.num_hidden_layers = configs.llm_layers
+            self.llama_config.output_attentions = True
+            self.llama_config.output_hidden_states = True
+            try:
+                self.llm_model = LlamaModel.from_pretrained(
+                    # "/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/",
+                    r'D:\LLM\llama1b',
+                    trust_remote_code=True,
+                    local_files_only=True,
+                    config=self.llama_config,
+                    # load_in_4bit=True
+                )
+            except EnvironmentError:  # downloads model from HF is not already done
+                print("Local model files not found. Attempting to download...")
+                self.llm_model = LlamaModel.from_pretrained(
+                    # "/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/",
+                    'huggyllama/llama-1b',
+                    trust_remote_code=True,
+                    local_files_only=False,
+                    config=self.llama_config,
+                    # load_in_4bit=True
+                )
+            try:
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    # "/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/tokenizer.model",
+                    r'D:\LLM\llama1b',
+                    trust_remote_code=True,
+                    local_files_only=True
+                )
+            except EnvironmentError:  # downloads the tokenizer from HF if not already done
+                print("Local tokenizer files not found. Atempting to download them..")
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    # "/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/tokenizer.model",
+                    'huggyllama/llama-1b',
+                    trust_remote_code=True,
+                    local_files_only=False
+                )
+        elif configs.llm_model == 'LLAMA3b':
+            # self.llama_config = LlamaConfig.from_pretrained('/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/')
+            self.llama_config = LlamaConfig.from_pretrained(r'D:\LLM\llama3b')
+            self.llama_config.num_hidden_layers = configs.llm_layers
+            self.llama_config.output_attentions = True
+            self.llama_config.output_hidden_states = True
+            try:
+                self.llm_model = LlamaModel.from_pretrained(
+                    # "/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/",
+                    r'D:\LLM\llama3b',
+                    trust_remote_code=True,
+                    local_files_only=True,
+                    config=self.llama_config,
+                    # load_in_4bit=True
+                )
+            except EnvironmentError:  # downloads model from HF is not already done
+                print("Local model files not found. Attempting to download...")
+                self.llm_model = LlamaModel.from_pretrained(
+                    # "/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/",
+                    'huggyllama/llama-3b',
+                    trust_remote_code=True,
+                    local_files_only=False,
+                    config=self.llama_config,
+                    # load_in_4bit=True
+                )
+            try:
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    # "/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/tokenizer.model",
+                    r'D:\LLM\llama3b',
+                    trust_remote_code=True,
+                    local_files_only=True
+                )
+            except EnvironmentError:  # downloads the tokenizer from HF if not already done
+                print("Local tokenizer files not found. Atempting to download them..")
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    # "/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/tokenizer.model",
+                    'huggyllama/llama-3b',
+                    trust_remote_code=True,
+                    local_files_only=False
+                )
         elif configs.llm_model == 'GPT2':
-            self.gpt2_config = GPT2Config.from_pretrained('openai-community/gpt2')
+            self.gpt2_config = GPT2Config.from_pretrained(r'D:\LLM\gpt2')
 
             self.gpt2_config.num_hidden_layers = configs.llm_layers
             self.gpt2_config.output_attentions = True
             self.gpt2_config.output_hidden_states = True
             try:
                 self.llm_model = GPT2Model.from_pretrained(
-                    'openai-community/gpt2',
+                    r'D:\LLM\gpt2',
                     trust_remote_code=True,
                     local_files_only=True,
                     config=self.gpt2_config,
@@ -110,7 +190,7 @@ class LLMBlock(nn.Module):
 
             try:
                 self.tokenizer = GPT2Tokenizer.from_pretrained(
-                    'openai-community/gpt2',
+                    r'D:\LLM\gpt2',
                     trust_remote_code=True,
                     local_files_only=True
                 )
@@ -270,6 +350,14 @@ class LLMBlock(nn.Module):
                 f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
                 f"top {self.top_k} lags are : {lags_values_str}<|end_prompt|>"
             )
+            # prompt_ = (
+            #     f"<|start_prompt|>Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information <|end_prompt|> "
+            # )
+
+            # prompt_ = (
+            #     f"<|start_prompt|>Dataset description: {self.description}"
+            #     f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information <|end_prompt|> "
+            # )
 
             prompt.append(prompt_)
         # x_enc [B * N, T, 1]
