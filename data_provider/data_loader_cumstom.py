@@ -20,7 +20,7 @@ class Dataset_cumstom(Dataset):
 
         self.source_data_path = configs.source_data_path
         self.forecast_dim = configs.forecast_dim
-        self.feature_cols = configs.feature_cols
+        self.feature_cols = configs.features_cols
         self.c_out = configs.c_out
         if size == None:
             self.seq_len = 24 * 3
@@ -72,9 +72,12 @@ class Dataset_cumstom(Dataset):
     def __read_data__(self):
         self.scaler = StandardScaler()
         self.target_scaler = StandardScaler()
-
-        df_source_domain = pd.read_csv(os.path.join(self.root_path, self.source_data_path))
-        df_raw = pd.read_csv(os.path.join(self.root_path, self.data_path))
+        try:
+            df_source_domain = pd.read_csv(os.path.join(self.root_path, self.source_data_path))
+            df_raw = pd.read_csv(os.path.join(self.root_path, self.data_path))
+        except:
+            df_source_domain = pd.read_csv(os.path.join(self.root_path, self.source_data_path),encoding='SHIFT-JIS')
+            df_raw = pd.read_csv(os.path.join(self.root_path, self.data_path),encoding='SHIFT-JIS')
 
         '''
         df_raw.columns: ['date', ...(other features), target feature]

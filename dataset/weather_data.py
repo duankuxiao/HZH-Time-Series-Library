@@ -10,9 +10,9 @@ def str2float(data):
     try:
         return float(data)
     except:
-        return 0
+        return data
 
-def JMA_scrap_1day(date,city='Tokyo'):
+def JMA_scrap_1day(date,city = 'Tokyo',freq = 'hour'):
     '''
 
     :param date: 日付
@@ -20,19 +20,24 @@ def JMA_scrap_1day(date,city='Tokyo'):
     '''
 
     if city == 'Tokyo':
-        url = "http://www.data.jma.go.jp/obd/stats/etrn/view/hourly_s1.php?prec_no=44&block_no=47662&year=%d&month=%d&day=%d&view=" % (date.year, date.month, date.day)  # 東京（東京都)
+        prec_no, block_no = 44,47662
     elif city == 'Sapporo':
-        url = "http://www.data.jma.go.jp/obd/stats/etrn/view/hourly_s1.php?prec_no=14&block_no=47412&year=%d&month=%d&day=%d&view=" % (date.year, date.month, date.day)  # 札幌（北海道)
+        prec_no, block_no = 14,47412
     elif city == 'Naha':
-        url = "http://www.data.jma.go.jp/obd/stats/etrn/view/hourly_s1.php?prec_no=91&block_no=47936&year=%d&month=%d&day=%d&view=" % (date.year, date.month, date.day)  # 那霸（冲绳）
+        prec_no, block_no = 91,47936
     elif city == 'Sendai':
-        url = "http://www.data.jma.go.jp/obd/stats/etrn/view/hourly_s1.php?prec_no=34&block_no=47590&year=%d&month=%d&day=%d&view=" % (date.year, date.month, date.day)  # 仙台（宫城）
+        prec_no, block_no = 34,47590
     elif city == 'Osaka':
-        url = "http://www.data.jma.go.jp/obd/stats/etrn/view/hourly_s1.php?prec_no=62&block_no=47772&year=%d&month=%d&day=%d&view=" % (date.year, date.month, date.day)  # 大阪（大阪）
+        prec_no, block_no = 62,47772
     elif city == 'Fukuoka':
-        url = "http://www.data.jma.go.jp/obd/stats/etrn/view/hourly_s1.php?prec_no=82&block_no=47807&year=%d&month=%d&day=%d&view=" % (date.year, date.month, date.day)  # 福冈（福冈）
-    else:
-        raise ValueError('Unknown city')
+        prec_no, block_no = 82,47807
+    elif city == 'Chiba':
+        prec_no, block_no = 45,47682
+    if freq == 'hour':
+        url = "http://www.data.jma.go.jp/obd/stats/etrn/view/hourly_s1.php?prec_no=%d&block_no=%d&year=%d&month=%d&day=%d&view=" % (prec_no,block_no,date.year, date.month, date.day)  # 東京（東京都)
+    elif freq == '10min':
+        url = "https://www.data.jma.go.jp/stats/etrn/view/10min_s1.php?prec_no=%d&block_no=%d&year=%d&month=%d&day=%d&view=" % (prec_no,block_no,date.year, date.month, date.day)  # 東京（東京都)
+
 
     html = urllib.request.urlopen(url).read()
     soup = BeautifulSoup(html, 'html.parser')
@@ -101,7 +106,7 @@ def TWH_scraping_48h():
     return temp_data, PoP_data, RH_data, C_data, Acc_data, Weather_data,WS_data,WD_data
 
 
-def get_JMA_data(start_date, end_date, city='Tokyo', output=True):
+def get_JMA_data(start_date, end_date, city='Tokyo',freq='hour', output=True):
     '''
 
     :param startdate: 開始日付
@@ -114,33 +119,60 @@ def get_JMA_data(start_date, end_date, city='Tokyo', output=True):
     if isinstance(end_date, str):
         end_date = datetime.datetime.strptime(end_date, '%Y/%m/%d')
     date = start_date
-    meteorologicaldata = pd.DataFrame(
-        columns=['Year', 'Month', 'Day', 'Hour', 'Atmospheric_pressure_local', 'Atmospheric_pressure_sea_level', 'Precipitation', 'Temperature', 'Dew_point', 'Vapor_pressure', 'Relative_humidity',
-                 'Wind_speed', 'Wind_direction', 'Sunshine_duration', 'Global_horizontal_irradiance', 'Snowfall', 'Snow_accumulation', 'Weather', 'Cloud_cover'])
+    if freq == 'hour':
+        columns = ['Year', 'Month', 'Day', 'Hour', 'Atmospheric_pressure_local', 'Atmospheric_pressure_sea_level', 'Precipitation', 'Temperature', 'Dew_point',
+                   'Vapor_pressure', 'Relative_humidity',
+                   'Wind_speed', 'Wind_direction', 'Sunshine_duration', 'Global_horizontal_irradiance', 'Snowfall', 'Snow_accumulation', 'Weather', 'Cloud_cover']
     # ["年","月","日", "時間", "気圧（現地）", "気圧（海面）","降水量", "気温", "露点湿度", "蒸気圧", "湿度", "風速", "風向", "日照時間", "全天日射量", "降雪", "積雪","天気","雲量"]
+    elif freq == '10min':
+        columns = ['Year', 'Month', 'Day', 'Hour', 'Min', 'Atmospheric_pressure_local', 'Atmospheric_pressure_sea_level', 'Precipitation', 'Temperature', 'Relative_humidity',
+                   'Wind_speed_mean', 'Wind_direction_mean', 'Wind_speed_max', 'Wind_direction_max', 'Sunshine_duration']
+    meteorologicaldata = pd.DataFrame(columns=columns)
+
     index_list = []
     day_count = 0
     try:
         while date != end_date + datetime.timedelta(days=1):
 
-            data_per_hour_list = JMA_scrap_1day(date,city=city)
-            for data_per_hour in data_per_hour_list:
-                index_date = datetime.datetime(date.year, date.month, date.day, 1, 0, 0)
-                index = data_per_hour_list.index(data_per_hour)
-                index_date = index_date + datetime.timedelta(hours=index)
-                index_date = datetime.datetime(index_date.year, index_date.month, index_date.day, index_date.hour, 0, 0)
-                index_list.append(index_date)
-                index = index + day_count * 24
-                meteorologicaldata.loc[index, 'Year'] = index_date.year
-                meteorologicaldata.loc[index, 'Month'] = index_date.month
-                meteorologicaldata.loc[index, 'Day'] = index_date.day
-                meteorologicaldata.loc[index, 'Hour'] = index_date.hour
-                for i in range(len(data_per_hour) - 1):
-                    try:
-                        data = str2float(data_per_hour[i][0])
-                        meteorologicaldata.iloc[index, i + 4] = data
-                    except:
-                        meteorologicaldata.iloc[index, i + 4] = '--'
+            data_per_hour_list = JMA_scrap_1day(date,city=city,freq=freq)
+            if freq == 'hour':
+                for data_per_hour in data_per_hour_list:
+                    index_date = datetime.datetime(date.year, date.month, date.day, 1, 0, 0)
+                    index = data_per_hour_list.index(data_per_hour)
+                    index_date = index_date + datetime.timedelta(hours=index)
+                    index_date = datetime.datetime(index_date.year, index_date.month, index_date.day, index_date.hour, 0, 0)
+                    index_list.append(index_date)
+                    index = index + day_count * 24
+                    meteorologicaldata.loc[index, 'Year'] = index_date.year
+                    meteorologicaldata.loc[index, 'Month'] = index_date.month
+                    meteorologicaldata.loc[index, 'Day'] = index_date.day
+                    meteorologicaldata.loc[index, 'Hour'] = index_date.hour
+                    for i in range(len(data_per_hour) - 1):
+                        try:
+                            data = str2float(data_per_hour[i][0])
+                            meteorologicaldata.iloc[index, i + 4] = data
+                        except:
+                            meteorologicaldata.iloc[index, i + 4] = '--'
+            elif freq == '10min':
+                for data_per_10min in data_per_hour_list:
+                    index_date = datetime.datetime(date.year, date.month, date.day, 1, 0, 0)
+                    index = data_per_hour_list.index(data_per_10min)
+                    index_date = index_date + datetime.timedelta(minutes=10*index)
+                    index_date = datetime.datetime(index_date.year, index_date.month, index_date.day, index_date.hour, index_date.minute, 0)
+                    index_list.append(index_date)
+                    index = index + day_count * 6 * 24
+                    meteorologicaldata.loc[index, 'Year'] = index_date.year
+                    meteorologicaldata.loc[index, 'Month'] = index_date.month
+                    meteorologicaldata.loc[index, 'Day'] = index_date.day
+                    meteorologicaldata.loc[index, 'Hour'] = index_date.hour
+                    meteorologicaldata.loc[index, 'Min'] = index_date.minute
+                    for i in range(len(data_per_10min)):
+                        try:
+                            data = str2float(data_per_10min[i][0])
+                            meteorologicaldata.iloc[index, i + 5] = data
+                        except:
+                            meteorologicaldata.iloc[index, i + 5] = '--'
+
             day_count += 1
             date += datetime.timedelta(days=1)
 
@@ -148,8 +180,7 @@ def get_JMA_data(start_date, end_date, city='Tokyo', output=True):
             enddate_str = end_date.strftime('%Y%m%d')
             meteorologicaldata.index = index_list
             if output == True:
-                meteorologicaldata.to_csv(
-                    r'D:\Time-LLM-main\dataset\solar_radiation\{}_{}_{}.csv'.format(city,startdate_str, enddate_str))
+                meteorologicaldata.to_csv('{}_{}_{}_{}.csv'.format(city,startdate_str, enddate_str,freq),encoding='SHIFT-JIS')
         return meteorologicaldata
 
     except:
@@ -240,10 +271,15 @@ def get_data(start_date, output=True):
 
 
 if __name__ == '__main__':
-    start_date = '2020/1/1'
-    end_date = '2023/12/31'
-    city = 'Sapporo'  # Sapporo Sendai Tokyo Osaka Fukuoka Naha
+    # start_date = '2024/12/7'
+    # end_date = '2025/2/4'
+    # city = 'Chiba'  # Sapporo Sendai Tokyo Osaka Fukuoka Naha Chiba
+    # jma_data = get_JMA_data(start_date, end_date, freq='10min', city=city)
+    # jma_data = pd.read_csv('Chiba_20241207_20250204_10min.csv',index_col=0,encoding='SHIFT-JIS')
+    # jma_data.index = pd.to_datetime(jma_data.index)
+    # jma_data.fillna(0,inplace=True)
+    # df_resampled = jma_data.resample('5T').interpolate(method='linear')
+    # df_resampled.to_csv('Chiba_20241207_20250204_5min.csv',encoding='SHIFT-JIS')
 
-    jma_data = get_JMA_data(start_date, end_date, city=city)
-
-
+    data = pd.read_csv('Chiba_20241207_20250204_5min.csv',encoding='SHIFT-JIS',index_col=0)
+    print(data.columns)
