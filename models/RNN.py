@@ -17,6 +17,9 @@ class Model(nn.Module):
         self.c_out = configs.c_out
         self.task_name = configs.task_name
         self.seq_len = configs.seq_len
+        self.use_forecast = configs.use_forecast
+        if self.use_forecast:
+            self.forecast_projection = nn.Linear(configs.forecast_dim, configs.enc_in)
         if configs.rnn_model == 'GRU':
             self.rnn_layer = nn.GRU(configs.enc_in, configs.rnn_dim, configs.rnn_layers, batch_first=True)
         elif configs.rnn_model == 'LSTM':
@@ -24,6 +27,9 @@ class Model(nn.Module):
 
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len)
+            if self.use_forecast:
+                self.linear_predict = nn.Linear(configs.seq_len + configs.pred_len, configs.pred_len)
+
             # self.output_projection = nn.Linear(configs.rnn_dim, configs.c_out)
             self.output_projection = nn.Linear(configs.rnn_dim, configs.c_out)
 
@@ -37,12 +43,20 @@ class Model(nn.Module):
             self.dropout = nn.Dropout(configs.dropout)
             self.output_projection = nn.Linear(configs.enc_in * configs.seq_len, configs.num_class)
 
-    def encoder(self, x):
+    def encoder(self, x,x_forecast=None):
         # Normalization from Non-stationary Transformer
         means = x.mean(1, keepdim=True).detach()
         x_enc = x - means
         stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
         x_enc /= stdev
+
+        if self.use_forecast:
+            means_forecast = x_forecast.mean(1, keepdim=True).detach()
+            x_enc_forecast = x_forecast - means_forecast
+            stdev_forecast = torch.sqrt(torch.var(x_enc_forecast, dim=1, keepdim=True, unbiased=False) + 1e-5)
+            x_forecast /= stdev_forecast
+            x_forecast_ = self.forecast_projection(x_forecast)
+            x_enc = torch.cat((x_enc, x_forecast_), dim=1)
 
         x,_ = self.rnn_layer(x_enc)
         x = self.linear_predict(x.permute(0, 2, 1)).permute(0, 2, 1)
@@ -52,8 +66,8 @@ class Model(nn.Module):
         dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
         return dec_out
 
-    def forecast(self, x_enc):
-        return self.encoder(x_enc)
+    def forecast(self, x_enc,x_forecast=None):
+        return self.encoder(x_enc,x_forecast)
 
     def imputation(self, x_enc):
         return self.encoder(x_enc)
@@ -69,9 +83,9 @@ class Model(nn.Module):
         output = self.projection(output)  # (batch_size, num_classes)
         return output
 
-    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
+    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast=None, mask=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
-            dec_out = self.forecast(x_enc)
+            dec_out = self.forecast(x_enc,x_forecast)
             return dec_out[:, -self.pred_len:, :]  # [B, L, D]
         if self.task_name == 'imputation':
             dec_out = self.imputation(x_enc)

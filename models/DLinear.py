@@ -25,6 +25,10 @@ class Model(nn.Module):
         self.individual = individual
         self.channels = configs.enc_in
 
+        self.use_forecast = configs.use_forecast
+        if self.use_forecast:
+            self.forecast_projection = nn.Linear(configs.forecast_dim, configs.enc_in)
+
         if self.individual:
             self.Linear_Seasonal = nn.ModuleList()
             self.Linear_Trend = nn.ModuleList()
@@ -68,7 +72,10 @@ class Model(nn.Module):
         x = seasonal_output + trend_output
         return x.permute(0, 2, 1)
 
-    def forecast(self, x_enc):
+    def forecast(self, x_enc,x_forecast=None):
+        if self.use_forecast:
+            x_forecast_ = self.forecast_projection(x_forecast)
+            x_enc = torch.cat((x_enc, x_forecast_), dim=1)
         return self.encoder(x_enc)
 
     def imputation(self, x_enc):
@@ -85,9 +92,9 @@ class Model(nn.Module):
         output = self.projection(output)  # (batch_size, num_classes)
         return output
 
-    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast, mask=None):
+    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast=None, mask=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
-            dec_out = self.forecast(x_enc)
+            dec_out = self.forecast(x_enc,x_forecast)
             return dec_out[:, -self.pred_len:, :]  # [B, L, D]
         if self.task_name == 'imputation':
             dec_out = self.imputation(x_enc)

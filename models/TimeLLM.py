@@ -41,7 +41,9 @@ class Model(nn.Module):
         self.patch_len = configs.patch_len
         self.stride = configs.stride
         self.use_prompt = configs.use_prompt
-
+        self.use_forecast = configs.use_forecast
+        if self.use_forecast:
+            self.forecast_projection = nn.Linear(configs.forecast_dim, configs.enc_in)
 
         if configs.llm_model == 'LLAMA':
             # self.llama_config = LlamaConfig.from_pretrained('/mnt/alps/modelhub/pretrained_model/LLaMA/7B_hf/')
@@ -208,8 +210,7 @@ class Model(nn.Module):
 
         self.dropout = nn.Dropout(configs.dropout)
 
-        self.patch_embedding = PatchEmbedding(
-            configs.d_model, self.patch_len, self.stride, configs.dropout)
+        self.patch_embedding = PatchEmbedding(configs.d_model, self.patch_len, self.stride, configs.dropout)
 
         self.word_embeddings = self.llm_model.get_input_embeddings().weight
         self.vocab_size = self.word_embeddings.shape[0]
@@ -219,6 +220,9 @@ class Model(nn.Module):
         self.reprogramming_layer = ReprogrammingLayer(configs.d_model, configs.n_heads, self.d_ff, self.d_llm)
 
         self.patch_nums = int((configs.seq_len - self.patch_len) / self.stride + 2)
+        if self.use_forecast:
+            self.patch_nums = int((configs.seq_len+configs.pred_len - self.patch_len) / self.stride + 2)
+
         self.head_nf = self.d_ff * self.patch_nums
 
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
@@ -241,6 +245,10 @@ class Model(nn.Module):
         return None
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
+        if self.use_forecast:
+            x_forecast_ = self.forecast_projection(x_forecast)
+            x_enc = torch.cat((x_enc, x_forecast_), dim=1)
+
         x_enc = self.normalize_layers(x_enc, 'norm')
 
         B, T, N = x_enc.size()
@@ -258,24 +266,24 @@ class Model(nn.Module):
                 max_values_str = str(max_values[b].tolist()[0])
                 median_values_str = str(medians[b].tolist()[0])
                 lags_values_str = str(lags[b].tolist())
-                # prompt_ = (
-                #     f"<|start_prompt|>Dataset description: {self.description}"
-                #     f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information; "
-                #     "Input statistics: "
-                #     f"min value {min_values_str}, "
-                #     f"max value {max_values_str}, "
-                #     f"median value {median_values_str}, "
-                #     f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
-                #     f"top {self.top_k} lags are : {lags_values_str}<|end_prompt|>"
-                # )
+                prompt_ = (
+                    f"<|start_prompt|>Dataset description: {self.description}"
+                    f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information; "
+                    "Input statistics: "
+                    f"min value {min_values_str}, "
+                    f"max value {max_values_str}, "
+                    f"median value {median_values_str}, "
+                    f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
+                    f"top {self.top_k} lags are : {lags_values_str}<|end_prompt|>"
+                )
                 # prompt_ = (
                 #     f"<|start_prompt|>Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information <|end_prompt|> "
                 # )
 
-                prompt_ = (
-                    f"<|start_prompt|>Dataset description: {self.description}"
-                    f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information <|end_prompt|> "
-                )
+                # prompt_ = (
+                #     f"<|start_prompt|>Dataset description: {self.description}"
+                #     f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information <|end_prompt|> "
+                # )
 
                 prompt.append(prompt_)
         # x_enc [B * N, T, 1]
