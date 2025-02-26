@@ -1,3 +1,4 @@
+import pandas as pd
 import torch
 import os
 from exp.exp_forecasting import Exp_Forecast
@@ -108,7 +109,7 @@ def main(args):
             exp.train(setting)
 
             print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-            exp.test(setting)
+            res_df,res_metrics_df = exp.test(setting)
             torch.cuda.empty_cache()
     else:
         ii = 0
@@ -116,8 +117,9 @@ def main(args):
 
         exp = Exp(args)  # set experiments
         print(' >>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-        exp.test(setting, test=1)
+        res_df,res_metrics_df = exp.test(setting, test=1)
         torch.cuda.empty_cache()
+    return res_df,res_metrics_df
 
 
 if __name__ == '__main__':
@@ -125,73 +127,81 @@ if __name__ == '__main__':
     # from solar_radiation_configs import args
     # from configs.price_configs import args
     from configs.aircon_configs import args
+    args.train_epochs = 2
+    args.patience = 2
+    for pred_len in [1,6]:
+        args.pred_len = pred_len
+        all_results = []
+        for model in ['RNN', 'DLinear', 'iTransformer', 'TimesNet','TimeLLM', 'TimeLLMformer']:
+        # for model in ['TimeLLMformer']:
 
-    # for model in ['RNN', 'DLinear', 'iTransformer', 'TimesNet','TimeLLM', 'TimeLLMformer']:
-    for model in ['TimeLLMformer']:
+            args.model_id = 'test'
+            # args.data_path = '{}.csv'.format(args.model_id)
+            # args.source_data_path = '{}.csv'.format(args.model_id)
+            args.features = 'M'
+            args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
+            args.llm_model = 'BERT'
+            args.is_training = 1
+            args.accelerate = False
+            args.use_prompt = True
+            args.use_forecast = False
 
-        args.model_id = 'test'
-        # args.data_path = '{}.csv'.format(args.model_id)
-        # args.source_data_path = '{}.csv'.format(args.model_id)
-        args.features = 'M'
-        args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
-        args.llm_model = 'BERT'
-        args.is_training = 1
-        args.accelerate = False
-        args.use_prompt = True
-        args.use_forecast = False
-
-        args.d_model = 32
-        args.d_ff = 64
-        args.e_layers = 4
-        args.d_layers = 4
-        args.llm_layers = 32
-
-        if args.model == 'TimeLLMformer':
-            args.lradj = 'PEMS'
             args.d_model = 32
             args.d_ff = 64
             args.e_layers = 4
             args.d_layers = 4
-            args.llm_layers = 6
+            args.llm_layers = 32
 
-        if args.model == 'Transformer':
-            args.d_model = 512
-            args.d_ff = 2048
-            args.e_layers = 8
-            args.d_layers = 3
+            if args.model == 'TimeLLMformer':
+                args.lradj = 'PEMS'
+                args.d_model = 32
+                args.d_ff = 64
+                args.e_layers = 4
+                args.d_layers = 4
+                args.llm_layers = 6
 
-        if 'RNN' in args.model:
-            args.rnn_dim = 512
-            args.rnn_layers = 2
+            if args.model == 'Transformer':
+                args.d_model = 512
+                args.d_ff = 2048
+                args.e_layers = 8
+                args.d_layers = 3
 
-        if args.model == 'DLinear':
-            args.d_model = 256
-            args.d_ff = 1024
-            args.e_layers = 4
-            args.d_layers = 1
+            if 'RNN' in args.model:
+                args.rnn_dim = 512
+                args.rnn_layers = 2
 
-        if args.model == 'iTransformer':
-            args.d_model = 512
-            args.d_ff = 2048
-            args.e_layers = 4
-            args.d_layers = 1
+            if args.model == 'DLinear':
+                args.d_model = 256
+                args.d_ff = 1024
+                args.e_layers = 4
+                args.d_layers = 1
 
-        if args.model == 'TimesNet':
-            args.d_model = 64
-            args.d_ff = 256
-            args.e_layers = 2
-            args.d_layers = 1
+            if args.model == 'iTransformer':
+                args.d_model = 512
+                args.d_ff = 2048
+                args.e_layers = 4
+                args.d_layers = 1
 
-        # args.target = ['Renewable_energy']
-        if args.model == 'TimeLLM':
-            args.feature_cols = ['2F', '1F_room1', '1F_room2','ac3_power', 'ac4_power']
-            args.target = ['2F', '1F_room1', '1F_room2','ac3_power', 'ac4_power']
-            args.d_model = 16
-            args.d_ff = 32
-            args.e_layers = 1
-            args.d_layers = 1
-            args.llm_layers = 6
+            if args.model == 'TimesNet':
+                args.d_model = 64
+                args.d_ff = 256
+                args.e_layers = 2
+                args.d_layers = 1
 
-        main(args)
+            # args.target = ['Renewable_energy']
+            if args.model == 'TimeLLM':
+                args.feature_cols = ['2F', '1F_room1', '1F_room2','ac3_power', 'ac4_power']
+                args.target = ['2F', '1F_room1', '1F_room2','ac3_power', 'ac4_power']
+                args.d_model = 16
+                args.d_ff = 32
+                args.e_layers = 1
+                args.d_layers = 1
+                args.llm_layers = 6
+
+            _,res_metrics_df = main(args)
+            res_metrics_df.insert(0, 'model', model)
+            all_results.append(res_metrics_df)
+            final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
+            final_metrics_df.to_csv('./results/all_models_comparison_{}.csv'.format(pred_len))
 
 

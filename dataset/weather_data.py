@@ -271,15 +271,16 @@ def get_data(start_date, output=True):
 
 
 if __name__ == '__main__':
-    # start_date = '2024/12/7'
-    # end_date = '2025/2/4'
-    # city = 'Chiba'  # Sapporo Sendai Tokyo Osaka Fukuoka Naha Chiba
-    # jma_data = get_JMA_data(start_date, end_date, freq='10min', city=city)
-    # jma_data = pd.read_csv('Chiba_20241207_20250204_10min.csv',index_col=0,encoding='SHIFT-JIS')
-    # jma_data.index = pd.to_datetime(jma_data.index)
-    # jma_data.fillna(0,inplace=True)
-    # df_resampled = jma_data.resample('5T').interpolate(method='linear')
-    # df_resampled.to_csv('Chiba_20241207_20250204_5min.csv',encoding='SHIFT-JIS')
+    start_date = '2024/12/6'
+    end_date = '2025/2/24'
+    city = 'Chiba'  # Sapporo Sendai Tokyo Osaka Fukuoka Naha Chiba
+    jma_data = get_JMA_data(start_date, end_date, freq='10min', city=city)
 
-    data = pd.read_csv('Chiba_20241207_20250204_5min.csv',encoding='SHIFT-JIS',index_col=0)
-    print(data.columns)
+    jma_data = pd.read_csv('Chiba_20241206_20250224_10min.csv',index_col=0,encoding='SHIFT-JIS')
+    jma_data.index = pd.to_datetime(jma_data.index)
+
+    df_resampled = jma_data.resample('5T').interpolate(method='linear')
+    df_resampled.to_csv('Chiba_20241206_20250224_5min.csv',encoding='SHIFT-JIS')
+
+    # data = pd.read_csv('Chiba_20241207_20250204_5min.csv',encoding='SHIFT-JIS',index_col=0)
+    # print(data.columns)
