@@ -40,6 +40,7 @@ class Model(nn.Module):
         self.use_forecast = configs.use_forecast
         if self.use_forecast:
             self.forecast_projection = nn.Linear(configs.forecast_dim, configs.enc_in)
+
         # Decoder
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             self.dec_embedding = DataEmbedding(configs.c_out, configs.d_model, configs.embed, configs.freq,
@@ -65,6 +66,13 @@ class Model(nn.Module):
                 norm_layer=torch.nn.LayerNorm(configs.d_model),
                 projection=nn.Linear(configs.d_model, configs.c_out, bias=True)
             )
+            # self.decoder = nn.Linear(configs.d_model, configs.c_out)
+            # self.linear_projection = nn.Linear(configs.seq_len, configs.pred_len)
+            if self.use_forecast:
+                self.linear_projection = nn.Linear(configs.seq_len + configs.pred_len, configs.pred_len)
+                self.dec_embedding = DataEmbedding(configs.forecast_dim, configs.d_model, configs.embed, configs.freq,
+                                                   configs.dropout)
+
         if self.task_name == 'imputation':
             self.projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
         if self.task_name == 'anomaly_detection':
@@ -75,16 +83,19 @@ class Model(nn.Module):
             self.projection = nn.Linear(configs.d_model * configs.seq_len, configs.num_class)
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast=None):
-        if self.use_forecast:
-            x_forecast_ = self.forecast_projection(x_forecast)
-            x_enc = torch.cat((x_enc, x_forecast_), dim=1)
-            x_mark_enc = torch.cat((x_mark_enc, x_mark_dec), dim=1)
+        # if self.use_forecast:
+        #     x_forecast_ = self.forecast_projection(x_forecast)
+        #     x_enc = torch.cat((x_enc, x_forecast_), dim=1)
+            # x_mark_enc = x_mark_dec
         # Embedding
         enc_out = self.enc_embedding(x_enc, x_mark_enc)
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
-        dec_out = self.dec_embedding(x_dec, x_mark_dec)
+        dec_out = self.dec_embedding(x_forecast, x_mark_dec) if self.use_forecast else self.dec_embedding(x_dec, x_mark_dec)
         dec_out = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None)
+
+        # dec_out = self.decoder(enc_out)
+        # dec_out = self.linear_projection(dec_out.permute(0, 2, 1)).permute(0, 2, 1)
         return dec_out
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):

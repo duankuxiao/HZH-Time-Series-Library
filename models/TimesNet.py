@@ -80,6 +80,10 @@ class Model(nn.Module):
         self.seq_len = configs.seq_len
         self.label_len = configs.label_len
         self.pred_len = configs.pred_len
+        self.use_forecast = configs.use_forecast
+        if self.use_forecast:
+            self.forecast_projection = nn.Linear(configs.forecast_dim, configs.enc_in)
+
         self.model = nn.ModuleList([TimesBlock(configs)
                                     for _ in range(configs.e_layers)])
         self.enc_embedding = DataEmbedding(configs.enc_in, configs.d_model, configs.embed, configs.freq,
@@ -87,8 +91,10 @@ class Model(nn.Module):
         self.layer = configs.e_layers
         self.layer_norm = nn.LayerNorm(configs.d_model)
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
-            self.predict_linear = nn.Linear(
-                self.seq_len, self.pred_len + self.seq_len)
+            self.predict_linear = nn.Linear(self.seq_len, self.pred_len + self.seq_len)
+            if self.use_forecast:
+                self.predict_linear = nn.Linear(self.seq_len+self.pred_len, self.pred_len + self.seq_len)
+
             self.projection = nn.Linear(
                 configs.d_model, configs.c_out, bias=True)
         if self.task_name == 'imputation' or self.task_name == 'anomaly_detection':
@@ -100,9 +106,7 @@ class Model(nn.Module):
             self.projection = nn.Linear(
                 configs.d_model * configs.seq_len, configs.num_class)
 
-        self.use_forecast = configs.use_forecast
-        if self.use_forecast:
-            self.forecast_projection = nn.Linear(configs.forecast_dim, configs.enc_in)
+
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast=None):
         # Normalization from Non-stationary Transformer
@@ -116,9 +120,9 @@ class Model(nn.Module):
             x_enc_forecast = x_forecast - means_forecast
             stdev_forecast = torch.sqrt(torch.var(x_enc_forecast, dim=1, keepdim=True, unbiased=False) + 1e-5)
             x_forecast /= stdev_forecast
-            x_forecast_ = self.forecast_projection(x_forecast)
+            x_forecast_ = self.forecast_projection(x_forecast[:,-self.pred_len:,:])
             x_enc = torch.cat((x_enc, x_forecast_), dim=1)
-            x_mark_enc = torch.cat((x_mark_enc, x_mark_dec), dim=1)
+            x_mark_enc = x_mark_dec
 
         # embedding
         enc_out = self.enc_embedding(x_enc, x_mark_enc)  # [B,T,C]
@@ -131,11 +135,9 @@ class Model(nn.Module):
         dec_out = self.projection(enc_out)
 
         # De-Normalization from Non-stationary Transformer
-        dec_out = dec_out * \
-                  (stdev[:, 0, -self.configs.c_out:].unsqueeze(1).repeat(
+        dec_out = dec_out * (stdev[:, 0, -self.configs.c_out:].unsqueeze(1).repeat(
                       1, self.pred_len + self.seq_len, 1))
-        dec_out = dec_out + \
-                  (means[:, 0,  -self.configs.c_out:].unsqueeze(1).repeat(
+        dec_out = dec_out + (means[:, 0,  -self.configs.c_out:].unsqueeze(1).repeat(
                       1, self.pred_len + self.seq_len, 1))
         return dec_out
 
@@ -184,11 +186,9 @@ class Model(nn.Module):
         dec_out = self.projection(enc_out)
 
         # De-Normalization from Non-stationary Transformer
-        dec_out = dec_out * \
-                  (stdev[:, 0, :].unsqueeze(1).repeat(
+        dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(
                       1, self.pred_len + self.seq_len, 1))
-        dec_out = dec_out + \
-                  (means[:, 0, :].unsqueeze(1).repeat(
+        dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(
                       1, self.pred_len + self.seq_len, 1))
         return dec_out
 

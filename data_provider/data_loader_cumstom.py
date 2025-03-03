@@ -59,6 +59,7 @@ class Dataset_cumstom(Dataset):
         seq_y = self.data_y[r_begin:r_end, :]
         seq_x_mark = self.data_stamp[s_begin:s_end]
         seq_y_mark = self.data_stamp[r_begin:r_end]
+        # x_forecast = self.data_forecast[r_begin:r_end, :self.forecast_dim]
         x_forecast = self.data_forecast[r_begin:r_end, :self.forecast_dim]
 
         return seq_x, seq_y, seq_x_mark, seq_y_mark, x_forecast

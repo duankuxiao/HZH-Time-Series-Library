@@ -28,6 +28,7 @@ class Model(nn.Module):
         self.use_forecast = configs.use_forecast
         if self.use_forecast:
             self.forecast_projection = nn.Linear(configs.forecast_dim, configs.enc_in)
+            self.seq_len = configs.seq_len + configs.pred_len
 
         if self.individual:
             self.Linear_Seasonal = nn.ModuleList()
@@ -74,7 +75,7 @@ class Model(nn.Module):
 
     def forecast(self, x_enc,x_forecast=None):
         if self.use_forecast:
-            x_forecast_ = self.forecast_projection(x_forecast)
+            x_forecast_ = self.forecast_projection(x_forecast[:,-self.pred_len:,:])
             x_enc = torch.cat((x_enc, x_forecast_), dim=1)
         return self.encoder(x_enc)
 

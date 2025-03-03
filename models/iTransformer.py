@@ -67,9 +67,9 @@ class Model(nn.Module):
             x_enc_forecast = x_forecast - means_forecast
             stdev_forecast = torch.sqrt(torch.var(x_enc_forecast, dim=1, keepdim=True, unbiased=False) + 1e-5)
             x_forecast /= stdev_forecast
-            x_forecast_ = self.forecast_projection(x_forecast)
+            x_forecast_ = self.forecast_projection(x_forecast[:,-self.pred_len:,:])
             x_enc = torch.cat((x_enc, x_forecast_), dim=1)
-            x_mark_enc = torch.cat((x_mark_enc, x_mark_dec), dim=1)
+            x_mark_enc = x_mark_dec
 
         _, _, N = x_enc.shape
 
