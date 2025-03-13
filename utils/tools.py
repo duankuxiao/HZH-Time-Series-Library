@@ -188,3 +188,12 @@ def heatmap(data,output_file):
     plt.xticks(fontsize=8)
     plt.yticks(fontsize=8)
     plt.show()
+
+
+if __name__ == '__main__':
+    path = r'D:\Time-LLM-main\results\noforecast\1_DLinear_aircon_ftM_sl6_ll6_pl36_sd20_td5_dm32_nh8_el4_dl4_df64_fc3_dropout0.1_ebtimeF_test_0_scale\checkpoints\configs.pkl'
+    configs = load_config(path)
+    print(configs)
+    path = r'D:\Time-LLM-main\results\1_DLinear_aircon_ftM_sl6_ll6_pl36_sd20_td5_dm32_df64_nh8_el4_dl4_ma13_fc3_dropout0.1_ebtimeF_test_0_scale\checkpoints\configs.pkl'
+    configs = load_config(path)
+    print(configs)

@@ -7,14 +7,14 @@ args.data = 'aircon'
 args.root_path = './dataset/aircon'
 args.data_path = 'aircon.csv'
 args.source_data_path = 'aircon.csv'
-
+args.freq = 't'
 args.features = 'MS'
 args.target = ['Global_horizontal_irradiance']
 
-args.num_train = 30*24*6*2
-args.num_test = 30*24*6
+args.num_train = 45 * 24 * 12  # 12960
+args.num_test = 15 * 24 * 12  # 4320   val 5622
 
-args.seq_len = 3 * 6
+args.seq_len = 6
 args.pred_len = 1
 args.label_len = args.seq_len
 args.forecast_dim = 6
@@ -36,6 +36,9 @@ args.dec_in = int(len(args.features_cols))
 args.c_out = int(len(args.target))
 args.scale = True
 
+args.patch_len = 6
+args.stride = 3
+args.top_k = 2
 
 if __name__ == '__main__':
     import pandas as pd

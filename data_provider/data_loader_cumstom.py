@@ -48,6 +48,7 @@ class Dataset_cumstom(Dataset):
 
         self.enc_in = self.data_x.shape[-1]
         self.tot_len = len(self.data_x) - self.seq_len - self.pred_len + 1
+        self.std_ = self.target_scaler.scale_
 
     def __getitem__(self, index):
         s_begin = index % self.tot_len

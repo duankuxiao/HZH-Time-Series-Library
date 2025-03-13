@@ -2,6 +2,7 @@ import pandas as pd
 
 from data_provider.data_factory import data_provider
 from exp.exp_basic import Exp_Basic
+from utils.interval_forecasting_tools import gaussian_likelihood_loss, negative_binomial_loss
 from utils.tools import EarlyStopping, adjust_learning_rate, visual
 from utils.metrics import metric
 import torch
@@ -21,6 +22,7 @@ warnings.filterwarnings('ignore')
 class Exp_Forecast(Exp_Basic):
     def __init__(self, args):
         super(Exp_Forecast, self).__init__(args)
+        self.likelihood = args.likelihood
 
     def _build_model(self):
         model = self.model_dict[self.args.model].Model(self.args).float()
@@ -70,15 +72,9 @@ class Exp_Forecast(Exp_Basic):
                 # encoder - decoder
                 if self.args.use_amp:
                     with torch.amp.autocast():
-                        if self.args.output_attention:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)[0]
-                        else:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
+                        outputs, outputs_sample, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
                 else:
-                    if self.args.output_attention:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)[0]
-                    else:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
+                    outputs, outputs_sample, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
 
                 if self.args.accelerate:
                     outputs, batch_y = self.accelerator.gather_for_metrics((outputs, batch_y))
@@ -87,8 +83,11 @@ class Exp_Forecast(Exp_Basic):
 
                 pred = outputs.detach().cpu()
                 true = batch_y.detach().cpu()
-
-                loss = criterion(pred, true)
+                mu, sigma = mu.detach().cpu(), sigma.detach().cpu()
+                if self.likelihood == "g":
+                    loss = gaussian_likelihood_loss(true, mu, sigma)
+                elif self.likelihood == "nb":
+                    loss = negative_binomial_loss(true, mu, sigma)
 
                 total_loss.append(loss)
         total_loss = np.average(total_loss)
@@ -157,31 +156,32 @@ class Exp_Forecast(Exp_Basic):
                 # encoder - decoder
                 if self.args.use_amp:
                     with torch.cuda.amp.autocast():
-                        if self.args.output_attention:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)[0]
-                        else:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
+                        outputs, outputs_sample, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
 
                         outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
                         if self.args.accelerate:
                             batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:]
                         else:
                             batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:].to(self.device)
-                        loss = criterion(outputs, batch_y)
+                        if self.likelihood == "g":
+                            loss = gaussian_likelihood_loss(batch_y, mu, sigma)
+                        elif self.likelihood == "nb":
+                            loss = negative_binomial_loss(batch_y, mu, sigma)
                         train_loss.append(loss.item())
                 else:
-                    if self.args.output_attention:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)[0]
-                    else:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
+                    outputs, outputs_sample, mu, sigma  = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
 
                     outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
                     if self.args.accelerate:
                         batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:]
                     else:
                         batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:].to(self.device)
-                    loss = criterion(outputs, batch_y)
+                    if self.likelihood == "g":
+                        loss = gaussian_likelihood_loss(batch_y, mu, sigma)
+                    elif self.likelihood == "nb":
+                        loss = negative_binomial_loss(batch_y, mu, sigma)
                     train_loss.append(loss.item())
+
                 if self.args.accelerate:
                     self.accelerator.print("\titers: {0}, epoch: {1} | loss: {2:.7f}".format(i + 1, epoch + 1, loss.item()))
                     speed = (time.time() - time_now) / iter_count
@@ -280,8 +280,8 @@ class Exp_Forecast(Exp_Basic):
             if not os.path.exists(folder_path):
                 os.makedirs(folder_path)
 
-        preds = []
-        trues = []
+        preds ,trues = [], []
+        mus,sigamas = [],[]
 
         self.model.eval()
 
@@ -299,38 +299,43 @@ class Exp_Forecast(Exp_Basic):
                 # encoder - decoder
                 if self.args.use_amp:
                     with torch.amp.autocast():
-                        if self.args.output_attention:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)[0]
-                        else:
-                            outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
+                        outputs, outputs_sample, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
                 else:
-                    if self.args.output_attention:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)[0]
-
-                    else:
-                        outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
+                    outputs, outputs_sample, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
 
                 if self.args.accelerate:
                     self.accelerator.wait_for_everyone()
-                    outputs = self.accelerator.gather_for_metrics(outputs)
+                    outputs_sample = self.accelerator.gather_for_metrics(outputs_sample)
 
-                outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
+                outputs = outputs_sample[:, -self.args.pred_len:, -self.f_dim:]
                 batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:]  # .to(self.device)
+                mu = mu[:, -self.args.pred_len:, -self.f_dim:]
+                sigma = sigma[:, -self.args.pred_len:, -self.f_dim:]
+
                 outputs = outputs.detach().cpu().numpy()
                 batch_y = batch_y.detach().cpu().numpy()
+                mu = mu.detach().cpu().numpy()
+                sigma = sigma.detach().cpu().numpy()
+
                 if test_data.scale and self.args.inverse:
                     shape = outputs.shape
                     outputs = test_data.inverse_transform(outputs.reshape(shape[0] * shape[1], -1)).reshape(shape)
                     batch_y = test_data.inverse_transform(batch_y.reshape(shape[0] * shape[1], -1)).reshape(shape)
+                    mu = test_data.inverse_transform(mu.reshape(shape[0] * shape[1], -1)).reshape(shape)
+                    sigma = sigma * test_data.std_
 
                 outputs = outputs[:, :, -self.f_dim:]
                 batch_y = batch_y[:, :, -self.f_dim:]
+                mu = mu[:, :, -self.f_dim:]
+                sigma = sigma[:, :, -self.f_dim:]
 
                 pred = outputs
                 true = batch_y
 
                 preds.append(pred)
                 trues.append(true)
+                mus.append(mu)
+                sigamas.append(sigma)
                 verbose_interval = (len(test_data) // 2) if len(test_data) > 2 else 1
                 verbose = False
                 if verbose:
@@ -348,6 +353,8 @@ class Exp_Forecast(Exp_Basic):
 
         preds = np.concatenate(preds, axis=0)
         trues = np.concatenate(trues, axis=0)
+        mus = np.concatenate(mus, axis=0)
+        sigamas = np.concatenate(sigamas, axis=0)
         print('test shape:', preds.shape, trues.shape)
         preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
         trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
@@ -380,6 +387,9 @@ class Exp_Forecast(Exp_Basic):
         np.save(os.path.join(folder_path, 'metrics_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), np.array([mae, mse, rmse, r2, corr]))
         np.save(os.path.join(folder_path, 'pred_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), preds)
         np.save(os.path.join(folder_path, 'true_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), trues)
+        np.save(os.path.join(folder_path, 'mu_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), mus)
+        np.save(os.path.join(folder_path, 'sigma_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), sigamas)
+
 
         if self.args.features == 'M':
             pred_res,metrics_df = self.res_evaluation_multi_target(trues, preds,trainable_params, folder_path)

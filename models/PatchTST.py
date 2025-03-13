@@ -60,7 +60,7 @@ class Model(nn.Module):
     Paper link: https://arxiv.org/pdf/2211.14730.pdf
     """
 
-    def __init__(self, configs, patch_len=16, stride=8):
+    def __init__(self, configs):
         """
         patch_len: int, patch len for patch_embedding
         stride: int, stride for patch_embedding
@@ -69,12 +69,12 @@ class Model(nn.Module):
         self.task_name = configs.task_name
         self.seq_len = configs.seq_len
         self.pred_len = configs.pred_len
-        padding = stride
+        padding = configs.stride
         self.use_forecast = configs.use_forecast
 
         # patching and embedding
         self.patch_embedding = PatchEmbedding(
-            configs.d_model, patch_len, stride, padding, configs.dropout)
+            configs.d_model, configs.patch_len, configs.stride, padding, configs.dropout)
 
         # Encoder
         self.encoder = Encoder(
@@ -93,9 +93,9 @@ class Model(nn.Module):
         )
 
         # Prediction Head
-        self.head_nf = configs.d_model * int((configs.seq_len - patch_len) / stride + 2)
+        self.head_nf = configs.d_model * int((configs.seq_len - configs.patch_len) / configs.stride + 2)
         if self.use_forecast:
-            self.head_nf = configs.d_model * int((configs.seq_len + self.pred_len - patch_len) / stride + 2)
+            self.head_nf = configs.d_model * int((configs.seq_len + self.pred_len - configs.patch_len) / configs.stride + 2)
             self.forecast_projection = nn.Linear(configs.forecast_dim, configs.enc_in)
 
 

@@ -16,8 +16,8 @@ torch.manual_seed(fix_seed)
 np.random.seed(fix_seed)
 
 
-def get_setting(args,ii):
-    setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_td{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_dropout{}_eb{}_{}_{}'.format(
+def get_setting(args, ii):
+    setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_td{}_dm{}_df{}_nh{}_el{}_dl{}_ma{}_fc{}_dropout{}_eb{}_{}_{}'.format(
         args.model_id,
         args.model,
         args.data,
@@ -28,10 +28,11 @@ def get_setting(args,ii):
         args.enc_in,
         args.c_out,
         args.d_model,
+        args.d_ff,
         args.n_heads,
         args.e_layers,
         args.d_layers,
-        args.d_ff,
+        args.moving_avg,
         args.factor,
         args.dropout,
         args.embed,
@@ -84,10 +85,12 @@ def main(args):
         else:
             raise ValueError('Unknown llm model')
 
-    if args.feature_cols is not None:
-        args.enc_in = len(args.feature_cols)
-        args.dec_in = len(args.feature_cols)
+    if args.features_cols is not None:
+        args.enc_in = len(args.features_cols)
+        args.dec_in = len(args.features_cols)
     args.c_out = len(args.target)
+    args.pred_dim = len(args.target)
+    args.seq_dim = len(args.features_cols)
 
     if args.features == 'S':
         args.enc_in = 1
@@ -103,39 +106,38 @@ def main(args):
         for ii in range(args.itr):
             exp = Exp(args)
             # setting record of experiments
-            setting = get_setting(args,ii)
+            setting = get_setting(args, ii)
 
             print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
             exp.train(setting)
 
             print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-            res_df,res_metrics_df = exp.test(setting)
+            res_df, res_metrics_df = exp.test(setting)
             torch.cuda.empty_cache()
     else:
         ii = 0
-        setting = get_setting(args,ii)
+        setting = get_setting(args, ii)
 
         exp = Exp(args)  # set experiments
         print(' >>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-        res_df,res_metrics_df = exp.test(setting, test=1)
+        res_df, res_metrics_df = exp.test(setting, test=1)
         torch.cuda.empty_cache()
-    return res_df,res_metrics_df
+    return res_df, res_metrics_df
 
 
 if __name__ == '__main__':
-    # from pv_configs import args
-    # from solar_radiation_configs import args
-    # from configs.price_configs import args
     from configs.aircon_configs import args
+
     # args.train_epochs = 2
     # args.patience = 2
-    for pred_len in [1,6,12,24,36]:
+    args.seq_len = 18
+    args.label_len = args.seq_len
+    for pred_len in [1, 6, 12, 24, 36]:
         args.pred_len = pred_len
         all_results = []
-        for model in ['RNN', 'DLinear','Transformer', 'iTransformer','PatchTST', 'TimesNet', 'TimeLLMformer']:
-        # for model in ['iTransformer']:
+        for model in ['RNN', 'DLinear', 'Transformer', 'iTransformer', 'PatchTST', 'TimesNet', 'TimeLLMformer']:
+        # for model in ['Transformer']:
         # for model in ['TimesNet', 'TimeLLMformer']:
-
 
             args.model_id = '1'
             # args.data_path = '{}.csv'.format(args.model_id)
@@ -160,9 +162,11 @@ if __name__ == '__main__':
                 args.d_ff = 64
                 args.e_layers = 2
                 args.d_layers = 2
-                args.llm_layers = 6
+                args.llm_layers = 4
 
             if args.model == 'Transformer':
+                args.lradj = 'PEMS'
+                args.learning_rate = 0.001
                 args.d_model = 512
                 args.d_ff = 2048
                 args.e_layers = 8
@@ -173,6 +177,8 @@ if __name__ == '__main__':
                 args.rnn_layers = 2
 
             if args.model == 'DLinear':
+                args.lradj = 'PEMS'
+                args.learning_rate = 0.01
                 args.moving_avg = 13
 
             if args.model == 'iTransformer':
@@ -195,18 +201,16 @@ if __name__ == '__main__':
 
             # args.target = ['Renewable_energy']
             if args.model == 'TimeLLM':
-                args.feature_cols = ['2F', '1F_room1', '1F_room2','ac3_power', 'ac4_power']
-                args.target = ['2F', '1F_room1', '1F_room2','ac3_power', 'ac4_power']
+                args.feature_cols = ['2F', '1F_room1', '1F_room2', 'ac3_power', 'ac4_power']
+                args.target = ['2F', '1F_room1', '1F_room2', 'ac3_power', 'ac4_power']
                 args.d_model = 16
                 args.d_ff = 32
                 args.e_layers = 1
                 args.d_layers = 1
                 args.llm_layers = 6
 
-            _,res_metrics_df = main(args)
+            _, res_metrics_df = main(args)
             res_metrics_df.insert(0, 'model', model)
             all_results.append(res_metrics_df)
             final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
             final_metrics_df.to_csv('./results/all_models_comparison_pl{}.csv'.format(pred_len))
-
-

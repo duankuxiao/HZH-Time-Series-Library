@@ -64,10 +64,11 @@ class Model(nn.Module):
                     for l in range(configs.d_layers)
                 ],
                 norm_layer=torch.nn.LayerNorm(configs.d_model),
-                projection=nn.Linear(configs.d_model, configs.c_out, bias=True)
             )
             # self.decoder = nn.Linear(configs.d_model, configs.c_out)
             # self.linear_projection = nn.Linear(configs.seq_len, configs.pred_len)
+            self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
+
             if self.use_forecast:
                 self.linear_projection = nn.Linear(configs.seq_len + configs.pred_len, configs.pred_len)
                 self.dec_embedding = DataEmbedding(configs.forecast_dim, configs.d_model, configs.embed, configs.freq,
@@ -93,7 +94,7 @@ class Model(nn.Module):
 
         dec_out = self.dec_embedding(x_forecast, x_mark_dec) if self.use_forecast else self.dec_embedding(x_dec, x_mark_dec)
         dec_out = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None)
-
+        dec_out = self.output_projection(dec_out)
         # dec_out = self.decoder(enc_out)
         # dec_out = self.linear_projection(dec_out.permute(0, 2, 1)).permute(0, 2, 1)
         return dec_out

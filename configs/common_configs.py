@@ -4,7 +4,7 @@ parser = argparse.ArgumentParser(description='Time-LLM')
 
 # basic config
 parser.add_argument('--task_name', type=str,  default='long_term_forecast',
-                    help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection]')
+                    help='task name, options:[long_term_forecast, short_term_forecast, imputation, classification, anomaly_detection,interval_forecast]')
 parser.add_argument('--is_training', type=int, default=1, help='status')
 parser.add_argument('--model_id', type=str, default='forecast', help='model id')
 parser.add_argument('--model_comment', type=str, default='PV', help='prefix when saving test results')
@@ -29,7 +29,6 @@ parser.add_argument('--use_forecast', action='store_true', help='input forecast 
 
 parser.add_argument('--num_train', type=int, default=8760*2+24, help='train number of data')
 parser.add_argument('--num_test', type=int, default=8760, help='test number of data')
-
 
 # GPU
 parser.add_argument('--use_gpu', type=bool, default=True, help='use gpu')
@@ -116,6 +115,9 @@ parser.add_argument('--lradj', type=str, default='type1', help='adjust learning 
 parser.add_argument('--pct_start', type=float, default=0.2, help='pct_start')
 parser.add_argument('--use_amp', action='store_true', help='use automatic mixed precision training', default=False)
 parser.add_argument('--percent', type=int, default=100)
+parser.add_argument('--likelihood', type=str, default='g', help='exp description')
+
+
 
 # metrics (dtw)
 parser.add_argument('--use_dtw', type=bool, default=False, help='the controller of using dtw metric (dtw is time consuming, not suggested unless necessary)')
