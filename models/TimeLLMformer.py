@@ -12,6 +12,9 @@ from transformers import LlamaConfig, LlamaModel, LlamaTokenizer, GPT2Config, GP
 from layers.Embed import PatchEmbedding
 import transformers
 from layers.StandardNorm import Normalize
+from utils.interval_forecasting_tools import gaussian_sample, negative_binomial_sample
+from .Distribution import Gaussian,NegativeBinomial
+
 
 transformers.logging.set_verbosity_error()
 
@@ -453,6 +456,7 @@ class Model(nn.Module):
         self.pred_len = configs.pred_len
         self.c_out = configs.c_out
         self.output_attention = configs.output_attention
+        self.likelihood = configs.likelihood
 
         # Encoder
         # Embedding
@@ -462,7 +466,7 @@ class Model(nn.Module):
         self.LLM_encoder = LLMBlock(configs)
 
         # Decoder
-        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
+        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast' or self.task_name == 'interval_forecast':
             self.dec_embedding = DataEmbedding(configs.c_out, configs.d_model, configs.embed, configs.freq, configs.dropout)
 
             # Embedding
@@ -490,7 +494,11 @@ class Model(nn.Module):
             self.projection = nn.Linear(configs.d_model, configs.pred_len, bias=True)
             # self.out_projection = nn.Linear(configs.pred_len, configs.c_out)
             self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len+configs.label_len)
-
+        if self.task_name == 'interval_forecast':
+            if configs.likelihood == "g":
+                self.likelihood_layer = Gaussian(configs.rnn_dim, configs.c_out)
+            elif configs.likelihood == "nb":
+                self.likelihood_layer = NegativeBinomial(configs.rnn_dim, configs.c_out)
         if self.task_name == 'imputation':
             self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
         if self.task_name == 'anomaly_detection':

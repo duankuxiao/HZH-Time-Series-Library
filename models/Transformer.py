@@ -4,7 +4,8 @@ import torch.nn.functional as F
 from layers.Transformer_EncDec import Decoder, DecoderLayer, Encoder, EncoderLayer, ConvLayer
 from layers.SelfAttention_Family import FullAttention, AttentionLayer
 from layers.Embed import DataEmbedding
-import numpy as np
+from utils.interval_forecasting_tools import gaussian_sample, negative_binomial_sample
+from .Distribution import Gaussian,NegativeBinomial
 
 
 class Model(nn.Module):
@@ -18,6 +19,8 @@ class Model(nn.Module):
         super(Model, self).__init__()
         self.task_name = configs.task_name
         self.pred_len = configs.pred_len
+        self.likelihood = configs.likelihood
+
         # Embedding
         self.enc_embedding = DataEmbedding(configs.enc_in, configs.d_model, configs.embed, configs.freq,
                                            configs.dropout)
@@ -42,7 +45,8 @@ class Model(nn.Module):
             self.forecast_projection = nn.Linear(configs.forecast_dim, configs.enc_in)
 
         # Decoder
-        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
+        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast' or self.task_name == 'interval_forecast':
+
             self.dec_embedding = DataEmbedding(configs.c_out, configs.d_model, configs.embed, configs.freq,
                                                configs.dropout)
             self.decoder = Decoder(
@@ -73,7 +77,11 @@ class Model(nn.Module):
                 self.linear_projection = nn.Linear(configs.seq_len + configs.pred_len, configs.pred_len)
                 self.dec_embedding = DataEmbedding(configs.forecast_dim, configs.d_model, configs.embed, configs.freq,
                                                    configs.dropout)
-
+        if self.task_name == 'interval_forecast':
+            if configs.likelihood == "g":
+                self.likelihood_layer = Gaussian(configs.rnn_dim, configs.c_out)
+            elif configs.likelihood == "nb":
+                self.likelihood_layer = NegativeBinomial(configs.rnn_dim, configs.c_out)
         if self.task_name == 'imputation':
             self.projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
         if self.task_name == 'anomaly_detection':

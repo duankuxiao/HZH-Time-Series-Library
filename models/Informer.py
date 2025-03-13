@@ -4,7 +4,8 @@ import torch.nn.functional as F
 from layers.Transformer_EncDec import Decoder, DecoderLayer, Encoder, EncoderLayer, ConvLayer
 from layers.SelfAttention_Family import ProbAttention, AttentionLayer
 from layers.Embed import DataEmbedding
-
+from utils.interval_forecasting_tools import gaussian_sample, negative_binomial_sample
+from .Distribution import Gaussian,NegativeBinomial
 
 class Model(nn.Module):
     """
@@ -16,6 +17,7 @@ class Model(nn.Module):
         super(Model, self).__init__()
         self.task_name = configs.task_name
         self.pred_len = configs.pred_len
+        self.likelihood = configs.likelihood
         self.label_len = configs.label_len
 
         # Embedding
@@ -73,6 +75,11 @@ class Model(nn.Module):
             self.act = F.gelu
             self.dropout = nn.Dropout(configs.dropout)
             self.projection = nn.Linear(configs.d_model * configs.seq_len, configs.num_class)
+        if self.task_name == 'interval_forecast':
+            if configs.likelihood == "g":
+                self.likelihood_layer = Gaussian(configs.rnn_dim, configs.c_out)
+            elif configs.likelihood == "nb":
+                self.likelihood_layer = NegativeBinomial(configs.rnn_dim, configs.c_out)
 
     def long_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
         enc_out = self.enc_embedding(x_enc, x_mark_enc)

@@ -4,8 +4,8 @@ import torch.nn.functional as F
 from layers.Embed import DataEmbedding, DataEmbedding_wo_pos
 from layers.AutoCorrelation import AutoCorrelation, AutoCorrelationLayer
 from layers.Autoformer_EncDec import Encoder, Decoder, EncoderLayer, DecoderLayer, my_Layernorm, series_decomp
-import math
-import numpy as np
+from utils.interval_forecasting_tools import gaussian_sample, negative_binomial_sample
+from .Distribution import Gaussian,NegativeBinomial
 
 
 class Model(nn.Module):
@@ -22,6 +22,7 @@ class Model(nn.Module):
         self.label_len = configs.label_len
         self.pred_len = configs.pred_len
         self.output_attention = configs.output_attention
+        self.likelihood = configs.likelihood
 
         # Decomp
         kernel_size = configs.moving_avg
@@ -48,7 +49,7 @@ class Model(nn.Module):
             norm_layer=my_Layernorm(configs.d_model)
         )
         # Decoder
-        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
+        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast' or self.task_name == 'interval_forecast':
             self.dec_embedding = DataEmbedding_wo_pos(configs.dec_in, configs.d_model, configs.embed, configs.freq,
                                                       configs.dropout)
             self.decoder = Decoder(
@@ -85,6 +86,11 @@ class Model(nn.Module):
             self.dropout = nn.Dropout(configs.dropout)
             self.projection = nn.Linear(
                 configs.d_model * configs.seq_len, configs.num_class)
+        if self.task_name == 'interval_forecast':
+            if configs.likelihood == "g":
+                self.likelihood_layer = Gaussian(configs.rnn_dim, configs.c_out)
+            elif configs.likelihood == "nb":
+                self.likelihood_layer = NegativeBinomial(configs.rnn_dim, configs.c_out)
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
         # decomp init

@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from layers.Autoformer_EncDec import series_decomp
-
+from utils.interval_forecasting_tools import gaussian_sample, negative_binomial_sample
+from .Distribution import Gaussian,NegativeBinomial
 
 class Model(nn.Module):
     """
@@ -16,6 +17,8 @@ class Model(nn.Module):
         super(Model, self).__init__()
         self.task_name = configs.task_name
         self.seq_len = configs.seq_len
+        self.likelihood = configs.likelihood
+
         if self.task_name == 'classification' or self.task_name == 'anomaly_detection' or self.task_name == 'imputation':
             self.pred_len = configs.seq_len
         else:
@@ -24,6 +27,7 @@ class Model(nn.Module):
         self.decompsition = series_decomp(configs.moving_avg)
         self.individual = individual
         self.channels = configs.enc_in
+
 
         self.use_forecast = configs.use_forecast
         if self.use_forecast:
@@ -52,6 +56,11 @@ class Model(nn.Module):
             self.dropout = nn.Dropout(configs.dropout)
             self.projection = nn.Linear(
                 configs.enc_in * configs.seq_len, configs.num_class)
+        if self.task_name == 'interval_forecast':
+            if configs.likelihood == "g":
+                self.likelihood_layer = Gaussian(configs.rnn_dim, configs.c_out)
+            elif configs.likelihood == "nb":
+                self.likelihood_layer = NegativeBinomial(configs.rnn_dim, configs.c_out)
 
     def encoder(self, x):
         seasonal_init, trend_init = self.decompsition(x)

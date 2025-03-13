@@ -3,6 +3,9 @@ from torch import nn
 from layers.Transformer_EncDec import Encoder, EncoderLayer
 from layers.SelfAttention_Family import FullAttention, AttentionLayer
 from layers.Embed import PositionalEmbedding
+from utils.interval_forecasting_tools import gaussian_sample, negative_binomial_sample
+from .Distribution import Gaussian,NegativeBinomial
+
 
 class PatchEmbedding(nn.Module):
     def __init__(self, d_model, patch_len, stride, padding, dropout):
@@ -71,6 +74,7 @@ class Model(nn.Module):
         self.pred_len = configs.pred_len
         padding = configs.stride
         self.use_forecast = configs.use_forecast
+        self.likelihood = configs.likelihood
 
         # patching and embedding
         self.patch_embedding = PatchEmbedding(
@@ -98,9 +102,14 @@ class Model(nn.Module):
             self.head_nf = configs.d_model * int((configs.seq_len + self.pred_len - configs.patch_len) / configs.stride + 2)
             self.forecast_projection = nn.Linear(configs.forecast_dim, configs.enc_in)
 
+        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast' or self.task_name == 'interval_forecast':
 
-        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             self.head = FlattenHead(configs.enc_in, self.head_nf, configs.pred_len,head_dropout=configs.dropout)
+        if self.task_name == 'interval_forecast':
+            if configs.likelihood == "g":
+                self.likelihood_layer = Gaussian(configs.rnn_dim, configs.c_out)
+            elif configs.likelihood == "nb":
+                self.likelihood_layer = NegativeBinomial(configs.rnn_dim, configs.c_out)
         elif self.task_name == 'imputation' or self.task_name == 'anomaly_detection':
             self.head = FlattenHead(configs.enc_in, self.head_nf, configs.seq_len,
                                     head_dropout=configs.dropout)

@@ -4,7 +4,8 @@ import torch.nn.functional as F
 import torch.fft
 from layers.Embed import DataEmbedding
 from layers.Conv_Blocks import Inception_Block_V1
-
+from utils.interval_forecasting_tools import gaussian_sample, negative_binomial_sample
+from .Distribution import Gaussian,NegativeBinomial
 
 def FFT_for_Period(x, k=2):
     # [B, T, C]
@@ -81,6 +82,8 @@ class Model(nn.Module):
         self.label_len = configs.label_len
         self.pred_len = configs.pred_len
         self.use_forecast = configs.use_forecast
+        self.likelihood = configs.likelihood
+
         if self.use_forecast:
             self.forecast_projection = nn.Linear(configs.forecast_dim, configs.enc_in)
 
@@ -89,13 +92,19 @@ class Model(nn.Module):
         self.enc_embedding = DataEmbedding(configs.enc_in, configs.d_model, configs.embed, configs.freq, configs.dropout)
         self.layer = configs.e_layers
         self.layer_norm = nn.LayerNorm(configs.d_model)
-        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
+        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast' or self.task_name == 'interval_forecast':
+
             self.predict_linear = nn.Linear(self.seq_len, self.pred_len + self.seq_len)
             if self.use_forecast:
                 self.predict_linear = nn.Linear(self.seq_len + self.pred_len, self.pred_len + self.seq_len)
 
             self.projection = nn.Linear(
                 configs.d_model, configs.c_out, bias=True)
+        if self.task_name == 'interval_forecast':
+            if configs.likelihood == "g":
+                self.likelihood_layer = Gaussian(configs.rnn_dim, configs.c_out)
+            elif configs.likelihood == "nb":
+                self.likelihood_layer = NegativeBinomial(configs.rnn_dim, configs.c_out)
         if self.task_name == 'imputation' or self.task_name == 'anomaly_detection':
             self.projection = nn.Linear(
                 configs.d_model, configs.c_out, bias=True)

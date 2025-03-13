@@ -1,6 +1,5 @@
 import torch
 import os
-from exp.exp_interval_forecasting import Exp_Forecast
 from utils.print_args import print_args
 from utils.tools import load_content
 import random
@@ -95,6 +94,10 @@ def main(args):
 
     print('Args in experiment:')
     print_args(args)
+    if args.task_name == 'interval_forecast':
+        from exp.exp_interval_forecasting import Exp_Forecast
+    else:
+        from exp.exp_forecasting import Exp_Forecast
 
     Exp = Exp_Forecast
 
@@ -125,21 +128,21 @@ if __name__ == '__main__':
     from configs.solar_radiation_configs import args
     # from configs.price_configs import args
     # from configs.electricity_configs import args
+
     args.task_name = 'interval_forecast'
     args.seq_len = 168
     args.pred_len = 24
     args.label_len = args.seq_len
+    args.is_training = 1
+    args.accelerate = False
+    args.use_prompt = True
     # for model in ['RNN', 'DLinear', 'iTransformer', 'TimesNet','TimeLLM', 'TimeLLMformer']:
     for model in ['RNN']:
 
-        args.model_id = 'testif'
+        args.model_id = 'test'
 
         args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
         args.llm_model = 'LLAMA1b'
-        args.is_training = 1
-        args.accelerate = False
-        args.use_prompt = True
-
         args.d_model = 32
         args.d_ff = 64
         args.e_layers = 4
