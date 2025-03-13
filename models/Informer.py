@@ -135,7 +135,7 @@ class Model(nn.Module):
         output = self.projection(output)  # (batch_size, num_classes)
         return output
 
-    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
+    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast=None, mask=None):
         if self.task_name == 'long_term_forecast':
             dec_out = self.long_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec)
             return dec_out[:, -self.pred_len:, :]  # [B, L, D]
@@ -151,4 +151,7 @@ class Model(nn.Module):
         if self.task_name == 'classification':
             dec_out = self.classification(x_enc, x_mark_enc)
             return dec_out  # [B, N]
+        if self.task_name == 'interval_forecast':
+            dec_out,dec_out_sample, mu, sigama = self.interval_forecast(x_enc, x_forecast)
+            return dec_out, dec_out_sample, mu, sigama
         return None

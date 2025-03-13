@@ -226,4 +226,7 @@ class Model(nn.Module):
         if self.task_name == 'classification':
             dec_out = self.classification(x_enc, x_mark_enc)
             return dec_out  # [B, N]
+        if self.task_name == 'interval_forecast':
+            dec_out,dec_out_sample, mu, sigama = self.interval_forecast(x_enc, x_forecast)
+            return dec_out, dec_out_sample, mu, sigama
         return None

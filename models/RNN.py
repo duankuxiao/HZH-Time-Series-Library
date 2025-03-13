@@ -102,6 +102,9 @@ class Model(nn.Module):
             mu_t = mu
             dec_out_sample = negative_binomial_sample(mu_t, alpha_t)
 
+        dec_out_sample = dec_out_sample * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+        dec_out_sample = dec_out_sample + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+
         dec_out = self.output_projection(x)
         # De-Normalization from Non-stationary Transformer
         dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
