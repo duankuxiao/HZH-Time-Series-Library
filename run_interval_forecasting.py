@@ -133,10 +133,11 @@ if __name__ == '__main__':
     # args.target = ['Global_horizontal_irradiance']
 
     args.task_name = 'interval_forecast'
+    args.likelihood = 'g'
     args.seq_len = 168
     args.pred_len = 24
     args.label_len = args.seq_len
-    args.is_training = 1
+    args.is_training = 0
     args.accelerate = False
     args.use_prompt = True
     all_results = []

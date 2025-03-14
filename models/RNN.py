@@ -38,7 +38,8 @@ class Model(nn.Module):
                 self.likelihood_layer = Gaussian(configs.rnn_dim, configs.c_out)
             elif configs.likelihood == "nb":
                 self.likelihood_layer = NegativeBinomial(configs.rnn_dim, configs.c_out)
-
+            else:
+                self.likelihood_layer = Gaussian(configs.rnn_dim, configs.c_out)
 
         if self.task_name == 'classification' or self.task_name == 'anomaly_detection' or self.task_name == 'imputation':
             self.pred_len = configs.seq_len
@@ -101,6 +102,8 @@ class Model(nn.Module):
             alpha_t = sigma
             mu_t = mu
             dec_out_sample = negative_binomial_sample(mu_t, alpha_t)
+        else:
+            dec_out_sample = gaussian_sample(mu, sigma)
 
         # dec_out_sample = dec_out_sample * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
         # dec_out_sample = dec_out_sample + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))

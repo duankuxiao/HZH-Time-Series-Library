@@ -1,8 +1,9 @@
 import pandas as pd
+from matplotlib import pyplot as plt
 
 from data_provider.data_factory import data_provider
 from exp.exp_basic import Exp_Basic
-from utils.interval_forecasting_tools import gaussian_likelihood_loss, negative_binomial_loss
+from utils.interval_forecasting_tools import gaussian_likelihood_loss, negative_binomial_loss, MAPE
 from utils.tools import EarlyStopping, adjust_learning_rate, visual
 from utils.metrics import metric
 import torch
@@ -441,6 +442,7 @@ class Exp_Forecast(Exp_Basic):
         for i in self.args.target:
             res_df['{}_pred'.format(i)] = pred[:, self.args.target.index(i)]
             res_df['{}_true'.format(i)] = true[:, self.args.target.index(i)]
+            self._show_plot(i,true[:, self.args.target.index(i)],pred[:, self.args.target.index(i)])
 
             [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(true[:, self.args.target.index(i)], pred[:, self.args.target.index(i)])
             print('{} mse:{}, rmse:{} mae:{} r2:{} corr:{}'.format(i, mse, rmse, mae, r2, corr))
@@ -471,3 +473,26 @@ class Exp_Forecast(Exp_Basic):
         res_df.to_csv(os.path.join(path, 'pred_res_{}.csv'.format(self.args.data_path[:-4])))
         res_metrics_df.to_csv(os.path.join(path, 'res_metrics_df_{}.csv'.format(self.args.data_path[:-4])))
         return res_df,res_metrics_df
+
+    def _show_plot(self,i,y_true,y_pred):
+        p50 = np.quantile(y_pred, 0.5, axis=1)
+        p90 = np.quantile(y_pred, 0.9, axis=1)
+        p10 = np.quantile(y_pred, 0.1, axis=1)
+        mape = MAPE(y_true, p50)
+        print("{} P50 MAPE: {}".format(i, mape))
+
+
+        plt.figure(1, figsize=(20, 5))
+        plt.plot([k + self.args.seq_len + self.args.num_train - self.args.seq_len for k in range(self.args.seq_len)], p50, "r-")
+        plt.fill_between(x=[k + self.args.seq_len + self.args.num_train - self.args.seq_len for k in range(self.args.seq_len)], y1=p10, y2=p90, alpha=0.5)
+        plt.title('Prediction uncertainty')
+        yplot = y_true[-1, -self.args.seq_len - self.args.num_train:]
+        plt.plot(range(len(yplot)), yplot, "k-")
+        plt.legend(["P50 forecast", "true", "P10-P90 quantile"], loc="upper left")
+        ymin, ymax = plt.ylim()
+        plt.vlines(self.args.seq_len + self.args.num_train - self.args.seq_len, ymin, ymax, color="blue", linestyles="dashed", linewidth=2)
+        plt.ylim(ymin, ymax)
+        plt.xlabel("Periods")
+        plt.ylabel("Y")
+        plt.show()
+

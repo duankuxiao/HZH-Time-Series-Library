@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 
 
@@ -78,3 +79,8 @@ def negative_binomial_loss(ytrue, mu, alpha):
         - 1. / alpha * torch.log(1 + alpha * mu) \
         + ytrue * torch.log(alpha * mu / (1 + alpha * mu))
     return - likelihood.mean()
+
+def MAPE(ytrue, ypred):
+    ytrue = np.array(ytrue).ravel() + 1e-4
+    ypred = np.array(ypred).ravel()
+    return np.mean(np.abs((ytrue - ypred) / ytrue))
