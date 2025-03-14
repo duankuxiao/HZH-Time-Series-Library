@@ -79,15 +79,19 @@ class Exp_Forecast(Exp_Basic):
                 if self.args.accelerate:
                     outputs, batch_y = self.accelerator.gather_for_metrics((outputs, batch_y))
                 outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
+                outputs_sample = outputs_sample[:, -self.args.pred_len:, :]
                 batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:].to(self.device)
 
                 pred = outputs.detach().cpu()
+                pred_sample = outputs_sample.detach().cpu()
                 true = batch_y.detach().cpu()
                 mu, sigma = mu.detach().cpu(), sigma.detach().cpu()
                 if self.likelihood == "g":
                     loss = gaussian_likelihood_loss(true, mu, sigma)
                 elif self.likelihood == "nb":
                     loss = negative_binomial_loss(true, mu, sigma)
+                else:
+                    loss = criterion(pred_sample, true)
 
                 total_loss.append(loss)
         total_loss = np.average(total_loss)
@@ -159,6 +163,8 @@ class Exp_Forecast(Exp_Basic):
                         outputs, outputs_sample, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
 
                         outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
+                        outputs_sample = outputs_sample[:, -self.args.pred_len:, -self.f_dim:]
+
                         if self.args.accelerate:
                             batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:]
                         else:
@@ -167,11 +173,15 @@ class Exp_Forecast(Exp_Basic):
                             loss = gaussian_likelihood_loss(batch_y, mu, sigma)
                         elif self.likelihood == "nb":
                             loss = negative_binomial_loss(batch_y, mu, sigma)
+                        else:
+                            loss = criterion(outputs_sample, batch_y)
                         train_loss.append(loss.item())
                 else:
-                    outputs, outputs_sample, mu, sigma  = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
+                    outputs, outputs_sample, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
 
                     outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
+                    outputs_sample = outputs_sample[:, -self.args.pred_len:, -self.f_dim:]
+
                     if self.args.accelerate:
                         batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:]
                     else:
@@ -180,6 +190,8 @@ class Exp_Forecast(Exp_Basic):
                         loss = gaussian_likelihood_loss(batch_y, mu, sigma)
                     elif self.likelihood == "nb":
                         loss = negative_binomial_loss(batch_y, mu, sigma)
+                    else:
+                        loss = criterion(outputs_sample, batch_y)
                     train_loss.append(loss.item())
 
                 if self.args.accelerate:

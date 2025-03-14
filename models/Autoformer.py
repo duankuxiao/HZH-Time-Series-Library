@@ -64,7 +64,7 @@ class Model(nn.Module):
                                             output_attention=False),
                             configs.d_model, configs.n_heads),
                         configs.d_model,
-                        configs.c_out,
+                        configs.dec_in,
                         configs.d_ff,
                         moving_avg=configs.moving_avg,
                         dropout=configs.dropout,
@@ -73,7 +73,7 @@ class Model(nn.Module):
                     for l in range(configs.d_layers)
                 ],
                 norm_layer=my_Layernorm(configs.d_model),
-                projection=nn.Linear(configs.d_model, configs.c_out, bias=True)
+                projection=nn.Linear(configs.d_model, configs.dec_in, bias=True)
             )
         if self.task_name == 'imputation':
             self.projection = nn.Linear(
@@ -95,11 +95,11 @@ class Model(nn.Module):
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
         # decomp init
         mean = torch.mean(x_enc, dim=1).unsqueeze(1).repeat(1, self.pred_len, 1)
-        zeros = torch.zeros([x_dec.shape[0], self.pred_len, x_dec.shape[2]], device=x_enc.device)
+        zeros = torch.zeros([x_enc.shape[0], self.pred_len, x_enc.shape[2]], device=x_enc.device)
         seasonal_init, trend_init = self.decomp(x_enc)
         # decoder input
-        trend_init = torch.cat([trend_init[:, -self.pred_len:, :], mean], dim=1)
-        seasonal_init = torch.cat([seasonal_init[:, -self.pred_len:, :], zeros], dim=1)
+        trend_init = torch.cat([trend_init[:, -self.label_len:, :], mean], dim=1)
+        seasonal_init = torch.cat([seasonal_init[:, -self.label_len:, :], zeros], dim=1)
         # enc
         enc_out = self.enc_embedding(x_enc, x_mark_enc)
         enc_out, attns = self.encoder(enc_out, attn_mask=None)

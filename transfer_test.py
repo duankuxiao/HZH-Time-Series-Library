@@ -8,7 +8,7 @@ from utils.tools import load_content
 import random
 import numpy as np
 from pred_results import res_evaluation
-from run_main import get_setting
+from run_ele import get_setting
 
 
 def transfer_test(args, path):

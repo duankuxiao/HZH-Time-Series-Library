@@ -1,6 +1,6 @@
-import pandas as pd
 import torch
 import os
+from exp.exp_forecasting import Exp_Forecast
 from utils.print_args import print_args
 from utils.tools import load_content
 import random
@@ -16,7 +16,7 @@ np.random.seed(fix_seed)
 
 
 def get_setting(args,ii):
-    setting = 'if_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_td{}_dm{}_df{}_el{}_dl{}_nh{}_ma{}_{}_{}'.format(
+    setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_td{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_dropout{}_eb{}_{}_{}'.format(
         args.model_id,
         args.model,
         args.data,
@@ -27,12 +27,14 @@ def get_setting(args,ii):
         args.enc_in,
         args.c_out,
         args.d_model,
-        args.d_ff,
+        args.n_heads,
         args.e_layers,
         args.d_layers,
-        args.n_heads,
-        args.moving_avg,
-        args.des, args.likelihood)
+        args.d_ff,
+        args.factor,
+        args.dropout,
+        args.embed,
+        args.des, ii)
 
     if 'TimeLLM' in args.model:
         setting += '_{}_llmd{}_llmf{}_tk{}'.format(args.llm_model, args.llm_dim, args.llm_layers, args.top_k)
@@ -93,10 +95,6 @@ def main(args):
 
     print('Args in experiment:')
     print_args(args)
-    if args.task_name == 'interval_forecast':
-        from exp.exp_interval_forecasting import Exp_Forecast
-    else:
-        from exp.exp_forecasting import Exp_Forecast
 
     Exp = Exp_Forecast
 
@@ -110,7 +108,7 @@ def main(args):
             exp.train(setting)
 
             print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-            res_df, res_metrics_df = exp.test(setting)
+            exp.test(setting)
             torch.cuda.empty_cache()
     else:
         ii = 0
@@ -118,37 +116,26 @@ def main(args):
 
         exp = Exp(args)  # set experiments
         print(' >>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-        res_df, res_metrics_df = exp.test(setting, test=1)
+        exp.test(setting, test=1)
         torch.cuda.empty_cache()
-    return res_df, res_metrics_df
-
 
 
 if __name__ == '__main__':
-    # from pv_configs import args
-    from configs.solar_radiation_configs import args
-    # from configs.price_configs import args
-    # from configs.electricity_configs import args
-    args.target = ['Temperature', 'Global_horizontal_irradiance']
-    # args.target = ['Global_horizontal_irradiance']
+    from configs.electricity_configs import args
 
-    args.task_name = 'interval_forecast'
-    args.seq_len = 168
-    args.pred_len = 24
-    args.label_len = args.seq_len
-    args.is_training = 1
-    args.accelerate = False
-    args.use_prompt = True
-    all_results = []
+    # for model in ['RNN', 'DLinear', 'iTransformer', 'TimesNet','TimeLLM', 'TimeLLMformer']:
+    for model in ['TimeLLMformer']:
 
-    # for model in ['RNN', 'Transformer','DLinear','Informer','Autoformer', 'iTransformer', 'TimesNet','PatchTST','TimeLLM', 'TimeLLMformer']:
-    # for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST']:
-    for model in ['RNN']:
-
-        args.model_id = 'test'
-
+        args.model_id = 'LLAMA'
+        # args.data_path = '{}.csv'.format(args.model_id)
+        # args.source_data_path = '{}.csv'.format(args.model_id)
+        args.features = 'M'
         args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
         args.llm_model = 'LLAMA1b'
+        args.is_training = 1
+        args.accelerate = False
+        args.use_prompt = True
+
         args.d_model = 32
         args.d_ff = 64
         args.e_layers = 4
@@ -191,18 +178,20 @@ if __name__ == '__main__':
             args.e_layers = 2
             args.d_layers = 1
 
+        args.feature_cols = ['Electricity','Renewable_energy', 'Nuclear', 'Coal', 'Hydro', 'Geothermal', 'Biomass','Solar', 'Solar_curtailment', 'Wind', 'Wind_ccurtailment','Water_pumping',
+                             'Interconnection', 'Temperature', 'Relative_humidity', 'Precipitation', 'Dew_point', 'Vapor_pressure', 'Wind_speed', 'Sunshine_duration',
+                             'Snowfall', 'Global_horizontal_irradiance']
+        args.target = ['Electricity', 'Renewable_energy', 'Coal']
+        # args.target = ['Renewable_energy']
         if args.model == 'TimeLLM':
-            args.feature_cols = args.target
+            args.feature_cols = ['Electricity', 'Renewable_energy', 'Coal']
+            args.target = ['Electricity', 'Renewable_energy', 'Coal']
             args.d_model = 16
             args.d_ff = 32
             args.e_layers = 1
             args.d_layers = 1
             args.llm_layers = 6
 
-        _, res_metrics_df = main(args)
-        res_metrics_df.insert(0, 'model', model)
-        all_results.append(res_metrics_df)
-        final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
-        final_metrics_df.to_csv('./results/all_models_comparison.csv')
+        main(args)
 
 
