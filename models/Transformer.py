@@ -79,9 +79,11 @@ class Model(nn.Module):
                                                    configs.dropout)
         if self.task_name == 'interval_forecast':
             if configs.likelihood == "g":
-                self.likelihood_layer = Gaussian(configs.rnn_dim, configs.c_out)
+                self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
             elif configs.likelihood == "nb":
-                self.likelihood_layer = NegativeBinomial(configs.rnn_dim, configs.c_out)
+                self.likelihood_layer = NegativeBinomial(configs.d_model, configs.c_out)
+            else:
+                self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
         if self.task_name == 'imputation':
             self.projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
         if self.task_name == 'anomaly_detection':
@@ -106,6 +108,33 @@ class Model(nn.Module):
         # dec_out = self.decoder(enc_out)
         # dec_out = self.linear_projection(dec_out.permute(0, 2, 1)).permute(0, 2, 1)
         return dec_out
+
+    def interval_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast=None):
+        # if self.use_forecast:
+        #     x_forecast_ = self.forecast_projection(x_forecast)
+        #     x_enc = torch.cat((x_enc, x_forecast_), dim=1)
+            # x_mark_enc = x_mark_dec
+        # Embedding
+        enc_out = self.enc_embedding(x_enc, x_mark_enc)
+        enc_out, attns = self.encoder(enc_out, attn_mask=None)
+
+        dec_out = self.dec_embedding(x_forecast, x_mark_dec) if self.use_forecast else self.dec_embedding(x_dec, x_mark_dec)
+        dec_out = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None)
+
+        mu, sigma = self.likelihood_layer(dec_out)
+        if self.likelihood == "g":
+            dec_out_sample = gaussian_sample(mu, sigma)
+        elif self.likelihood == "nb":
+            alpha_t = sigma
+            mu_t = mu
+            dec_out_sample = negative_binomial_sample(mu_t, alpha_t)
+        else:
+            dec_out_sample = gaussian_sample(mu, sigma)
+
+        dec_out = self.output_projection(dec_out)
+        # dec_out = self.decoder(enc_out)
+        # dec_out = self.linear_projection(dec_out.permute(0, 2, 1)).permute(0, 2, 1)
+        return dec_out, dec_out_sample, mu, sigma
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
         # Embedding
@@ -150,6 +179,6 @@ class Model(nn.Module):
             dec_out = self.classification(x_enc, x_mark_enc)
             return dec_out  # [B, N]
         if self.task_name == 'interval_forecast':
-            dec_out,dec_out_sample, mu, sigama = self.interval_forecast(x_enc, x_forecast)
-            return dec_out, dec_out_sample, mu, sigama
+            dec_out,dec_out_sample, mu, sigama = self.interval_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)
+            return dec_out[:, -self.pred_len:, :], dec_out_sample[:, -self.pred_len:, :], mu[:, -self.pred_len:, :], sigama[:, -self.pred_len:, :]
         return None

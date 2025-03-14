@@ -51,9 +51,11 @@ class Model(nn.Module):
             self.projection = nn.Linear(configs.d_model, configs.pred_len, bias=True)
         if self.task_name == 'interval_forecast':
             if configs.likelihood == "g":
-                self.likelihood_layer = Gaussian(configs.rnn_dim, configs.c_out)
+                self.likelihood_layer = Gaussian(configs.d_model, configs.pred_len)
             elif configs.likelihood == "nb":
-                self.likelihood_layer = NegativeBinomial(configs.rnn_dim, configs.c_out)
+                self.likelihood_layer = NegativeBinomial(configs.d_model, configs.pred_len)
+            else:
+                self.likelihood_layer = Gaussian(configs.d_model, configs.pred_len)
         if self.task_name == 'imputation':
             self.projection = nn.Linear(configs.d_model, configs.seq_len, bias=True)
         if self.task_name == 'anomaly_detection':
@@ -90,6 +92,47 @@ class Model(nn.Module):
         dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
         dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
         return dec_out
+
+    def interval_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast=None):
+        # Normalization from Non-stationary Transformer
+        means = x_enc.mean(1, keepdim=True).detach()
+        x_enc = x_enc - means
+        stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
+        x_enc /= stdev
+
+        if self.use_forecast:
+            means_forecast = x_forecast.mean(1, keepdim=True).detach()
+            x_enc_forecast = x_forecast - means_forecast
+            stdev_forecast = torch.sqrt(torch.var(x_enc_forecast, dim=1, keepdim=True, unbiased=False) + 1e-5)
+            x_forecast /= stdev_forecast
+            x_forecast_ = self.forecast_projection(x_forecast[:,-self.pred_len:,:])
+            x_enc = torch.cat((x_enc, x_forecast_), dim=1)
+            x_mark_enc = x_mark_dec
+
+        _, _, N = x_enc.shape
+
+        # Embedding
+        enc_out = self.enc_embedding(x_enc, x_mark_enc)
+        enc_out, attns = self.encoder(enc_out, attn_mask=None)
+
+        mu, sigma = self.likelihood_layer(enc_out)
+        mu = mu.permute(0, 2, 1)[:, :, -self.c_out:] * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+        mu = mu + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+        sigma = sigma.permute(0, 2, 1)[:, :, -self.c_out:] * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+        if self.likelihood == "g":
+            dec_out_sample = gaussian_sample(mu, sigma)
+        elif self.likelihood == "nb":
+            alpha_t = sigma
+            mu_t = mu
+            dec_out_sample = negative_binomial_sample(mu_t, alpha_t)
+        else:
+            dec_out_sample = gaussian_sample(mu, sigma)
+
+        dec_out = self.projection(enc_out).permute(0, 2, 1)[:, :, -self.c_out:]
+        # De-Normalization from Non-stationary Transformer
+        dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+        dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+        return dec_out, dec_out_sample, mu, sigma
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
         # Normalization from Non-stationary Transformer
@@ -155,6 +198,6 @@ class Model(nn.Module):
             dec_out = self.classification(x_enc, x_mark_enc)
             return dec_out  # [B, N]
         if self.task_name == 'interval_forecast':
-            dec_out,dec_out_sample, mu, sigama = self.interval_forecast(x_enc, x_forecast)
-            return dec_out, dec_out_sample, mu, sigama
+            dec_out, dec_out_sample, mu, sigama = self.interval_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
+            return dec_out[:, -self.pred_len:, :], dec_out_sample[:, -self.pred_len:, :], mu[:, -self.pred_len:, :], sigama[:, -self.pred_len:, :]
         return None

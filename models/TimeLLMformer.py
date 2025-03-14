@@ -496,9 +496,11 @@ class Model(nn.Module):
             self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len+configs.label_len)
         if self.task_name == 'interval_forecast':
             if configs.likelihood == "g":
-                self.likelihood_layer = Gaussian(configs.rnn_dim, configs.c_out)
+                self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
             elif configs.likelihood == "nb":
-                self.likelihood_layer = NegativeBinomial(configs.rnn_dim, configs.c_out)
+                self.likelihood_layer = NegativeBinomial(configs.d_model, configs.c_out)
+            else:
+                self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
         if self.task_name == 'imputation':
             self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
         if self.task_name == 'anomaly_detection':
@@ -587,6 +589,6 @@ class Model(nn.Module):
             dec_out = self.classification(x_enc, x_mark_enc)
             return dec_out  # [B, N]
         if self.task_name == 'interval_forecast':
-            dec_out,dec_out_sample, mu, sigama = self.interval_forecast(x_enc, x_forecast)
-            return dec_out, dec_out_sample, mu, sigama
+            dec_out, dec_out_sample, mu, sigama = self.interval_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
+            return dec_out[:, -self.pred_len:, :], dec_out_sample[:, -self.pred_len:, :], mu[:, -self.pred_len:, :], sigama[:, -self.pred_len:, :]
         return None

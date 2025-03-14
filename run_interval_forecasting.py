@@ -137,16 +137,16 @@ if __name__ == '__main__':
     args.seq_len = 168
     args.pred_len = 24
     args.label_len = args.seq_len
-    args.is_training = 0
+    args.is_training = 1
     args.accelerate = False
     args.use_prompt = True
     all_results = []
 
     # for model in ['RNN', 'Transformer','DLinear','Informer','Autoformer', 'iTransformer', 'TimesNet','PatchTST','TimeLLM', 'TimeLLMformer']:
     # for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST']:
-    for model in ['RNN']:
+    for model in ['PatchTST']:
 
-        args.model_id = 'test'
+        args.model_id = 'test2'
 
         args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
         args.llm_model = 'LLAMA1b'

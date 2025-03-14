@@ -73,8 +73,9 @@ class Model(nn.Module):
                     for l in range(configs.d_layers)
                 ],
                 norm_layer=my_Layernorm(configs.d_model),
-                projection=nn.Linear(configs.d_model, configs.dec_in, bias=True)
             )
+            self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
+
         if self.task_name == 'imputation':
             self.projection = nn.Linear(
                 configs.d_model, configs.c_out, bias=True)
@@ -88,9 +89,11 @@ class Model(nn.Module):
                 configs.d_model * configs.seq_len, configs.num_class)
         if self.task_name == 'interval_forecast':
             if configs.likelihood == "g":
-                self.likelihood_layer = Gaussian(configs.rnn_dim, configs.c_out)
+                self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
             elif configs.likelihood == "nb":
-                self.likelihood_layer = NegativeBinomial(configs.rnn_dim, configs.c_out)
+                self.likelihood_layer = NegativeBinomial(configs.d_model, configs.c_out)
+            else:
+                self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
         # decomp init
@@ -108,7 +111,38 @@ class Model(nn.Module):
         seasonal_part, trend_part = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None, trend=trend_init)
         # final
         dec_out = trend_part + seasonal_part
+        dec_out = self.output_projection(dec_out)
         return dec_out
+
+    def interval_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast):
+        # decomp init
+        mean = torch.mean(x_enc, dim=1).unsqueeze(1).repeat(1, self.pred_len, 1)
+        zeros = torch.zeros([x_enc.shape[0], self.pred_len, x_enc.shape[2]], device=x_enc.device)
+        seasonal_init, trend_init = self.decomp(x_enc)
+        # decoder input
+        trend_init = torch.cat([trend_init[:, -self.label_len:, :], mean], dim=1)
+        seasonal_init = torch.cat([seasonal_init[:, -self.label_len:, :], zeros], dim=1)
+        # enc
+        enc_out = self.enc_embedding(x_enc, x_mark_enc)
+        enc_out, attns = self.encoder(enc_out, attn_mask=None)
+        # dec
+        dec_out = self.dec_embedding(seasonal_init, x_mark_dec)
+        seasonal_part, trend_part = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None, trend=trend_init)
+
+        # final
+        dec_out = trend_part + seasonal_part
+
+        mu, sigma = self.likelihood_layer(dec_out)
+        if self.likelihood == "g":
+            dec_out_sample = gaussian_sample(mu, sigma)
+        elif self.likelihood == "nb":
+            alpha_t = sigma
+            mu_t = mu
+            dec_out_sample = negative_binomial_sample(mu_t, alpha_t)
+        else:
+            dec_out_sample = gaussian_sample(mu, sigma)
+        dec_out = self.output_projection(dec_out)
+        return dec_out, dec_out_sample, mu, sigma
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
         # enc
@@ -157,6 +191,6 @@ class Model(nn.Module):
             dec_out = self.classification(x_enc, x_mark_enc)
             return dec_out  # [B, N]
         if self.task_name == 'interval_forecast':
-            dec_out,dec_out_sample, mu, sigama = self.interval_forecast(x_enc, x_forecast)
-            return dec_out, dec_out_sample, mu, sigama
+            dec_out, dec_out_sample, mu, sigama = self.interval_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
+            return dec_out[:, -self.pred_len:, :], dec_out_sample[:, -self.pred_len:, :], mu[:, -self.pred_len:, :], sigama[:, -self.pred_len:, :]
         return None

@@ -1,9 +1,10 @@
 import pandas as pd
 from matplotlib import pyplot as plt
+from tqdm import tqdm
 
 from data_provider.data_factory import data_provider
 from exp.exp_basic import Exp_Basic
-from utils.interval_forecasting_tools import gaussian_likelihood_loss, negative_binomial_loss, MAPE
+from utils.interval_forecasting_tools import gaussian_likelihood_loss, negative_binomial_loss, MAPE, gaussian_sample
 from utils.tools import EarlyStopping, adjust_learning_rate, visual
 from utils.metrics import metric
 import torch
@@ -91,8 +92,10 @@ class Exp_Forecast(Exp_Basic):
                     loss = gaussian_likelihood_loss(true, mu, sigma)
                 elif self.likelihood == "nb":
                     loss = negative_binomial_loss(true, mu, sigma)
+                elif self.likelihood == "mse":
+                    loss = criterion(pred, true)
                 else:
-                    loss = criterion(pred_sample, true)
+                    loss = criterion(pred, true) + gaussian_likelihood_loss(true, mu, sigma) / 10
 
                 total_loss.append(loss)
         total_loss = np.average(total_loss)
@@ -174,8 +177,10 @@ class Exp_Forecast(Exp_Basic):
                             loss = gaussian_likelihood_loss(batch_y, mu, sigma)
                         elif self.likelihood == "nb":
                             loss = negative_binomial_loss(batch_y, mu, sigma)
-                        else:
+                        elif self.likelihood == "mse":
                             loss = criterion(outputs_sample, batch_y)
+                        else:
+                            loss = criterion(outputs, batch_y) + gaussian_likelihood_loss(batch_y, mu, sigma) / 10
                         train_loss.append(loss.item())
                 else:
                     outputs, outputs_sample, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
@@ -191,8 +196,11 @@ class Exp_Forecast(Exp_Basic):
                         loss = gaussian_likelihood_loss(batch_y, mu, sigma)
                     elif self.likelihood == "nb":
                         loss = negative_binomial_loss(batch_y, mu, sigma)
+                    elif self.likelihood == "mse":
+                        loss = criterion(outputs, batch_y)
                     else:
-                        loss = criterion(outputs_sample, batch_y)
+                        loss = criterion(outputs, batch_y) + gaussian_likelihood_loss(batch_y, mu, sigma)/10
+
                     train_loss.append(loss.item())
 
                 if self.args.accelerate:
@@ -320,7 +328,7 @@ class Exp_Forecast(Exp_Basic):
                     self.accelerator.wait_for_everyone()
                     outputs_sample = self.accelerator.gather_for_metrics(outputs_sample)
 
-                outputs = outputs_sample[:, -self.args.pred_len:, -self.f_dim:]
+                outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
                 batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:]  # .to(self.device)
                 mu = mu[:, -self.args.pred_len:, -self.f_dim:]
                 sigma = sigma[:, -self.args.pred_len:, -self.f_dim:]
@@ -390,7 +398,7 @@ class Exp_Forecast(Exp_Basic):
         trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
 
         [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(trues.flatten(), preds.flatten())
-        print('mae:{}, r2:{}, dtw:{}'.format(mae, r2, dtw))
+        # print('mae:{}, r2:{}, dtw:{}'.format(mae, r2, dtw))
         f = open(os.path.join('./results', "result_long_term_forecast.txt"), 'a')
         f.write(setting + "  \n")
         f.write('mae:{}, r2:{}, dtw:{}'.format(mae, r2, dtw))
@@ -403,35 +411,15 @@ class Exp_Forecast(Exp_Basic):
         np.save(os.path.join(folder_path, 'mu_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), mus)
         np.save(os.path.join(folder_path, 'sigma_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), sigamas)
 
-
-        if self.args.features == 'M':
-            pred_res,metrics_df = self.res_evaluation_multi_target(trues, preds,trainable_params, folder_path)
-        else:
-            pred_res,metrics_df = self.res_evaluation(trues,preds,trainable_params, folder_path)
+        pred_res,metrics_df = self.res_evaluation_multi_target(trues, preds,mus,sigamas,trainable_params, folder_path)
         return pred_res,metrics_df
 
-    def res_evaluation(self,true, pred,trainable_params, path):
-        stride = self.args.pred_len
-        pred_output = np.squeeze(pred,axis=-1)[::stride, :].reshape(-1, 1)
-        true_output = np.squeeze(true,axis=-1)[::stride, :].reshape(-1, 1)
-
-        pred_res = pd.DataFrame({'pred': pred_output.flatten(), 'true': true_output.flatten()})
-        pred_res.loc[pred_res['true'] < 1e-3, 'true'] = 0
-        pred_res.loc[pred_res['true'] < 1e-3, 'pred'] = 0
-
-        [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(pred_res['true'].values, pred_res['pred'].values)
-
-        pred_res.to_csv(os.path.join(path, 'pred_results_{}_{}.csv'.format(self.args.data,self.args.data_path[:-4])))
-        metrics_df = pd.DataFrame({'trainable_params':trainable_params,'mse':mse,'rmse': rmse,'nrmse':nrmse, 'mae': mae, 'mape': mape,'rae':rae,'r2': r2,'corr':corr}, index=[0])
-        metrics_df.to_csv(os.path.join(path, 'metrics_results_{}_{}.csv'.format(self.args.data,self.args.data_path[:-4])))
-
-        print('RMSE: {} MAE: {} R2: {}'.format(rmse, mae, r2))
-        return pred_res,metrics_df
-
-    def res_evaluation_multi_target(self,true,pred,trainable_params,path):
+    def res_evaluation_multi_target(self,true,pred,mus, sigmas, trainable_params,path):
         stride = self.args.pred_len
         true = true[::stride,:,:].reshape(-1,len(self.args.target))
         pred = pred[::stride,:,:].reshape(-1,len(self.args.target))
+        mus = mus[::stride,:,:].reshape(-1,len(self.args.target))
+        sigmas = sigmas[::stride,:,:].reshape(-1,len(self.args.target))
         columns_list = []
         for i in self.args.target:
             columns_list.append('{}_true'.format(i))
@@ -440,12 +428,16 @@ class Exp_Forecast(Exp_Basic):
         mse_list, rmse_list, mae_list, r2_list, corr_list,mape_list = [], [], [], [], [], []
         nrmse_list,rae_list = [],[]
         for i in self.args.target:
-            res_df['{}_pred'.format(i)] = pred[:, self.args.target.index(i)]
-            res_df['{}_true'.format(i)] = true[:, self.args.target.index(i)]
-            self._show_plot(i,true[:, self.args.target.index(i)],pred[:, self.args.target.index(i)])
+            p50 = self._show_plot(i,true[:, self.args.target.index(i)],pred[:, self.args.target.index(i)],mus[:,self.args.target.index(i)],sigmas[:,self.args.target.index(i)],path)
 
-            [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(true[:, self.args.target.index(i)], pred[:, self.args.target.index(i)])
-            print('{} mse:{}, rmse:{} mae:{} r2:{} corr:{}'.format(i, mse, rmse, mae, r2, corr))
+            # [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(true[:, self.args.target.index(i)], pred[:, self.args.target.index(i)])
+            # res_df['{}_pred'.format(i)] = pred[:, self.args.target.index(i)]
+            # res_df['{}_true'.format(i)] = true[:, self.args.target.index(i)]
+            [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(true[:, self.args.target.index(i)], p50)
+            res_df['{}_pred'.format(i)] = p50
+            res_df['{}_true'.format(i)] = true[:, self.args.target.index(i)]
+
+            print('{} mse:{}, rmse:{} mae:{} mape:{} r2:{} corr:{}'.format(i, mse, rmse, mae,mape, r2, corr))
             np.save(os.path.join(path, 'metrics_{}.npy'.format(i)), np.array([mse, rmse, mae, r2, corr]))
 
             mse_list.append(mse)
@@ -470,29 +462,48 @@ class Exp_Forecast(Exp_Basic):
         res_metrics_df['corr'] = corr_list
         res_metrics_df.loc['mean'] = res_metrics_df.mean()
         print(res_metrics_df.loc['mean'])
+        plt.show()
         res_df.to_csv(os.path.join(path, 'pred_res_{}.csv'.format(self.args.data_path[:-4])))
         res_metrics_df.to_csv(os.path.join(path, 'res_metrics_df_{}.csv'.format(self.args.data_path[:-4])))
         return res_df,res_metrics_df
 
-    def _show_plot(self,i,y_true,y_pred):
+    def _show_plot(self,i,y_true,y_pred,mu,sigma,path):
+        y_pred = []
+        res_df = pd.DataFrame(columns=['p50','p90','p10'])
+        for _ in tqdm(range(self.args.sample_size)):
+            y_sample = gaussian_sample(torch.tensor(mu), torch.tensor(sigma))
+            y_pred.append(y_sample.reshape(-1,1))
+        y_pred = np.concatenate(y_pred, axis=1)
         p50 = np.quantile(y_pred, 0.5, axis=1)
         p90 = np.quantile(y_pred, 0.9, axis=1)
+        p70 = np.quantile(y_pred, 0.7, axis=1)
+        p30 = np.quantile(y_pred, 0.3, axis=1)
         p10 = np.quantile(y_pred, 0.1, axis=1)
-        mape = MAPE(y_true, p50)
-        print("{} P50 MAPE: {}".format(i, mape))
+        res_df['p50'] = p50
+        res_df['p90'] = p90
+        res_df['p10'] = p10
+        res_df.to_csv(os.path.join(path, 'interval_res_{}_{}.csv'.format(self.args.data_path[:-4],i)))
 
+        p50_ = p50[-self.args.pred_len*7:]
+        p90_ = p90[-self.args.pred_len*7:]
+        p70_ = p70[-self.args.pred_len*7:]
+        p30_ = p30[-self.args.pred_len*7:]
+        p10_ = p10[-self.args.pred_len*7:]
+        x_range = np.arange(self.args.num_train -self.args.pred_len*7, self.args.num_train)
+        plt.figure(self.args.target.index(i)+1, figsize=(20, 5))
+        plt.plot(x_range, p50_, "r-", label="P50 forecast")
+        plt.fill_between(x_range, p10_, p90_, alpha=0.5, color="orange", label="P10-P90 quantile")
+        plt.fill_between(x_range, p30_, p70_, alpha=0.5, color="green", label="P30-P70 quantile")
 
-        plt.figure(1, figsize=(20, 5))
-        plt.plot([k + self.args.seq_len + self.args.num_train - self.args.seq_len for k in range(self.args.seq_len)], p50, "r-")
-        plt.fill_between(x=[k + self.args.seq_len + self.args.num_train - self.args.seq_len for k in range(self.args.seq_len)], y1=p10, y2=p90, alpha=0.5)
-        plt.title('Prediction uncertainty')
-        yplot = y_true[-1, -self.args.seq_len - self.args.num_train:]
-        plt.plot(range(len(yplot)), yplot, "k-")
-        plt.legend(["P50 forecast", "true", "P10-P90 quantile"], loc="upper left")
+        yplot = y_true[-self.args.pred_len*7:]
+        plt.plot(x_range, yplot, "k-", label="True values")
         ymin, ymax = plt.ylim()
-        plt.vlines(self.args.seq_len + self.args.num_train - self.args.seq_len, ymin, ymax, color="blue", linestyles="dashed", linewidth=2)
+        plt.vlines(self.args.num_train - self.args.pred_len*7, ymin, ymax, color="blue", linestyles="dashed", linewidth=2)
         plt.ylim(ymin, ymax)
+        plt.legend(loc="upper left")
+        plt.title('Prediction uncertainty')
         plt.xlabel("Periods")
         plt.ylabel("Y")
-        plt.show()
+        plt.savefig(os.path.join(path,'{}.png'.format(i)))
+        return p50
 

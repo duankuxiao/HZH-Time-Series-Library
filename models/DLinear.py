@@ -28,7 +28,6 @@ class Model(nn.Module):
         self.individual = individual
         self.channels = configs.enc_in
 
-
         self.use_forecast = configs.use_forecast
         if self.use_forecast:
             self.forecast_projection = nn.Linear(configs.forecast_dim, configs.enc_in)
@@ -58,9 +57,11 @@ class Model(nn.Module):
                 configs.enc_in * configs.seq_len, configs.num_class)
         if self.task_name == 'interval_forecast':
             if configs.likelihood == "g":
-                self.likelihood_layer = Gaussian(configs.rnn_dim, configs.c_out)
+                self.likelihood_layer = Gaussian(configs.dec_in, configs.c_out)
             elif configs.likelihood == "nb":
-                self.likelihood_layer = NegativeBinomial(configs.rnn_dim, configs.c_out)
+                self.likelihood_layer = NegativeBinomial(configs.dec_in, configs.c_out)
+            else:
+                self.likelihood_layer = Gaussian(configs.dec_in, configs.c_out)
 
     def encoder(self, x):
         seasonal_init, trend_init = self.decompsition(x)
@@ -87,6 +88,40 @@ class Model(nn.Module):
             x_forecast_ = self.forecast_projection(x_forecast[:,-self.pred_len:,:])
             x_enc = torch.cat((x_enc, x_forecast_), dim=1)
         return self.encoder(x_enc)
+
+    def interval_forecast(self, x_enc,x_forecast=None):
+        if self.use_forecast:
+            x_forecast_ = self.forecast_projection(x_forecast[:,-self.pred_len:,:])
+            x_enc = torch.cat((x_enc, x_forecast_), dim=1)
+
+        seasonal_init, trend_init = self.decompsition(x_enc)
+        seasonal_init, trend_init = seasonal_init.permute(
+            0, 2, 1), trend_init.permute(0, 2, 1)
+        if self.individual:
+            seasonal_output = torch.zeros([seasonal_init.size(0), seasonal_init.size(1), self.pred_len],
+                                          dtype=seasonal_init.dtype).to(seasonal_init.device)
+            trend_output = torch.zeros([trend_init.size(0), trend_init.size(1), self.pred_len],
+                                       dtype=trend_init.dtype).to(trend_init.device)
+            for i in range(self.channels):
+                seasonal_output[:, i, :] = self.Linear_Seasonal[i](
+                    seasonal_init[:, i, :])
+                trend_output[:, i, :] = self.Linear_Trend[i](
+                    trend_init[:, i, :])
+        else:
+            seasonal_output = self.Linear_Seasonal(seasonal_init)
+            trend_output = self.Linear_Trend(trend_init)
+        x = seasonal_output + trend_output
+        mu, sigma = self.likelihood_layer(x.permute(0, 2, 1))
+        if self.likelihood == "g":
+            dec_out_sample = gaussian_sample(mu, sigma)
+        elif self.likelihood == "nb":
+            alpha_t = sigma
+            mu_t = mu
+            dec_out_sample = negative_binomial_sample(mu_t, alpha_t)
+        else:
+            dec_out_sample = gaussian_sample(mu, sigma)
+        return x.permute(0, 2, 1), dec_out_sample.permute(0, 2, 1), mu, sigma
+
 
     def imputation(self, x_enc):
         return self.encoder(x_enc)

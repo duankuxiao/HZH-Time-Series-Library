@@ -65,8 +65,9 @@ class Model(nn.Module):
                 for l in range(configs.d_layers)
             ],
             norm_layer=torch.nn.LayerNorm(configs.d_model),
-            projection=nn.Linear(configs.d_model, configs.c_out, bias=True)
         )
+        self.projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
+
         if self.task_name == 'imputation':
             self.projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
         if self.task_name == 'anomaly_detection':
@@ -77,9 +78,11 @@ class Model(nn.Module):
             self.projection = nn.Linear(configs.d_model * configs.seq_len, configs.num_class)
         if self.task_name == 'interval_forecast':
             if configs.likelihood == "g":
-                self.likelihood_layer = Gaussian(configs.rnn_dim, configs.c_out)
+                self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
             elif configs.likelihood == "nb":
-                self.likelihood_layer = NegativeBinomial(configs.rnn_dim, configs.c_out)
+                self.likelihood_layer = NegativeBinomial(configs.d_model, configs.c_out)
+            else:
+                self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
 
     def long_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
         enc_out = self.enc_embedding(x_enc, x_mark_enc)
@@ -87,8 +90,27 @@ class Model(nn.Module):
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
         dec_out = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None)
-
+        dec_out = self.projection(dec_out)
         return dec_out  # [B, L, D]
+
+    def interval_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast=None):
+        enc_out = self.enc_embedding(x_enc, x_mark_enc)
+        dec_out = self.dec_embedding(x_dec, x_mark_dec)
+        enc_out, attns = self.encoder(enc_out, attn_mask=None)
+
+        dec_out = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None)
+        mu, sigma = self.likelihood_layer(dec_out)
+        if self.likelihood == "g":
+            dec_out_sample = gaussian_sample(mu, sigma)
+        elif self.likelihood == "nb":
+            alpha_t = sigma
+            mu_t = mu
+            dec_out_sample = negative_binomial_sample(mu_t, alpha_t)
+        else:
+            dec_out_sample = gaussian_sample(mu, sigma)
+
+        dec_out = self.projection(dec_out)
+        return dec_out, dec_out_sample, mu, sigma  # [B, L, D]
 
     def short_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
         # Normalization
@@ -102,6 +124,7 @@ class Model(nn.Module):
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
         dec_out = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None)
+        dec_out = self.projection(dec_out)
 
         dec_out = dec_out * std_enc + mean_enc
         return dec_out  # [B, L, D]
@@ -152,6 +175,6 @@ class Model(nn.Module):
             dec_out = self.classification(x_enc, x_mark_enc)
             return dec_out  # [B, N]
         if self.task_name == 'interval_forecast':
-            dec_out,dec_out_sample, mu, sigama = self.interval_forecast(x_enc, x_forecast)
-            return dec_out, dec_out_sample, mu, sigama
+            dec_out, dec_out_sample, mu, sigama = self.interval_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
+            return dec_out[:, -self.pred_len:, :], dec_out_sample[:, -self.pred_len:, :], mu[:, -self.pred_len:, :], sigama[:, -self.pred_len:, :]
         return None
