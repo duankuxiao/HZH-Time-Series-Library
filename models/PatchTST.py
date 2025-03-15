@@ -72,6 +72,7 @@ class Model(nn.Module):
         self.task_name = configs.task_name
         self.seq_len = configs.seq_len
         self.pred_len = configs.pred_len
+        self.c_out = configs.c_out
         padding = configs.stride
         self.use_forecast = configs.use_forecast
         self.likelihood = configs.likelihood
@@ -107,11 +108,11 @@ class Model(nn.Module):
             self.head = FlattenHead(configs.enc_in, self.head_nf, configs.pred_len,head_dropout=configs.dropout)
         if self.task_name == 'interval_forecast':
             if configs.likelihood == "g":
-                self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
+                self.likelihood_layer = Gaussian(configs.enc_in, configs.c_out)
             elif configs.likelihood == "nb":
-                self.likelihood_layer = NegativeBinomial(configs.d_model, configs.c_out)
+                self.likelihood_layer = NegativeBinomial(configs.enc_in, configs.c_out)
             else:
-                self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
+                self.likelihood_layer = Gaussian(configs.enc_in, configs.c_out)
         elif self.task_name == 'imputation' or self.task_name == 'anomaly_detection':
             self.head = FlattenHead(configs.enc_in, self.head_nf, configs.seq_len,
                                     head_dropout=configs.dropout)
@@ -180,12 +181,26 @@ class Model(nn.Module):
 
         # Decoder
         dec_out = self.head(enc_out)  # z: [bs x nvars x target_window]
+
+        mu, sigma = self.likelihood_layer(dec_out.permute(0, 2, 1))
+        mu = mu * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+        mu = mu + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+        sigma = sigma * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+        if self.likelihood == "g":
+            dec_out_sample = gaussian_sample(mu, sigma)
+        elif self.likelihood == "nb":
+            alpha_t = sigma
+            mu_t = mu
+            dec_out_sample = negative_binomial_sample(mu_t, alpha_t)
+        else:
+            dec_out_sample = gaussian_sample(mu, sigma)
+
         dec_out = dec_out.permute(0, 2, 1)
 
         # De-Normalization from Non-stationary Transformer
         dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.pred_len, 1))
         dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.pred_len, 1))
-        return dec_out
+        return dec_out, dec_out_sample, mu, sigma
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
         # Normalization from Non-stationary Transformer

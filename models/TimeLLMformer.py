@@ -305,7 +305,7 @@ class LLMBlock(nn.Module):
         self.patch_nums = int((configs.seq_len - self.patch_len) / self.stride + 2)
         self.head_nf = self.d_ff * self.patch_nums
 
-        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
+        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast' or self.task_name == 'interval_forecast':
             self.output_projection = FlattenHead(configs.enc_in, self.head_nf, self.pred_len, head_dropout=configs.dropout)
         else:
             raise NotImplementedError
@@ -319,7 +319,7 @@ class LLMBlock(nn.Module):
         self.patch_embedding.to(device=self.device)
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None, mask=None):
-        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
+        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast' or self.task_name == 'interval_forecast':
             dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)
             return dec_out
         return None
@@ -545,6 +545,52 @@ class Model(nn.Module):
         dec_out = dec_out + (means[:, :1, -self.c_out:].repeat(1, self.pred_len, 1))
 
         return dec_out
+
+    def interval_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
+        # Normalization from Non-stationary Transformer
+        means = x_enc.mean(1, keepdim=True).detach()
+        x_enc = x_enc - means
+        stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
+        x_enc /= stdev
+        if self.use_forecast:
+            means_forecast = x_forecast.mean(1, keepdim=True).detach()
+            x_enc_forecast = x_forecast - means_forecast
+            stdev_forecast = torch.sqrt(torch.var(x_enc_forecast, dim=1, keepdim=True, unbiased=False) + 1e-5)
+            x_forecast /= stdev_forecast
+            x_forecast_ = self.forecast_projection(x_forecast[:,-self.pred_len:,:])
+            x_enc = torch.cat((x_enc, x_forecast_), dim=1)
+
+        x_enc_other = x_enc[:,:,:-self.c_out]
+        x_enc_target = x_enc[:,:,-self.c_out:]
+
+        enc_out_target = self.LLM_encoder(x_enc_target, x_mark_enc, x_dec, x_mark_dec, x_forecast)
+        enc_out_other = self.encoder(x_enc_other)
+
+        dec_in = enc_out_target
+        dec_in = self.dec_embedding(dec_in, x_mark_dec[:,-self.pred_len:,:])
+
+        dec_out = self.decoder(dec_in, enc_out_other, x_mask=None, cross_mask=None)
+
+        mu, sigma = self.likelihood_layer(dec_out)
+        mu = mu * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+        mu = mu + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+        sigma = sigma * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+        if self.likelihood == "g":
+            dec_out_sample = gaussian_sample(mu, sigma)
+        elif self.likelihood == "nb":
+            alpha_t = sigma
+            mu_t = mu
+            dec_out_sample = negative_binomial_sample(mu_t, alpha_t)
+        else:
+            dec_out_sample = gaussian_sample(mu, sigma)
+
+        dec_out = self.out_projection(dec_out)
+
+        # De-Normalization from Non-stationary Transformer
+        dec_out = dec_out * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len, 1))
+        dec_out = dec_out + (means[:, :1, -self.c_out:].repeat(1, self.pred_len, 1))
+
+        return dec_out, dec_out_sample, mu, sigma
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
         # Embedding

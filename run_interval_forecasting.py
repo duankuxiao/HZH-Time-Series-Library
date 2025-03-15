@@ -143,10 +143,11 @@ if __name__ == '__main__':
     all_results = []
 
     # for model in ['RNN', 'Transformer','DLinear','Informer','Autoformer', 'iTransformer', 'TimesNet','PatchTST','TimeLLM', 'TimeLLMformer']:
-    # for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST']:
-    for model in ['PatchTST']:
+    # for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLMformer']:
+    for model in ['TimeLLMformer']:
+        args.lradj = 'PEMS'
 
-        args.model_id = 'test2'
+        args.model_id = '1'
 
         args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
         args.llm_model = 'LLAMA1b'
@@ -175,10 +176,7 @@ if __name__ == '__main__':
             args.rnn_layers = 2
 
         if args.model == 'DLinear':
-            args.d_model = 256
-            args.d_ff = 1024
-            args.e_layers = 4
-            args.d_layers = 1
+            args.moving_avg = 25
 
         if args.model == 'iTransformer':
             args.d_model = 512

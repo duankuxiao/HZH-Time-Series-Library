@@ -73,8 +73,9 @@ class Model(nn.Module):
                     for l in range(configs.d_layers)
                 ],
                 norm_layer=my_Layernorm(configs.d_model),
+                projection=nn.Linear(configs.d_model, configs.dec_in, bias=True)
             )
-            self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
+            self.output_projection = nn.Linear(configs.dec_in, configs.c_out, bias=True)
 
         if self.task_name == 'imputation':
             self.projection = nn.Linear(
@@ -89,11 +90,11 @@ class Model(nn.Module):
                 configs.d_model * configs.seq_len, configs.num_class)
         if self.task_name == 'interval_forecast':
             if configs.likelihood == "g":
-                self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
+                self.likelihood_layer = Gaussian(configs.dec_in, configs.c_out)
             elif configs.likelihood == "nb":
-                self.likelihood_layer = NegativeBinomial(configs.d_model, configs.c_out)
+                self.likelihood_layer = NegativeBinomial(configs.dec_in, configs.c_out)
             else:
-                self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
+                self.likelihood_layer = Gaussian(configs.dec_in, configs.c_out)
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
         # decomp init
@@ -133,16 +134,16 @@ class Model(nn.Module):
         dec_out = trend_part + seasonal_part
 
         mu, sigma = self.likelihood_layer(dec_out)
-        if self.likelihood == "g":
-            dec_out_sample = gaussian_sample(mu, sigma)
-        elif self.likelihood == "nb":
-            alpha_t = sigma
-            mu_t = mu
-            dec_out_sample = negative_binomial_sample(mu_t, alpha_t)
-        else:
-            dec_out_sample = gaussian_sample(mu, sigma)
+        # if self.likelihood == "g":
+        #     dec_out_sample = gaussian_sample(mu, sigma)
+        # elif self.likelihood == "nb":
+        #     alpha_t = sigma
+        #     mu_t = mu
+        #     dec_out_sample = negative_binomial_sample(mu_t, alpha_t)
+        # else:
+        #     dec_out_sample = gaussian_sample(mu, sigma)
         dec_out = self.output_projection(dec_out)
-        return dec_out, dec_out_sample, mu, sigma
+        return dec_out, dec_out, mu, sigma
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
         # enc
