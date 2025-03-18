@@ -64,7 +64,7 @@ parser.add_argument('--dec_in', type=int, default=11, help='decoder input size (
 parser.add_argument('--c_out', type=int, default=1, help='output size (pred dim)')
 parser.add_argument('--d_model', type=int, default=512, help='dimension of model')
 parser.add_argument('--n_heads', type=int, default=8, help='num of heads')
-parser.add_argument('--e_layers', type=int, default=8, help='num of encoder layers')
+parser.add_argument('--e_layers', type=int, default=2, help='num of encoder layers')
 parser.add_argument('--d_layers', type=int, default=1, help='num of decoder layers')
 parser.add_argument('--d_ff', type=int, default=2048, help='dimension of fcn')
 parser.add_argument('--hidden_size', nargs='+', default=[256], help='output mlp layer')
@@ -116,7 +116,7 @@ parser.add_argument('--pct_start', type=float, default=0.2, help='pct_start')
 parser.add_argument('--use_amp', action='store_true', help='use automatic mixed precision training', default=False)
 parser.add_argument('--percent', type=int, default=100)
 parser.add_argument('--likelihood', type=str, default='g', help='exp description  g or nb')
-parser.add_argument("--sample_size", type=int, default=200)
+parser.add_argument("--sample_size", type=int, default=500)
 
 
 

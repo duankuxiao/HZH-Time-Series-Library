@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import torch
 
@@ -41,21 +43,26 @@ def negative_binomial_sample(mu, alpha):
     return ypred
 
 
-def gaussian_likelihood_loss(z, mu, sigma):
+def gaussian_likelihood_loss(target, mu, sigma,eps=1e-6):
     '''
     Gaussian Liklihood Loss
     Args:
-    z (tensor): true observations, shape (num_ts, num_periods)
+    target (tensor): true observations, shape (num_ts, num_periods)
     mu (tensor): mean, shape (num_ts, num_periods)
     sigma (tensor): standard deviation, shape (num_ts, num_periods)
 
     likelihood:
-    (2 pi sigma^2)^(-1/2) exp(-(z - mu)^2 / (2 sigma^2))
+    (2 pi sigma^2)^(-1/2) exp(-(target - mu)^2 / (2 sigma^2))
 
     log likelihood:
-    -1/2 * (log (2 pi) + 2 * log (sigma)) - (z - mu)^2 / (2 sigma^2)
+    -1/2 * (log (2 pi) + 2 * log (sigma)) - 1/2 *  (target - mu)^2 / (sigma^2) + constant  # constant对结果没有影响
     '''
-    negative_likelihood = torch.log(sigma + 1) + (z - mu) ** 2 / (2 * sigma ** 2) + 6
+    sigma = sigma.clone()
+    with torch.no_grad():
+        sigma.clamp_(min=eps)
+
+    # negative_likelihood = torch.log(sigma + 1) + (target - mu) ** 2 / (2 * sigma ** 2) + 6
+    negative_likelihood = 0.5 * (torch.log(sigma+1) + (mu - target)**2 / sigma) + 0.5 * math.log(2 * torch.pi)
     return negative_likelihood.mean()
 
 

@@ -307,20 +307,34 @@ class LLMBlock(nn.Module):
 
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast' or self.task_name == 'interval_forecast':
             self.output_projection = FlattenHead(configs.enc_in, self.head_nf, self.pred_len, head_dropout=configs.dropout)
-        else:
-            raise NotImplementedError
+            self.output_projection.to(device=self.device)
+
+        # if self.task_name == 'interval_forecast':
+        #     if configs.likelihood == "g":
+        #         # self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
+        #         self.likelihood_layer_mu = FlattenHead(configs.enc_in, self.head_nf, self.pred_len, head_dropout=configs.dropout)
+        #         self.likelihood_layer_sigma = FlattenHead(configs.enc_in, self.head_nf, self.pred_len, head_dropout=configs.dropout)
+        #     elif configs.likelihood == "nb":
+        #         self.likelihood_layer = NegativeBinomial(configs.d_model, configs.c_out)
+        #     else:
+        #         self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
 
         self.normalize_layers = Normalize(configs.enc_in, affine=False)
 
         self.llm_model.to(device=self.device)
         self.mapping_layer.to(device=self.device)
         self.reprogramming_layer.to(device=self.device)
-        self.output_projection.to(device=self.device)
         self.patch_embedding.to(device=self.device)
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None, mask=None):
-        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast' or self.task_name == 'interval_forecast':
+        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)
+            return dec_out
+        # elif self.task_name == 'interval_forecast':
+        #     mu, sigma = self.interval_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
+        #     return mu, sigma
+        else:
+            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
             return dec_out
         return None
 
@@ -392,6 +406,64 @@ class LLMBlock(nn.Module):
         dec_out = self.normalize_layers(dec_out, 'denorm')
         return dec_out
 
+    def interval_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
+        # x_enc = self.normalize_layers(x_enc, 'norm')
+
+        B, T, N = x_enc.size()
+        x_enc = x_enc.permute(0, 2, 1).contiguous().reshape(B * N, T, 1)
+
+        min_values = torch.min(x_enc, dim=1)[0]
+        max_values = torch.max(x_enc, dim=1)[0]
+        medians = torch.median(x_enc, dim=1).values
+        lags = self.calcute_lags(x_enc)
+        trends = x_enc.diff(dim=1).sum(dim=1)
+
+        prompt = []
+        for b in range(x_enc.shape[0]):
+            min_values_str = str(min_values[b].tolist()[0])
+            max_values_str = str(max_values[b].tolist()[0])
+            median_values_str = str(medians[b].tolist()[0])
+            lags_values_str = str(lags[b].tolist())
+            prompt_ = (
+                f"<|start_prompt|>Dataset description: {self.description}"
+                f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information; "
+                "Input statistics: "
+                f"min value {min_values_str}, "
+                f"max value {max_values_str}, "
+                f"median value {median_values_str}, "
+                f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
+                f"top {self.top_k} lags are : {lags_values_str}<|end_prompt|>"
+            )
+            prompt.append(prompt_)
+        # x_enc [B * N, T, 1]
+        x_enc = x_enc.reshape(B, N, T).permute(0, 2, 1).contiguous()  # [B, T, N]
+
+        prompt = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
+        prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)
+
+        source_embeddings = self.mapping_layer(self.word_embeddings.permute(1, 0)).permute(1, 0)
+
+        x_enc = x_enc.permute(0, 2, 1).contiguous()
+        enc_out, n_vars = self.patch_embedding(x_enc.to(torch.bfloat16))
+        enc_out = self.reprogramming_layer(enc_out, source_embeddings, source_embeddings)
+
+        if self.use_prompt:
+            llama_enc_out = torch.cat([prompt_embeddings, enc_out], dim=1)
+        else:
+            llama_enc_out = enc_out
+
+        dec_out = self.llm_model(inputs_embeds=llama_enc_out).last_hidden_state
+        dec_out = dec_out[:, :, :self.d_ff]
+
+        dec_out = torch.reshape(dec_out, (-1, n_vars, dec_out.shape[-2], dec_out.shape[-1]))
+        dec_out = dec_out.permute(0, 1, 3, 2).contiguous()
+
+        mu = self.likelihood_layer_mu(dec_out[:, :, :, -self.patch_nums:])
+        sigma = torch.log(1 + torch.exp(self.likelihood_layer_sigma(dec_out[:, :, :, -self.patch_nums:]))) + 1e-6
+        # mu = self.normalize_layers(mu.permute(0, 2, 1).contiguous(), 'denorm')
+        # sigma = sigma.permute(0, 2, 1).contiguous() * self.normalize_layers.stdev
+        return mu, sigma
+
     def calcute_lags(self, x_enc):
         q_fft = torch.fft.rfft(x_enc.permute(0, 2, 1).contiguous(), dim=-1)
         k_fft = torch.fft.rfft(x_enc.permute(0, 2, 1).contiguous(), dim=-1)
@@ -444,16 +516,11 @@ class ReprogrammingLayer(nn.Module):
 
 
 class Model(nn.Module):
-    """
-    Vanilla Transformer
-    with O(L^2) complexity
-    Paper link: https://proceedings.neurips.cc/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf
-    """
-
     def __init__(self, configs):
         super(Model, self).__init__()
         self.task_name = configs.task_name
         self.pred_len = configs.pred_len
+        self.seq_len = configs.seq_len
         self.c_out = configs.c_out
         self.output_attention = configs.output_attention
         self.likelihood = configs.likelihood
@@ -462,7 +529,9 @@ class Model(nn.Module):
         # Embedding
         self.enc_embedding = DataEmbedding(configs.enc_in-self.c_out, configs.d_model, configs.embed, configs.freq, configs.dropout)
 
-        self.encoder = nn.Linear(configs.enc_in - configs.c_out, configs.d_model)
+        self.encoder = nn.Linear(configs.enc_in - configs.c_out, configs.d_model)  # 1
+        # self.encoder = nn.Linear(configs.enc_in, configs.d_model)  # 2
+
         self.LLM_encoder = LLMBlock(configs)
 
         # Decoder
@@ -490,10 +559,9 @@ class Model(nn.Module):
                 ],
                 norm_layer=torch.nn.LayerNorm(configs.d_model),
             )
-            self.out_projection = nn.Linear(configs.d_model, configs.c_out)
-            self.projection = nn.Linear(configs.d_model, configs.pred_len, bias=True)
-            # self.out_projection = nn.Linear(configs.pred_len, configs.c_out)
-            self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len+configs.label_len)
+            self.projection = nn.Linear(configs.d_model, configs.c_out)
+            # self.projection = nn.Linear(configs.d_model, configs.pred_len, bias=True)
+            # self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len+configs.label_len)
         if self.task_name == 'interval_forecast':
             if configs.likelihood == "g":
                 self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
@@ -563,15 +631,20 @@ class Model(nn.Module):
         x_enc_other = x_enc[:,:,:-self.c_out]
         x_enc_target = x_enc[:,:,-self.c_out:]
 
+        # 1
         enc_out_target = self.LLM_encoder(x_enc_target, x_mark_enc, x_dec, x_mark_dec, x_forecast)
         enc_out_other = self.encoder(x_enc_other)
-
         dec_in = enc_out_target
         dec_in = self.dec_embedding(dec_in, x_mark_dec[:,-self.pred_len:,:])
-
         dec_out = self.decoder(dec_in, enc_out_other, x_mask=None, cross_mask=None)
-
         mu, sigma = self.likelihood_layer(dec_out)
+
+        # 2
+        # mu, sigma = self.LLM_encoder(x_enc_target, x_mark_enc, x_dec, x_mark_dec, x_forecast)
+        # enc_out = self.encoder(x_enc)
+        # dec_in = self.dec_embedding(x_dec, x_mark_dec)
+        # dec_out = self.decoder(dec_in, enc_out, x_mask=None, cross_mask=None)
+
         mu = mu * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
         mu = mu + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
         sigma = sigma * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
@@ -584,11 +657,10 @@ class Model(nn.Module):
         else:
             dec_out_sample = gaussian_sample(mu, sigma)
 
-        dec_out = self.out_projection(dec_out)
-
+        # dec_out = self.projection(dec_out)
         # De-Normalization from Non-stationary Transformer
-        dec_out = dec_out * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len, 1))
-        dec_out = dec_out + (means[:, :1, -self.c_out:].repeat(1, self.pred_len, 1))
+        # dec_out = dec_out * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len+self.seq_len, 1))
+        # dec_out = dec_out + (means[:, :1, -self.c_out:].repeat(1, self.pred_len+self.seq_len, 1))
 
         return dec_out, dec_out_sample, mu, sigma
 
@@ -635,6 +707,6 @@ class Model(nn.Module):
             dec_out = self.classification(x_enc, x_mark_enc)
             return dec_out  # [B, N]
         if self.task_name == 'interval_forecast':
-            dec_out, dec_out_sample, mu, sigama = self.interval_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
-            return dec_out[:, -self.pred_len:, :], dec_out_sample[:, -self.pred_len:, :], mu[:, -self.pred_len:, :], sigama[:, -self.pred_len:, :]
+            dec_out, dec_out_sample, mu, sigma = self.interval_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
+            return dec_out[:, -self.pred_len:, :], dec_out_sample[:, -self.pred_len:, :], mu[:, -self.pred_len:, :], sigma[:, -self.pred_len:, :]
         return None

@@ -137,10 +137,10 @@ if __name__ == '__main__':
     args.accelerate = False
     args.use_prompt = True
     all_results = []
-
     # for model in ['RNN', 'Transformer','DLinear','Informer','Autoformer', 'iTransformer', 'TimesNet','PatchTST','TimeLLM', 'TimeLLMformer']:
-    # for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST']:
-    for model in ['RNN']:
+    for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLMformer']:
+    # for model in ['TimeLLMformer']:
+        args.lradj = 'PEMS'
 
         args.model_id = 'test'
 
@@ -171,10 +171,7 @@ if __name__ == '__main__':
             args.rnn_layers = 2
 
         if args.model == 'DLinear':
-            args.d_model = 256
-            args.d_ff = 1024
-            args.e_layers = 4
-            args.d_layers = 1
+            args.moving_avg = 25
 
         if args.model == 'iTransformer':
             args.d_model = 512
@@ -200,6 +197,7 @@ if __name__ == '__main__':
         res_metrics_df.insert(0, 'model', model)
         all_results.append(res_metrics_df)
         final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
-        final_metrics_df.to_csv('./results/all_models_comparison.csv')
+        final_metrics_df.to_csv('./results/{}_all_models_comparison.csv'.format(args.model_id))
+
 
 

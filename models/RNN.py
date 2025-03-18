@@ -58,13 +58,13 @@ class Model(nn.Module):
         # stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
         # x_enc /= stdev
 
-        # if self.use_forecast:
-        #     means_forecast = x_forecast.mean(1, keepdim=True).detach()
-        #     x_enc_forecast = x_forecast - means_forecast
-        #     stdev_forecast = torch.sqrt(torch.var(x_enc_forecast, dim=1, keepdim=True, unbiased=False) + 1e-5)
-        #     x_forecast /= stdev_forecast
-        #     x_forecast_ = self.forecast_projection(x_forecast[:,-self.pred_len:,:])
-        #     x_enc = torch.cat((x_enc, x_forecast_), dim=1)
+        if self.use_forecast:
+            # means_forecast = x_forecast.mean(1, keepdim=True).detach()
+            # x_enc_forecast = x_forecast - means_forecast
+            # stdev_forecast = torch.sqrt(torch.var(x_enc_forecast, dim=1, keepdim=True, unbiased=False) + 1e-5)
+            # x_forecast /= stdev_forecast
+            x_forecast_ = self.forecast_projection(x_forecast[:,-self.pred_len:,:])
+            x_enc = torch.cat((x_enc, x_forecast_), dim=1)
 
         x,_ = self.rnn_layer(x_enc)
         x = self.linear_predict(x.permute(0, 2, 1)).permute(0, 2, 1)
@@ -83,14 +83,14 @@ class Model(nn.Module):
         # x_enc = x_enc - means
         # stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
         # x_enc /= stdev
-        #
-        # if self.use_forecast:
-        #     means_forecast = x_forecast.mean(1, keepdim=True).detach()
-        #     x_enc_forecast = x_forecast - means_forecast
-        #     stdev_forecast = torch.sqrt(torch.var(x_enc_forecast, dim=1, keepdim=True, unbiased=False) + 1e-5)
-        #     x_forecast /= stdev_forecast
-        #     x_forecast_ = self.forecast_projection(x_forecast[:, -self.pred_len:, :])
-        #     x_enc = torch.cat((x_enc, x_forecast_), dim=1)
+
+        if self.use_forecast:
+            # means_forecast = x_forecast.mean(1, keepdim=True).detach()
+            # x_enc_forecast = x_forecast - means_forecast
+            # stdev_forecast = torch.sqrt(torch.var(x_enc_forecast, dim=1, keepdim=True, unbiased=False) + 1e-5)
+            # x_forecast /= stdev_forecast
+            x_forecast_ = self.forecast_projection(x_forecast[:, -self.pred_len:, :])
+            x_enc = torch.cat((x_enc, x_forecast_), dim=1)
 
         x, _ = self.rnn_layer(x_enc)
         x = self.linear_predict(x.permute(0, 2, 1)).permute(0, 2, 1)
@@ -107,7 +107,7 @@ class Model(nn.Module):
 
         # dec_out_sample = dec_out_sample * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
         # dec_out_sample = dec_out_sample + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
-        #
+
         dec_out = self.output_projection(x)
         # # De-Normalization from Non-stationary Transformer
         # dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))

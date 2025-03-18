@@ -126,14 +126,20 @@ def main(args):
 
 if __name__ == '__main__':
     # from pv_configs import args
+    from utils.hyparameter_setup import model_hyparameter_setup
     from configs.solar_radiation_configs import args
     # from configs.price_configs import args
     # from configs.electricity_configs import args
+
+    fix_seed = 123456
+    random.seed(fix_seed)
+    torch.manual_seed(fix_seed)
+    np.random.seed(fix_seed)
+
     args.target = ['Temperature', 'Global_horizontal_irradiance']
     # args.target = ['Global_horizontal_irradiance']
 
     args.task_name = 'interval_forecast'
-    args.likelihood = 'g'
     args.seq_len = 168
     args.pred_len = 24
     args.label_len = args.seq_len
@@ -143,65 +149,20 @@ if __name__ == '__main__':
     all_results = []
 
     # for model in ['RNN', 'Transformer','DLinear','Informer','Autoformer', 'iTransformer', 'TimesNet','PatchTST','TimeLLM', 'TimeLLMformer']:
-    # for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLMformer']:
-    for model in ['TimeLLMformer']:
-        args.lradj = 'PEMS'
+    for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLMformer']:
+    # for model in ['Autoformer']:
 
-        args.model_id = '1'
+        args.model_id = 'msemu'
+        args.likelihood = 'msemu'  # 'g' 'nb' 'mse' 'msemu' 'hybridmu'
 
         args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
-        args.llm_model = 'LLAMA1b'
-        args.d_model = 32
-        args.d_ff = 64
-        args.e_layers = 4
-        args.d_layers = 4
-        args.llm_layers = 32
 
-        if args.model == 'TimeLLMformer':
-            args.lradj = 'PEMS'
-            args.d_model = 32
-            args.d_ff = 64
-            args.e_layers = 4
-            args.d_layers = 4
-            args.llm_layers = 6
-
-        if args.model == 'Transformer':
-            args.d_model = 512
-            args.d_ff = 2048
-            args.e_layers = 8
-            args.d_layers = 3
-
-        if 'RNN' in args.model:
-            args.rnn_dim = 512
-            args.rnn_layers = 2
-
-        if args.model == 'DLinear':
-            args.moving_avg = 25
-
-        if args.model == 'iTransformer':
-            args.d_model = 512
-            args.d_ff = 2048
-            args.e_layers = 4
-            args.d_layers = 1
-
-        if args.model == 'TimesNet':
-            args.d_model = 64
-            args.d_ff = 256
-            args.e_layers = 2
-            args.d_layers = 1
-
-        if args.model == 'TimeLLM':
-            args.feature_cols = args.target
-            args.d_model = 16
-            args.d_ff = 32
-            args.e_layers = 1
-            args.d_layers = 1
-            args.llm_layers = 6
+        args = model_hyparameter_setup(args)
 
         _, res_metrics_df = main(args)
         res_metrics_df.insert(0, 'model', model)
         all_results.append(res_metrics_df)
         final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
-        final_metrics_df.to_csv('./results/all_models_comparison.csv')
+        final_metrics_df.to_csv('./results/{}_all_models_comparison.csv'.format(args.model_id))
 
 

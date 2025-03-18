@@ -213,4 +213,4 @@ if __name__ == '__main__':
             res_metrics_df.insert(0, 'model', model)
             all_results.append(res_metrics_df)
             final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
-            final_metrics_df.to_csv('./results/all_models_comparison_pl{}.csv'.format(pred_len))
+            final_metrics_df.to_csv('./results/{}_all_models_comparison_pl{}.csv'.format(args.model_id,pred_len))

@@ -25,6 +25,7 @@ class Exp_Forecast(Exp_Basic):
     def __init__(self, args):
         super(Exp_Forecast, self).__init__(args)
         self.likelihood = args.likelihood
+        self.loss_func = args.likelihood
 
     def _build_model(self):
         model = self.model_dict[self.args.model].Model(self.args).float()
@@ -42,7 +43,12 @@ class Exp_Forecast(Exp_Basic):
         return model_optim
 
     def _select_criterion(self):
-        criterion = nn.MSELoss()
+        if self.loss_func == 'mse':
+            criterion = nn.MSELoss()
+        # elif self.loss_func == 'g':
+        #     criterion = nn.GaussianNLLLoss(full=False,eps=1e-6,reduction='mean')
+        else:
+            criterion = nn.MSELoss()
         return criterion
 
     def _select_scheduler(self, model_optim, train_loader):
@@ -56,6 +62,22 @@ class Exp_Forecast(Exp_Basic):
                                                 epochs=self.args.train_epochs,
                                                 max_lr=self.args.learning_rate)
         return scheduler
+
+    def _loss_function(self, criterion, pred, true, mu, sigma):
+        if self.likelihood == "g":
+            loss = gaussian_likelihood_loss(true, mu, sigma)
+            # loss = criterion(pred,true,sigma)
+        elif self.likelihood == "nb":
+            loss = negative_binomial_loss(true, mu, sigma)
+        elif self.likelihood == "mse":
+            loss = criterion(pred, true)
+        elif self.likelihood == "msemu":
+            loss = criterion(mu, true)
+        elif self.likelihood == "hybridmu":
+            loss = criterion(mu, true) + gaussian_likelihood_loss(true, mu, sigma) / 10
+        else:
+            loss = criterion(pred, true) + gaussian_likelihood_loss(true, mu, sigma) / 10
+        return loss
 
     def vali(self, vali_data, vali_loader, criterion):
         total_loss = []
@@ -88,14 +110,7 @@ class Exp_Forecast(Exp_Basic):
                 pred_sample = outputs_sample.detach().cpu()
                 true = batch_y.detach().cpu()
                 mu, sigma = mu.detach().cpu(), sigma.detach().cpu()
-                if self.likelihood == "g":
-                    loss = gaussian_likelihood_loss(true, mu, sigma)
-                elif self.likelihood == "nb":
-                    loss = negative_binomial_loss(true, mu, sigma)
-                elif self.likelihood == "mse":
-                    loss = criterion(pred, true)
-                else:
-                    loss = criterion(pred, true) + gaussian_likelihood_loss(true, mu, sigma) / 10
+                loss = self._loss_function(criterion, pred, true, mu, sigma)
 
                 total_loss.append(loss)
         total_loss = np.average(total_loss)
@@ -173,14 +188,16 @@ class Exp_Forecast(Exp_Basic):
                             batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:]
                         else:
                             batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:].to(self.device)
-                        if self.likelihood == "g":
-                            loss = gaussian_likelihood_loss(batch_y, mu, sigma)
-                        elif self.likelihood == "nb":
-                            loss = negative_binomial_loss(batch_y, mu, sigma)
-                        elif self.likelihood == "mse":
-                            loss = criterion(outputs_sample, batch_y)
-                        else:
-                            loss = criterion(outputs, batch_y) + gaussian_likelihood_loss(batch_y, mu, sigma) / 10
+                        # if self.likelihood == "g":
+                        #     loss = gaussian_likelihood_loss(batch_y, mu, sigma)
+                        # elif self.likelihood == "nb":
+                        #     loss = negative_binomial_loss(batch_y, mu, sigma)
+                        # elif self.likelihood == "mse":
+                        #     loss = criterion(outputs_sample, batch_y)
+                        # else:
+                        #     loss = criterion(outputs, batch_y) + gaussian_likelihood_loss(batch_y, mu, sigma) / 10
+                        loss = self._loss_function(criterion, outputs, batch_y, mu, sigma)
+
                         train_loss.append(loss.item())
                 else:
                     outputs, outputs_sample, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
@@ -192,14 +209,15 @@ class Exp_Forecast(Exp_Basic):
                         batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:]
                     else:
                         batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:].to(self.device)
-                    if self.likelihood == "g":
-                        loss = gaussian_likelihood_loss(batch_y, mu, sigma)
-                    elif self.likelihood == "nb":
-                        loss = negative_binomial_loss(batch_y, mu, sigma)
-                    elif self.likelihood == "mse":
-                        loss = criterion(outputs, batch_y)
-                    else:
-                        loss = criterion(outputs, batch_y) + gaussian_likelihood_loss(batch_y, mu, sigma)/10
+                    # if self.likelihood == "g":
+                    #     loss = gaussian_likelihood_loss(batch_y, mu, sigma)
+                    # elif self.likelihood == "nb":
+                    #     loss = negative_binomial_loss(batch_y, mu, sigma)
+                    # elif self.likelihood == "mse":
+                    #     loss = criterion(outputs, batch_y)
+                    # else:
+                    #     loss = criterion(outputs, batch_y) + gaussian_likelihood_loss(batch_y, mu, sigma)/10
+                    loss = self._loss_function(criterion, outputs, batch_y, mu, sigma)
 
                     train_loss.append(loss.item())
 
@@ -505,5 +523,6 @@ class Exp_Forecast(Exp_Basic):
         plt.xlabel("Periods")
         plt.ylabel("Y")
         plt.savefig(os.path.join(path,'{}.png'.format(i)))
+        plt.close()
         return p50
 
