@@ -1,5 +1,10 @@
+from utils.print_args import print_args
+from utils.tools import load_content
+import torch
+
+
 def model_hyparameter_setup(args):
-    if args.model == 'TimeLLMformer':
+    if args.model == 'TimeLLMformer' or args.model == 'AttLLM':
         args.lradj = 'PEMS'
         args.llm_model = 'BERT'
         args.d_model = 32
@@ -24,6 +29,10 @@ def model_hyparameter_setup(args):
         args.dropout = 0.05
 
     if args.model == 'TimeLLM':  # default
+        args.batch_size = 12
+        args.learning_rate = 0.01
+        args.train_epochs = 20
+        args.patience = 3
         args.feature_cols = args.target
         args.top_k = 5
         args.d_model = 16
@@ -52,4 +61,44 @@ def model_hyparameter_setup(args):
         args.n_heads = 4
         args.d_v = 64
         args.d_k = 64
+
+    if 'LLM' in args.model:
+        args.patience = 3
+        args.content = load_content(args)
+        if args.llm_model == 'LLAMA8b':
+            args.llm_dim = 4096
+        elif args.llm_model == 'LLAMA3b':
+            args.llm_dim = 3072
+        elif args.llm_model == 'LLAMA1b':
+            args.llm_dim = 2048
+        elif 'BERT' in args.llm_model:
+            args.llm_dim = 768
+        elif 'GPT2' in args.llm_model:
+            args.llm_dim = 768
+        else:
+            raise ValueError('Unknown llm model')
+
+    args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False
+    args.device = torch.device('cuda' if torch.cuda.is_available() and args.use_gpu else 'cpu')
+    args.inverse = True
+    print(torch.cuda.is_available())
+
+    if args.use_gpu and args.use_multi_gpu:
+        args.devices = args.devices.replace(' ', '')
+        device_ids = args.devices.split(',')
+        args.device_ids = [int(id_) for id_ in device_ids]
+        args.gpu = args.device_ids[0]
+
+    if args.feature_cols is not None:
+        args.enc_in = len(args.feature_cols)
+        args.dec_in = len(args.feature_cols)
+    args.c_out = len(args.target)
+
+    if args.features == 'S':
+        args.enc_in = 1
+        args.dec_in = 1
+        args.c_out = 1
+
+    print('Args in experiment:')
+    print_args(args)
     return args

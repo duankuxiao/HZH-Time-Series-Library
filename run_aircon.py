@@ -2,8 +2,6 @@ import pandas as pd
 import torch
 import os
 from exp.exp_forecasting import Exp_Forecast
-from utils.print_args import print_args
-from utils.tools import load_content
 import random
 import numpy as np
 
@@ -55,51 +53,6 @@ def get_setting(args, ii):
 
 
 def main(args):
-    args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False
-    args.device = torch.device('cuda' if torch.cuda.is_available() and args.use_gpu else 'cpu')
-    args.inverse = True
-    print(torch.cuda.is_available())
-
-    if args.use_gpu and args.use_multi_gpu:
-        args.devices = args.devices.replace(' ', '')
-        device_ids = args.devices.split(',')
-        args.device_ids = [int(id_) for id_ in device_ids]
-        args.gpu = args.device_ids[0]
-
-    args.content = load_content(args)
-
-    if 'TimeLLM' in args.model:
-        args.batch_size = 24
-        args.learning_rate = 0.01
-        args.content = load_content(args)
-        if args.llm_model == 'LLAMA8b':
-            args.llm_dim = 4096
-        elif args.llm_model == 'LLAMA3b':
-            args.llm_dim = 3072
-        elif args.llm_model == 'LLAMA1b':
-            args.llm_dim = 2048
-        elif 'BERT' in args.llm_model:
-            args.llm_dim = 768
-        elif 'GPT2' in args.llm_model:
-            args.llm_dim = 768
-        else:
-            raise ValueError('Unknown llm model')
-
-    if args.features_cols is not None:
-        args.enc_in = len(args.features_cols)
-        args.dec_in = len(args.features_cols)
-    args.c_out = len(args.target)
-    args.pred_dim = len(args.target)
-    args.seq_dim = len(args.features_cols)
-
-    if args.features == 'S':
-        args.enc_in = 1
-        args.dec_in = 1
-        args.c_out = 1
-
-    print('Args in experiment:')
-    print_args(args)
-
     Exp = Exp_Forecast
 
     if args.is_training:
@@ -127,7 +80,7 @@ def main(args):
 
 if __name__ == '__main__':
     from configs.aircon_configs import args
-
+    from utils.hyparameter_setup import model_hyparameter_setup
     # args.train_epochs = 2
     # args.patience = 2
     args.seq_len = 18
@@ -150,64 +103,7 @@ if __name__ == '__main__':
             args.use_prompt = True
             args.use_forecast = True
 
-            args.d_model = 32
-            args.d_ff = 64
-            args.e_layers = 4
-            args.d_layers = 4
-            args.llm_layers = 32
-
-            if args.model == 'TimeLLMformer':
-                args.lradj = 'PEMS'
-                args.d_model = 64
-                args.d_ff = 64
-                args.e_layers = 2
-                args.d_layers = 2
-                args.llm_layers = 4
-
-            if args.model == 'Transformer':
-                args.lradj = 'PEMS'
-                args.learning_rate = 0.001
-                args.d_model = 512
-                args.d_ff = 2048
-                args.e_layers = 8
-                args.d_layers = 1
-
-            if 'RNN' in args.model:
-                args.rnn_dim = 512
-                args.rnn_layers = 2
-
-            if args.model == 'DLinear':
-                args.lradj = 'PEMS'
-                args.learning_rate = 0.01
-                args.moving_avg = 13
-
-            if args.model == 'iTransformer':
-                args.d_model = 512
-                args.d_ff = 2048
-                args.e_layers = 4
-                args.d_layers = 1
-
-            if args.model == 'PatchTST':
-                args.d_model = 512
-                args.d_ff = 2048
-                args.e_layers = 4
-                args.d_layers = 1
-
-            if args.model == 'TimesNet':
-                args.d_model = 64
-                args.d_ff = 256
-                args.e_layers = 2
-                args.d_layers = 1
-
-            # args.target = ['Renewable_energy']
-            if args.model == 'TimeLLM':
-                args.feature_cols = ['2F', '1F_room1', '1F_room2', 'ac3_power', 'ac4_power']
-                args.target = ['2F', '1F_room1', '1F_room2', 'ac3_power', 'ac4_power']
-                args.d_model = 16
-                args.d_ff = 32
-                args.e_layers = 1
-                args.d_layers = 1
-                args.llm_layers = 6
+            args = model_hyparameter_setup(args)
 
             _, res_metrics_df = main(args)
             res_metrics_df.insert(0, 'model', model)

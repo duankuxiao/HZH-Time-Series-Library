@@ -1,8 +1,6 @@
 import pandas as pd
 import torch
 import os
-from utils.print_args import print_args
-from utils.tools import load_content
 import random
 import numpy as np
 
@@ -51,48 +49,6 @@ def get_setting(args,ii):
 
 
 def main(args):
-    args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False
-    args.device = torch.device('cuda' if torch.cuda.is_available() and args.use_gpu else 'cpu')
-    args.inverse = True
-    print(torch.cuda.is_available())
-
-    if args.use_gpu and args.use_multi_gpu:
-        args.devices = args.devices.replace(' ', '')
-        device_ids = args.devices.split(',')
-        args.device_ids = [int(id_) for id_ in device_ids]
-        args.gpu = args.device_ids[0]
-
-    args.content = load_content(args)
-
-    if 'TimeLLM' in args.model:
-        args.batch_size = 24
-        args.learning_rate = 0.01
-        args.content = load_content(args)
-        if args.llm_model == 'LLAMA8b':
-            args.llm_dim = 4096
-        elif args.llm_model == 'LLAMA3b':
-            args.llm_dim = 3072
-        elif args.llm_model == 'LLAMA1b':
-            args.llm_dim = 2048
-        elif 'BERT' in args.llm_model:
-            args.llm_dim = 768
-        elif 'GPT2' in args.llm_model:
-            args.llm_dim = 768
-        else:
-            raise ValueError('Unknown llm model')
-
-    if args.feature_cols is not None:
-        args.enc_in = len(args.feature_cols)
-        args.dec_in = len(args.feature_cols)
-    args.c_out = len(args.target)
-
-    if args.features == 'S':
-        args.enc_in = 1
-        args.dec_in = 1
-        args.c_out = 1
-
-    print('Args in experiment:')
-    print_args(args)
     if args.task_name == 'interval_forecast':
         from exp.exp_interval_forecasting import Exp_Forecast
     else:
@@ -130,11 +86,6 @@ if __name__ == '__main__':
     from configs.solar_radiation_configs import args
     # from configs.price_configs import args
     # from configs.electricity_configs import args
-
-    fix_seed = 123456
-    random.seed(fix_seed)
-    torch.manual_seed(fix_seed)
-    np.random.seed(fix_seed)
 
     args.target = ['Temperature', 'Global_horizontal_irradiance']
     # args.target = ['Global_horizontal_irradiance']

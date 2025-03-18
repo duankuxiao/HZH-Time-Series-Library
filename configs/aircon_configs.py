@@ -8,8 +8,7 @@ args.root_path = './dataset/aircon'
 args.data_path = 'aircon.csv'
 args.source_data_path = 'aircon.csv'
 args.freq = 't'
-args.features = 'MS'
-args.target = ['Global_horizontal_irradiance']
+args.features = 'M'
 
 args.num_train = 45 * 24 * 12  # 12960
 args.num_test = 15 * 24 * 12  # 4320   val 5622

@@ -1,8 +1,6 @@
 import torch
 import os
 from exp.exp_forecasting import Exp_Forecast
-from utils.print_args import print_args
-from utils.tools import load_content
 import random
 import numpy as np
 
@@ -53,49 +51,6 @@ def get_setting(args,ii):
 
 
 def main(args):
-    args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False
-    args.device = torch.device('cuda' if torch.cuda.is_available() and args.use_gpu else 'cpu')
-    args.inverse = True
-    print(torch.cuda.is_available())
-
-    if args.use_gpu and args.use_multi_gpu:
-        args.devices = args.devices.replace(' ', '')
-        device_ids = args.devices.split(',')
-        args.device_ids = [int(id_) for id_ in device_ids]
-        args.gpu = args.device_ids[0]
-
-    args.content = load_content(args)
-
-    if 'TimeLLM' in args.model:
-        args.batch_size = 24
-        args.learning_rate = 0.01
-        args.content = load_content(args)
-        if args.llm_model == 'LLAMA8b':
-            args.llm_dim = 4096
-        elif args.llm_model == 'LLAMA3b':
-            args.llm_dim = 3072
-        elif args.llm_model == 'LLAMA1b':
-            args.llm_dim = 2048
-        elif 'BERT' in args.llm_model:
-            args.llm_dim = 768
-        elif 'GPT2' in args.llm_model:
-            args.llm_dim = 768
-        else:
-            raise ValueError('Unknown llm model')
-
-    if args.feature_cols is not None:
-        args.enc_in = len(args.feature_cols)
-        args.dec_in = len(args.feature_cols)
-    args.c_out = len(args.target)
-
-    if args.features == 'S':
-        args.enc_in = 1
-        args.dec_in = 1
-        args.c_out = 1
-
-    print('Args in experiment:')
-    print_args(args)
-
     Exp = Exp_Forecast
 
     if args.is_training:
@@ -121,6 +76,7 @@ def main(args):
 
 
 if __name__ == '__main__':
+    from utils.hyparameter_setup import model_hyparameter_setup
     from configs.electricity_configs import args
 
     # for model in ['RNN', 'DLinear', 'iTransformer', 'TimesNet','TimeLLM', 'TimeLLMformer']:
@@ -136,47 +92,7 @@ if __name__ == '__main__':
         args.accelerate = False
         args.use_prompt = True
 
-        args.d_model = 32
-        args.d_ff = 64
-        args.e_layers = 4
-        args.d_layers = 4
-        args.llm_layers = 32
-
-        if args.model == 'TimeLLMformer':
-            args.lradj = 'PEMS'
-            args.d_model = 32
-            args.d_ff = 64
-            args.e_layers = 4
-            args.d_layers = 4
-            args.llm_layers = 6
-
-        if args.model == 'Transformer':
-            args.d_model = 512
-            args.d_ff = 2048
-            args.e_layers = 8
-            args.d_layers = 3
-
-        if 'RNN' in args.model:
-            args.rnn_dim = 512
-            args.rnn_layers = 2
-
-        if args.model == 'DLinear':
-            args.d_model = 256
-            args.d_ff = 1024
-            args.e_layers = 4
-            args.d_layers = 1
-
-        if args.model == 'iTransformer':
-            args.d_model = 512
-            args.d_ff = 2048
-            args.e_layers = 4
-            args.d_layers = 1
-
-        if args.model == 'TimesNet':
-            args.d_model = 64
-            args.d_ff = 256
-            args.e_layers = 2
-            args.d_layers = 1
+        args = model_hyparameter_setup(args)
 
         args.feature_cols = ['Electricity','Renewable_energy', 'Nuclear', 'Coal', 'Hydro', 'Geothermal', 'Biomass','Solar', 'Solar_curtailment', 'Wind', 'Wind_ccurtailment','Water_pumping',
                              'Interconnection', 'Temperature', 'Relative_humidity', 'Precipitation', 'Dew_point', 'Vapor_pressure', 'Wind_speed', 'Sunshine_duration',
