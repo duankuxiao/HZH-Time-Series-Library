@@ -606,7 +606,7 @@ class Model(nn.Module):
         dec_in = self.dec_embedding(dec_in, x_mark_dec[:,-self.pred_len:,:])
 
         dec_out = self.decoder(dec_in, enc_out_other, x_mask=None, cross_mask=None)
-        dec_out = self.out_projection(dec_out)
+        dec_out = self.projection(dec_out)
 
         # De-Normalization from Non-stationary Transformer
         dec_out = dec_out * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len, 1))

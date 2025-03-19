@@ -153,7 +153,6 @@ class Dataset_cumstom(Dataset):
         else:
             self.data_x = data[border1:border2, :len(self.feature_cols)]
             self.data_y = data[border1:border2, -len(self.target):]
-
         self.data_forecast = data[border1:border2, :self.forecast_dim]
         self.data_stamp = data_stamp
 

@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 from data_provider.data_factory import data_provider
 from exp.exp_basic import Exp_Basic
-from utils.interval_forecasting_tools import gaussian_likelihood_loss, negative_binomial_loss, MAPE, gaussian_sample
+from utils.interval_forecasting_tools import gaussian_likelihood_loss, negative_binomial_loss, MAPE, gaussian_sample, negative_binomial_sample
 from utils.tools import EarlyStopping, adjust_learning_rate, visual
 from utils.metrics import metric
 import torch
@@ -74,9 +74,9 @@ class Exp_Forecast(Exp_Basic):
         elif self.likelihood == "msemu":
             loss = criterion(mu, true)
         elif self.likelihood == "hybridmu":
-            loss = criterion(mu, true) + gaussian_likelihood_loss(true, mu, sigma) / 10
+            loss = criterion(mu, true) + gaussian_likelihood_loss(true, mu, sigma) * 0.1
         else:
-            loss = criterion(pred, true) + gaussian_likelihood_loss(true, mu, sigma) / 10
+            loss = criterion(mu, true) + gaussian_likelihood_loss(true, mu, sigma) * 0.1
         return loss
 
     def vali(self, vali_data, vali_loader, criterion):
@@ -489,7 +489,13 @@ class Exp_Forecast(Exp_Basic):
         y_pred = []
         res_df = pd.DataFrame(columns=['p50','p90','p10'])
         for _ in tqdm(range(self.args.sample_size)):
-            y_sample = gaussian_sample(torch.tensor(mu), torch.tensor(sigma))
+            if self.likelihood == 'g':
+                y_sample = gaussian_sample(torch.tensor(mu), torch.tensor(sigma))
+            elif self.likelihood == 'nb':
+                y_sample = negative_binomial_sample(torch.tensor(mu), torch.tensor(sigma))
+            else:
+                y_sample = y_pred
+
             y_pred.append(y_sample.reshape(-1,1))
         y_pred = np.concatenate(y_pred, axis=1)
         p50 = np.quantile(y_pred, 0.5, axis=1)

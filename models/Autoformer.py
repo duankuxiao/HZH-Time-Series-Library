@@ -21,6 +21,7 @@ class Model(nn.Module):
         self.seq_len = configs.seq_len
         self.label_len = configs.label_len
         self.pred_len = configs.pred_len
+        self.c_out = configs.c_out
         self.output_attention = configs.output_attention
         self.likelihood = configs.likelihood
 
@@ -49,7 +50,33 @@ class Model(nn.Module):
             norm_layer=my_Layernorm(configs.d_model)
         )
         # Decoder
-        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast' or self.task_name == 'interval_forecast':
+        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
+            self.dec_embedding = DataEmbedding_wo_pos(configs.dec_in, configs.d_model, configs.embed, configs.freq,
+                                                      configs.dropout)
+            self.decoder = Decoder(
+                [
+                    DecoderLayer(
+                        AutoCorrelationLayer(
+                            AutoCorrelation(True, configs.factor, attention_dropout=configs.dropout,
+                                            output_attention=False),
+                            configs.d_model, configs.n_heads),
+                        AutoCorrelationLayer(
+                            AutoCorrelation(False, configs.factor, attention_dropout=configs.dropout,
+                                            output_attention=False),
+                            configs.d_model, configs.n_heads),
+                        configs.d_model,
+                        configs.dec_in,
+                        configs.d_ff,
+                        moving_avg=configs.moving_avg,
+                        dropout=configs.dropout,
+                        activation=configs.activation,
+                    )
+                    for l in range(configs.d_layers)
+                ],
+                norm_layer=my_Layernorm(configs.d_model),
+                projection=nn.Linear(configs.d_model, configs.c_out, bias=True)
+            )
+        if self.task_name == 'interval_forecast':
             self.dec_embedding = DataEmbedding_wo_pos(configs.dec_in, configs.d_model, configs.embed, configs.freq,
                                                       configs.dropout)
             self.decoder = Decoder(
@@ -111,8 +138,7 @@ class Model(nn.Module):
         dec_out = self.dec_embedding(seasonal_init, x_mark_dec)
         seasonal_part, trend_part = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None, trend=trend_init)
         # final
-        dec_out = trend_part + seasonal_part
-        dec_out = self.output_projection(dec_out)
+        dec_out = trend_part[:,:,-self.c_out:] + seasonal_part
         return dec_out
 
     def interval_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast):

@@ -39,7 +39,7 @@ def negative_binomial_sample(mu, alpha):
     Note: torch.lgamma: log Gamma function
     '''
     var = mu + mu * mu * alpha
-    ypred = mu + torch.randn(mu.size()) * torch.sqrt(var)
+    ypred = mu + torch.randn(mu.size()).to(mu.device) * torch.sqrt(var)
     return ypred
 
 
@@ -81,7 +81,7 @@ def negative_binomial_loss(ytrue, mu, alpha):
 
     Note: torch.lgamma: log Gamma function
     '''
-    batch_size, seq_len = ytrue.size()
+    batch_size, seq_len,_ = ytrue.size()
     likelihood = torch.lgamma(ytrue + 1. / alpha) - torch.lgamma(ytrue + 1) - torch.lgamma(1. / alpha) \
         - 1. / alpha * torch.log(1 + alpha * mu) \
         + ytrue * torch.log(alpha * mu / (1 + alpha * mu))

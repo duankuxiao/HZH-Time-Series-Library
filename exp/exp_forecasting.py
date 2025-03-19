@@ -1,4 +1,5 @@
 import pandas as pd
+from matplotlib import pyplot as plt
 
 from data_provider.data_factory import data_provider
 from exp.exp_basic import Exp_Basic
@@ -419,6 +420,7 @@ class Exp_Forecast(Exp_Basic):
         for i in self.args.target:
             res_df['{}_pred'.format(i)] = pred[:, self.args.target.index(i)]
             res_df['{}_true'.format(i)] = true[:, self.args.target.index(i)]
+            self._show_plot(i,y_true=true[:, self.args.target.index(i)],y_pred=pred[:, self.args.target.index(i)],path=path)
 
             [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(true[:, self.args.target.index(i)], pred[:, self.args.target.index(i)])
             print('{} mse:{}, rmse:{} mae:{} r2:{} corr:{}'.format(i, mse, rmse, mae, r2, corr))
@@ -449,3 +451,20 @@ class Exp_Forecast(Exp_Basic):
         res_df.to_csv(os.path.join(path, 'pred_res_{}.csv'.format(self.args.data_path[:-4])))
         res_metrics_df.to_csv(os.path.join(path, 'res_metrics_df_{}.csv'.format(self.args.data_path[:-4])))
         return res_df,res_metrics_df
+
+    def _show_plot(self,i,y_true,y_pred,path=None):
+        x_range = np.arange(self.args.num_train -self.args.pred_len*7, self.args.num_train)
+        y_pred_plot = y_pred[-self.args.pred_len*7:]
+        plt.figure(self.args.target.index(i)+1, figsize=(20, 5))
+        plt.plot(x_range, y_pred_plot, "r-", label="Forecast values")
+        yplot = y_true[-self.args.pred_len*7:]
+        plt.plot(x_range, yplot, "k-", label="True values")
+        ymin, ymax = plt.ylim()
+        plt.vlines(self.args.num_train - self.args.pred_len*7, ymin, ymax, color="blue", linestyles="dashed", linewidth=2)
+        plt.ylim(ymin, ymax)
+        plt.legend(loc="upper left")
+        plt.title('Prediction')
+        plt.xlabel("Periods")
+        plt.ylabel("Y")
+        plt.savefig(os.path.join(path,'{}.png'.format(i)))
+        plt.close()

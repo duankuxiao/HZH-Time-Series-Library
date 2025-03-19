@@ -14,7 +14,7 @@ np.random.seed(fix_seed)
 
 
 def get_setting(args,ii):
-    setting = 'if_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_td{}_dm{}_df{}_el{}_dl{}_nh{}_ma{}_{}_{}'.format(
+    setting = 'f_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_td{}_dm{}_df{}_el{}_dl{}_nh{}_ma{}_{}_{}'.format(
         args.model_id,
         args.model,
         args.data,
@@ -87,7 +87,7 @@ if __name__ == '__main__':
     # from configs.price_configs import args
     from configs.electricity_configs import args
 
-    args.task_name = 'interval_forecast'
+    # args.task_name = 'interval_forecast'
     args.seq_len = 72
     args.pred_len = 24
     args.label_len = args.seq_len
