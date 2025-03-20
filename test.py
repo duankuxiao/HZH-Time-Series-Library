@@ -85,12 +85,14 @@ if __name__ == '__main__':
     from utils.hyparameter_setup import model_hyparameter_setup
     # from configs.solar_radiation_configs import args
     # from configs.price_configs import args
+    from configs.electricity_configs import args as default_args
+    from copy import deepcopy
 
     all_results = []
 
     for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLMformer']:
     # for model in ['TimeLLMformer']:
-        from configs.electricity_configs import args
+        args = deepcopy(default_args)
 
         args.seq_len = 72
         args.pred_len = 24

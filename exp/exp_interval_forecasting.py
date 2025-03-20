@@ -96,18 +96,17 @@ class Exp_Forecast(Exp_Basic):
                 # encoder - decoder
                 if self.args.use_amp:
                     with torch.amp.autocast():
-                        outputs, outputs_sample, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
+                        outputs, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
                 else:
-                    outputs, outputs_sample, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
+                    outputs, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
 
                 if self.args.accelerate:
                     outputs, batch_y = self.accelerator.gather_for_metrics((outputs, batch_y))
                 outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
-                outputs_sample = outputs_sample[:, -self.args.pred_len:, :]
                 batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:].to(self.device)
 
                 pred = outputs.detach().cpu()
-                pred_sample = outputs_sample.detach().cpu()
+
                 true = batch_y.detach().cpu()
                 mu, sigma = mu.detach().cpu(), sigma.detach().cpu()
                 loss = self._loss_function(criterion, pred, true, mu, sigma)
@@ -179,44 +178,27 @@ class Exp_Forecast(Exp_Basic):
                 # encoder - decoder
                 if self.args.use_amp:
                     with torch.cuda.amp.autocast():
-                        outputs, outputs_sample, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
+                        outputs, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
 
                         outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
-                        outputs_sample = outputs_sample[:, -self.args.pred_len:, -self.f_dim:]
 
                         if self.args.accelerate:
                             batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:]
                         else:
                             batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:].to(self.device)
-                        # if self.likelihood == "g":
-                        #     loss = gaussian_likelihood_loss(batch_y, mu, sigma)
-                        # elif self.likelihood == "nb":
-                        #     loss = negative_binomial_loss(batch_y, mu, sigma)
-                        # elif self.likelihood == "mse":
-                        #     loss = criterion(outputs_sample, batch_y)
-                        # else:
-                        #     loss = criterion(outputs, batch_y) + gaussian_likelihood_loss(batch_y, mu, sigma) / 10
                         loss = self._loss_function(criterion, outputs, batch_y, mu, sigma)
 
                         train_loss.append(loss.item())
                 else:
-                    outputs, outputs_sample, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
+                    outputs, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
 
                     outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
-                    outputs_sample = outputs_sample[:, -self.args.pred_len:, -self.f_dim:]
 
                     if self.args.accelerate:
                         batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:]
                     else:
                         batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:].to(self.device)
-                    # if self.likelihood == "g":
-                    #     loss = gaussian_likelihood_loss(batch_y, mu, sigma)
-                    # elif self.likelihood == "nb":
-                    #     loss = negative_binomial_loss(batch_y, mu, sigma)
-                    # elif self.likelihood == "mse":
-                    #     loss = criterion(outputs, batch_y)
-                    # else:
-                    #     loss = criterion(outputs, batch_y) + gaussian_likelihood_loss(batch_y, mu, sigma)/10
+
                     loss = self._loss_function(criterion, outputs, batch_y, mu, sigma)
 
                     train_loss.append(loss.item())
@@ -338,13 +320,9 @@ class Exp_Forecast(Exp_Basic):
                 # encoder - decoder
                 if self.args.use_amp:
                     with torch.amp.autocast():
-                        outputs, outputs_sample, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
+                        outputs, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
                 else:
-                    outputs, outputs_sample, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
-
-                if self.args.accelerate:
-                    self.accelerator.wait_for_everyone()
-                    outputs_sample = self.accelerator.gather_for_metrics(outputs_sample)
+                    outputs, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
 
                 outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
                 batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:]  # .to(self.device)

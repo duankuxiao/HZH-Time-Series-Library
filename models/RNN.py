@@ -96,23 +96,12 @@ class Model(nn.Module):
         x = self.linear_predict(x.permute(0, 2, 1)).permute(0, 2, 1)
 
         mu, sigma = self.likelihood_layer(x)
-        if self.likelihood == "g":
-            dec_out_sample = gaussian_sample(mu, sigma)
-        elif self.likelihood == "nb":
-            alpha_t = sigma
-            mu_t = mu
-            dec_out_sample = negative_binomial_sample(mu_t, alpha_t)
-        else:
-            dec_out_sample = gaussian_sample(mu, sigma)
-
-        # dec_out_sample = dec_out_sample * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
-        # dec_out_sample = dec_out_sample + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
 
         dec_out = self.output_projection(x)
         # # De-Normalization from Non-stationary Transformer
         # dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
         # dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
-        return dec_out, dec_out_sample, mu, sigma
+        return dec_out, mu, sigma
 
     def imputation(self, x_enc):
         return self.encoder(x_enc)
@@ -142,6 +131,6 @@ class Model(nn.Module):
             dec_out = self.classification(x_enc)
             return dec_out  # [B, N]
         if self.task_name == 'interval_forecast':
-            dec_out,dec_out_sample, mu, sigama = self.interval_forecast(x_enc, x_forecast)
-            return dec_out, dec_out_sample, mu, sigama
+            dec_out, mu, sigama = self.interval_forecast(x_enc, x_forecast)
+            return dec_out, mu, sigama
         return None

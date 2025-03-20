@@ -170,19 +170,10 @@ class Model(nn.Module):
         # dec_out = self.output_projection(dec_out)
 
         mu, sigma = self.likelihood_layer(seasonal_part)
-        if self.likelihood == "g":
-            dec_out_sample = gaussian_sample(mu, sigma)
-        elif self.likelihood == "nb":
-            alpha_t = sigma
-            mu_t = mu
-            dec_out_sample = negative_binomial_sample(mu_t, alpha_t)
-        else:
-            dec_out_sample = gaussian_sample(mu, sigma)
-
         seasonal_part = self.output_projection(seasonal_part)
         dec_out = trend_part + seasonal_part
 
-        return dec_out, dec_out_sample, mu, sigma
+        return dec_out, mu, sigma
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
         # enc
@@ -231,6 +222,6 @@ class Model(nn.Module):
             dec_out = self.classification(x_enc, x_mark_enc)
             return dec_out  # [B, N]
         if self.task_name == 'interval_forecast':
-            dec_out, dec_out_sample, mu, sigama = self.interval_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
-            return dec_out[:, -self.pred_len:, :], dec_out_sample[:, -self.pred_len:, :], mu[:, -self.pred_len:, :], sigama[:, -self.pred_len:, :]
+            dec_out, mu, sigama = self.interval_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
+            return dec_out[:, -self.pred_len:, :], mu[:, -self.pred_len:, :], sigama[:, -self.pred_len:, :]
         return None

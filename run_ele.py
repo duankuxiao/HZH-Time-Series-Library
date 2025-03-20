@@ -86,9 +86,7 @@ if __name__ == '__main__':
         args.model_id = 'LLAMA'
         # args.data_path = '{}.csv'.format(args.model_id)
         # args.source_data_path = '{}.csv'.format(args.model_id)
-        args.features = 'M'
         args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
-        args.llm_model = 'LLAMA1b'
         args.is_training = 1
         args.accelerate = False
         args.use_prompt = True

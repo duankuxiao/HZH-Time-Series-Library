@@ -100,17 +100,9 @@ class Model(nn.Module):
 
         dec_out = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None)
         mu, sigma = self.likelihood_layer(dec_out)
-        if self.likelihood == "g":
-            dec_out_sample = gaussian_sample(mu, sigma)
-        elif self.likelihood == "nb":
-            alpha_t = sigma
-            mu_t = mu
-            dec_out_sample = negative_binomial_sample(mu_t, alpha_t)
-        else:
-            dec_out_sample = gaussian_sample(mu, sigma)
 
         dec_out = self.projection(dec_out)
-        return dec_out, dec_out_sample, mu, sigma  # [B, L, D]
+        return dec_out, mu, sigma  # [B, L, D]
 
     def short_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
         # Normalization
@@ -175,6 +167,6 @@ class Model(nn.Module):
             dec_out = self.classification(x_enc, x_mark_enc)
             return dec_out  # [B, N]
         if self.task_name == 'interval_forecast':
-            dec_out, dec_out_sample, mu, sigama = self.interval_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
-            return dec_out[:, -self.pred_len:, :], dec_out_sample[:, -self.pred_len:, :], mu[:, -self.pred_len:, :], sigama[:, -self.pred_len:, :]
+            dec_out, mu, sigama = self.interval_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
+            return dec_out[:, -self.pred_len:, :], mu[:, -self.pred_len:, :], sigama[:, -self.pred_len:, :]
         return None

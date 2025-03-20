@@ -648,21 +648,13 @@ class Model(nn.Module):
         mu = mu * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
         mu = mu + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
         sigma = sigma * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
-        if self.likelihood == "g":
-            dec_out_sample = gaussian_sample(mu, sigma)
-        elif self.likelihood == "nb":
-            alpha_t = sigma
-            mu_t = mu
-            dec_out_sample = negative_binomial_sample(mu_t, alpha_t)
-        else:
-            dec_out_sample = gaussian_sample(mu, sigma)
 
         # dec_out = self.projection(dec_out)
         # De-Normalization from Non-stationary Transformer
         # dec_out = dec_out * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len+self.seq_len, 1))
         # dec_out = dec_out + (means[:, :1, -self.c_out:].repeat(1, self.pred_len+self.seq_len, 1))
 
-        return dec_out, dec_out_sample, mu, sigma
+        return dec_out, mu, sigma
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
         # Embedding
@@ -707,6 +699,6 @@ class Model(nn.Module):
             dec_out = self.classification(x_enc, x_mark_enc)
             return dec_out  # [B, N]
         if self.task_name == 'interval_forecast':
-            dec_out, dec_out_sample, mu, sigma = self.interval_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
-            return dec_out[:, -self.pred_len:, :], dec_out_sample[:, -self.pred_len:, :], mu[:, -self.pred_len:, :], sigma[:, -self.pred_len:, :]
+            dec_out, mu, sigma = self.interval_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
+            return dec_out[:, -self.pred_len:, :], mu[:, -self.pred_len:, :], sigma[:, -self.pred_len:, :]
         return None

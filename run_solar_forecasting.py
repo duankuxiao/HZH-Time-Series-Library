@@ -86,20 +86,22 @@ if __name__ == '__main__':
     from configs.solar_radiation_configs import args as default_args
     from copy import deepcopy
     from utils.hyparameter_setup import model_hyparameter_setup
-    args = deepcopy(default_args)
-    args.target = ['Temperature', 'Global_horizontal_irradiance']
-    # args.target = ['Global_horizontal_irradiance']
 
-    args.seq_len = 168
-    args.pred_len = 24
-    args.label_len = args.seq_len
-    args.is_training = 1
-    args.accelerate = False
-    args.use_prompt = True
     all_results = []
     # for model in ['RNN', 'Transformer','DLinear','Informer','Autoformer', 'iTransformer', 'TimesNet','PatchTST','TimeLLM', 'TimeLLMformer']:
     for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLMformer']:
     # for model in ['TimeLLMformer']:
+
+        args = deepcopy(default_args)
+        args.target = ['Temperature', 'Global_horizontal_irradiance']
+        # args.target = ['Global_horizontal_irradiance']
+
+        args.seq_len = 168
+        args.pred_len = 24
+        args.label_len = args.seq_len
+        args.is_training = 1
+        args.accelerate = False
+        args.use_prompt = True
         args.lradj = 'PEMS'
 
         args.model_id = 'test'

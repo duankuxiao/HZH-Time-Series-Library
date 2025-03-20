@@ -112,15 +112,7 @@ class Model(nn.Module):
             trend_output = self.Linear_Trend(trend_init)
         x = seasonal_output + trend_output
         mu, sigma = self.likelihood_layer(x.permute(0, 2, 1))
-        if self.likelihood == "g":
-            dec_out_sample = gaussian_sample(mu, sigma)
-        elif self.likelihood == "nb":
-            alpha_t = sigma
-            mu_t = mu
-            dec_out_sample = negative_binomial_sample(mu_t, alpha_t)
-        else:
-            dec_out_sample = gaussian_sample(mu, sigma)
-        return x.permute(0, 2, 1), dec_out_sample.permute(0, 2, 1), mu, sigma
+        return x.permute(0, 2, 1), mu, sigma
 
 
     def imputation(self, x_enc):
@@ -151,6 +143,6 @@ class Model(nn.Module):
             dec_out = self.classification(x_enc)
             return dec_out  # [B, N]
         if self.task_name == 'interval_forecast':
-            dec_out,dec_out_sample, mu, sigama = self.interval_forecast(x_enc, x_forecast)
-            return dec_out, dec_out_sample, mu, sigama
+            dec_out, mu, sigama = self.interval_forecast(x_enc, x_forecast)
+            return dec_out, mu, sigama
         return None
