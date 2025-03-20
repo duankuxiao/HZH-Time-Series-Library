@@ -14,7 +14,7 @@ np.random.seed(fix_seed)
 
 
 def get_setting(args,ii):
-    setting = 'if_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_td{}_dm{}_df{}_el{}_dl{}_nh{}_ma{}_{}_{}'.format(
+    setting = 'if_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_td{}_dm{}_df{}_el{}_dl{}_nh{}_ma{}_factor{}_{}'.format(
         args.model_id,
         args.model,
         args.data,
@@ -30,7 +30,7 @@ def get_setting(args,ii):
         args.d_layers,
         args.n_heads,
         args.moving_avg,
-        args.des, args.likelihood)
+        args.factor, args.likelihood)
 
     if 'TimeLLM' in args.model:
         setting += '_{}_llmd{}_llmf{}_tk{}'.format(args.llm_model, args.llm_dim, args.llm_layers, args.top_k)
@@ -81,36 +81,36 @@ def main(args):
 
 
 if __name__ == '__main__':
-    # from pv_configs import args
     from utils.hyparameter_setup import model_hyparameter_setup
+    from configs.electricity_configs import args as default_args
+    from copy import deepcopy
     # from configs.solar_radiation_configs import args
-    # from configs.price_configs import args
-    from configs.electricity_configs import args
 
-    args.task_name = 'interval_forecast'
-    args.seq_len = 72
-    args.pred_len = 24
-    args.label_len = args.seq_len
-    args.is_training = 1
-    args.accelerate = False
-    args.use_prompt = True
     all_results = []
+    for likelihood in ['g','msemu','hybridmu']:
+    # for likelihood in ['g']:
+        for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLMformer']:
+        # for model in ['PatchTST','Transformer']:
+            args = deepcopy(default_args)
+            args.task_name = 'interval_forecast'
+            args.seq_len = 72
+            args.pred_len = 24
+            args.label_len = args.seq_len
+            args.is_training = 1
+            args.accelerate = False
+            args.use_prompt = True
 
-    # for model in ['RNN', 'Transformer','DLinear','Informer','Autoformer', 'iTransformer', 'TimesNet','PatchTST','TimeLLM', 'TimeLLMformer']:
-    for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLMformer']:
-    # for model in ['TimeLLMformer']:
+            args.model_id = likelihood
+            args.likelihood = likelihood  # 'g' 'nb' 'mse' 'msemu' 'hybridmu'
 
-        args.model_id = 'mse'
-        args.likelihood = 'mse'  # 'g' 'nb' 'mse' 'msemu' 'hybridmu'
+            args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
 
-        args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
+            args = model_hyparameter_setup(args)
 
-        args = model_hyparameter_setup(args)
-
-        _, res_metrics_df = main(args)
-        res_metrics_df.insert(0, 'model', model)
-        all_results.append(res_metrics_df)
-        final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
-        final_metrics_df.to_csv('./results/{}_all_models_comparison.csv'.format(args.model_id))
+            _, res_metrics_df = main(args)
+            res_metrics_df.insert(0, 'model', model)
+            all_results.append(res_metrics_df)
+            final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
+            final_metrics_df.to_csv('./results/{}_all_models_comparison.csv'.format(args.model_id))
 
 

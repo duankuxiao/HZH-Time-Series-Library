@@ -79,7 +79,7 @@ parser.add_argument('--channel_independence', type=int, default=1, help='0: chan
 parser.add_argument('--decomp_method', type=str, default='moving_avg', help='method of series decompsition, only support moving_avg or dft_decomp')
 parser.add_argument('--use_norm', type=int, default=1, help='whether to use normalize; True 1 False 0')
 
-parser.add_argument('--factor', type=int, default=3, help='attn factor')
+parser.add_argument('--factor', type=int, default=1, help='attn factor')
 parser.add_argument('--dropout', type=float, default=0.1, help='dropout')
 parser.add_argument('--embed', type=str, default='timeF', help='time features encoding, options:[timeF, fixed, learned]')
 parser.add_argument('--activation', type=str, default='gelu', help='activation')
@@ -96,8 +96,8 @@ parser.add_argument('--use_prompt', action='store_true', help='input forecast da
 
 # RNN
 parser.add_argument('--rnn_model', type=str, default='LSTM', help='RNN model')  # GRU, LSTM, seq2seq
-parser.add_argument('--rnn_dim', type=int, default=256, help='LLM model dimension')  # LLama7b:4096; GPT2-small:768; BERT-base:768
-parser.add_argument('--rnn_layers', type=int, default=3, help='bert_layers=6 llama_layers=32')
+parser.add_argument('--rnn_dim', type=int, default=512, help='LLM model dimension')  # LLama7b:4096; GPT2-small:768; BERT-base:768
+parser.add_argument('--rnn_layers', type=int, default=2, help='bert_layers=6 llama_layers=32')
 
 # optimization
 parser.add_argument('--num_workers', type=int, default=1, help='data loader num workers')
@@ -117,8 +117,6 @@ parser.add_argument('--use_amp', action='store_true', help='use automatic mixed 
 parser.add_argument('--percent', type=int, default=100)
 parser.add_argument('--likelihood', type=str, default='g', help='exp description  g or nb')
 parser.add_argument("--sample_size", type=int, default=500)
-
-
 
 # metrics (dtw)
 parser.add_argument('--use_dtw', type=bool, default=False, help='the controller of using dtw metric (dtw is time consuming, not suggested unless necessary)')

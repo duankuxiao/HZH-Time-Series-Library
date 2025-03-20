@@ -14,7 +14,7 @@ np.random.seed(fix_seed)
 
 
 def get_setting(args,ii):
-    setting = 'f_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_td{}_dm{}_df{}_el{}_dl{}_nh{}_ma{}_{}_{}'.format(
+    setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_td{}_dm{}_df{}_nh{}_el{}_dl{}_ma{}_factor{}_dropout{}_eb{}_{}'.format(
         args.model_id,
         args.model,
         args.data,
@@ -26,11 +26,13 @@ def get_setting(args,ii):
         args.c_out,
         args.d_model,
         args.d_ff,
+        args.n_heads,
         args.e_layers,
         args.d_layers,
-        args.n_heads,
         args.moving_avg,
-        args.des, ii)
+        args.factor,
+        args.dropout,
+        args.embed, ii)
 
     if 'TimeLLM' in args.model:
         setting += '_{}_llmd{}_llmf{}_tk{}'.format(args.llm_model, args.llm_dim, args.llm_layers, args.top_k)
@@ -81,8 +83,10 @@ def main(args):
 
 
 if __name__ == '__main__':
-    from configs.solar_radiation_configs import args
+    from configs.solar_radiation_configs import args as default_args
+    from copy import deepcopy
     from utils.hyparameter_setup import model_hyparameter_setup
+    args = deepcopy(default_args)
     args.target = ['Temperature', 'Global_horizontal_irradiance']
     # args.target = ['Global_horizontal_irradiance']
 

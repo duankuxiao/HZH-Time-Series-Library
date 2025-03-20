@@ -25,6 +25,7 @@ args.dec_in = 22
 args.c_out = 1
 args.scale = True
 
+
 # ['Electricity', 'Nuclear', 'Coal', 'Hydro', 'Geothermal', 'Biomass',
 #        'Solar', 'Solar_curtailment', 'Wind', 'Wind_ccurtailment',
 #        'Water_pumping', 'Interconnection', 'Total', 'Temperature',

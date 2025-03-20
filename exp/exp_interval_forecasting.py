@@ -493,8 +493,10 @@ class Exp_Forecast(Exp_Basic):
                 y_sample = gaussian_sample(torch.tensor(mu), torch.tensor(sigma))
             elif self.likelihood == 'nb':
                 y_sample = negative_binomial_sample(torch.tensor(mu), torch.tensor(sigma))
+            elif self.likelihood == 'mse':
+                y_sample = torch.tensor(y_pred)
             else:
-                y_sample = y_pred
+                y_sample = gaussian_sample(torch.tensor(mu), torch.tensor(sigma))
 
             y_pred.append(y_sample.reshape(-1,1))
         y_pred = np.concatenate(y_pred, axis=1)

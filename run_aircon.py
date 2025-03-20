@@ -15,7 +15,7 @@ np.random.seed(fix_seed)
 
 
 def get_setting(args, ii):
-    setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_td{}_dm{}_df{}_nh{}_el{}_dl{}_ma{}_fc{}_dropout{}_eb{}_{}_{}'.format(
+    setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_td{}_dm{}_df{}_nh{}_el{}_dl{}_ma{}_factor{}_dropout{}_eb{}_{}'.format(
         args.model_id,
         args.model,
         args.data,
@@ -33,8 +33,7 @@ def get_setting(args, ii):
         args.moving_avg,
         args.factor,
         args.dropout,
-        args.embed,
-        args.des, ii)
+        args.embed, ii)
 
     if 'TimeLLM' in args.model:
         setting += '_{}_llmd{}_llmf{}_tk{}'.format(args.llm_model, args.llm_dim, args.llm_layers, args.top_k)
@@ -79,13 +78,14 @@ def main(args):
 
 
 if __name__ == '__main__':
-    from configs.aircon_configs import args
+    from configs.aircon_configs import args as default_args
+    from copy import deepcopy
     from utils.hyparameter_setup import model_hyparameter_setup
-    # args.train_epochs = 2
-    # args.patience = 2
-    args.seq_len = 18
-    args.label_len = args.seq_len
+
     for pred_len in [1, 6, 12, 24, 36]:
+        args = deepcopy(default_args)
+        args.seq_len = 18
+        args.label_len = args.seq_len
         args.pred_len = pred_len
         all_results = []
         for model in ['RNN', 'DLinear', 'Transformer', 'iTransformer', 'PatchTST', 'TimesNet', 'TimeLLMformer']:

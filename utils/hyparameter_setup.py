@@ -5,6 +5,8 @@ import torch
 
 def model_hyparameter_setup(args):
     if args.model == 'TimeLLMformer' or args.model == 'AttLLM':
+        args.learning_rate = 0.01  # 0.001 for imputation 0.0001 for forecast
+        args.patience = 5
         args.lradj = 'PEMS'
         args.llm_model = 'BERT'
         args.d_model = 32
@@ -29,6 +31,7 @@ def model_hyparameter_setup(args):
         args.dropout = 0.05
 
     if args.model == 'TimeLLM':  # default
+        args.patience = 3
         args.batch_size = 12
         args.learning_rate = 0.01
         args.train_epochs = 20
@@ -63,7 +66,6 @@ def model_hyparameter_setup(args):
         args.d_k = 64
 
     if 'LLM' in args.model:
-        args.patience = 3
         args.content = load_content(args)
         if args.llm_model == 'LLAMA8b':
             args.llm_dim = 4096

@@ -14,7 +14,7 @@ np.random.seed(fix_seed)
 
 
 def get_setting(args,ii):
-    setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_td{}_dm{}_nh{}_el{}_dl{}_df{}_fc{}_dropout{}_eb{}_{}_{}'.format(
+    setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_td{}_dm{}_df{}_nh{}_el{}_dl{}_ma{}_factor{}_dropout{}_eb{}_{}'.format(
         args.model_id,
         args.model,
         args.data,
@@ -25,14 +25,14 @@ def get_setting(args,ii):
         args.enc_in,
         args.c_out,
         args.d_model,
+        args.d_ff,
         args.n_heads,
         args.e_layers,
         args.d_layers,
-        args.d_ff,
+        args.moving_avg,
         args.factor,
         args.dropout,
-        args.embed,
-        args.des, ii)
+        args.embed, ii)
 
     if 'TimeLLM' in args.model:
         setting += '_{}_llmd{}_llmf{}_tk{}'.format(args.llm_model, args.llm_dim, args.llm_layers, args.top_k)
@@ -77,11 +77,12 @@ def main(args):
 
 if __name__ == '__main__':
     from utils.hyparameter_setup import model_hyparameter_setup
-    from configs.electricity_configs import args
+    from configs.electricity_configs import args as default_args
+    from copy import deepcopy
 
     # for model in ['RNN', 'DLinear', 'iTransformer', 'TimesNet','TimeLLM', 'TimeLLMformer']:
     for model in ['TimeLLMformer']:
-
+        args = deepcopy(default_args)
         args.model_id = 'LLAMA'
         # args.data_path = '{}.csv'.format(args.model_id)
         # args.source_data_path = '{}.csv'.format(args.model_id)

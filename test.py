@@ -85,20 +85,19 @@ if __name__ == '__main__':
     from utils.hyparameter_setup import model_hyparameter_setup
     # from configs.solar_radiation_configs import args
     # from configs.price_configs import args
-    from configs.electricity_configs import args
 
-    # args.task_name = 'interval_forecast'
-    args.seq_len = 72
-    args.pred_len = 24
-    args.label_len = args.seq_len
-    args.is_training = 1
-    args.accelerate = False
-    args.use_prompt = True
     all_results = []
 
-    # for model in ['RNN', 'Transformer','DLinear','Informer','Autoformer', 'iTransformer', 'TimesNet','PatchTST','TimeLLM', 'TimeLLMformer']:
     for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLMformer']:
     # for model in ['TimeLLMformer']:
+        from configs.electricity_configs import args
+
+        args.seq_len = 72
+        args.pred_len = 24
+        args.label_len = args.seq_len
+        args.is_training = 1
+        args.accelerate = False
+        args.use_prompt = True
 
         args.model_id = 'mse'
         args.likelihood = 'mse'  # 'g' 'nb' 'mse' 'msemu' 'hybridmu'
