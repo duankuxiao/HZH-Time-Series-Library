@@ -89,7 +89,7 @@ if __name__ == '__main__':
 
     all_results = []
     # for model in ['RNN', 'Transformer','DLinear','Informer','Autoformer', 'iTransformer', 'TimesNet','PatchTST','TimeLLM', 'TimeLLMformer']:
-    for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLMformer']:
+    for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST']:
     # for model in ['TimeLLMformer']:
 
         args = deepcopy(default_args)
@@ -102,13 +102,10 @@ if __name__ == '__main__':
         args.is_training = 1
         args.accelerate = False
         args.use_prompt = True
-        args.lradj = 'PEMS'
 
-        args.model_id = 'test'
-
+        args.model_id = 'daxiang'
         args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
         args = model_hyparameter_setup(args)
-
         _, res_metrics_df = main(args)
         res_metrics_df.insert(0, 'model', model)
         all_results.append(res_metrics_df)

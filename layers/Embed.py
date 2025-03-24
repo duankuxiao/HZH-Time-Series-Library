@@ -142,6 +142,7 @@ class DataEmbedding_inverted(nn.Module):
         # x: [Batch Variate d_model]
         return self.dropout(x)
 
+
 class DataEmbedding_wo_pos(nn.Module):
     def __init__(self, c_in, d_model, embed_type='fixed', freq='h', dropout=0.1):
         super(DataEmbedding_wo_pos, self).__init__()
@@ -189,14 +190,14 @@ class PatchEmbedding(nn.Module):
         # Residual dropout
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x):
+    def forward(self, x):  # x [B, N, T]
         # do patching
         n_vars = x.shape[1]
-        x = self.padding_patch_layer(x)
-        x = x.unfold(dimension=-1, size=self.patch_len, step=self.stride)
-        x = torch.reshape(x, (x.shape[0] * x.shape[1], x.shape[2], x.shape[3]))
+        x = self.padding_patch_layer(x)  # x [B, N, T+stride]
+        x = x.unfold(dimension=-1, size=self.patch_len, step=self.stride)  # x [B, N, patch_num, patch_len]
+        x = torch.reshape(x, (x.shape[0] * x.shape[1], x.shape[2], x.shape[3]))  # x [B * N, patch_num, patch_len]
         # Input encoding
-        x = self.value_embedding(x)
+        x = self.value_embedding(x)  # x [B * N, patch_num, d_model]
         return self.dropout(x), n_vars
 
 

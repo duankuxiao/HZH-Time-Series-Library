@@ -25,7 +25,10 @@ class Exp_Forecast(Exp_Basic):
     def __init__(self, args):
         super(Exp_Forecast, self).__init__(args)
         self.likelihood = args.likelihood
-        self.loss_func = args.likelihood
+        self.loss = args.loss
+        if self.loss == "adaptive":
+            self.log_sigma_mse = nn.Parameter(torch.zeros(1))
+            self.log_sigma_nll = nn.Parameter(torch.zeros(1))
 
     def _build_model(self):
         model = self.model_dict[self.args.model].Model(self.args).float()
@@ -39,16 +42,15 @@ class Exp_Forecast(Exp_Basic):
         return data_set, data_loader
 
     def _select_optimizer(self):
-        model_optim = optim.Adam(self.model.parameters(), lr=self.args.learning_rate)
+        param_list = list(self.model.parameters())
+        if self.loss == "adaptive":
+            # 将不确定性参数也加入到优化器中
+            param_list += [self.log_sigma_mse, self.log_sigma_nll]
+        model_optim = optim.Adam(param_list, lr=self.args.learning_rate)
         return model_optim
 
     def _select_criterion(self):
-        if self.loss_func == 'mse':
-            criterion = nn.MSELoss()
-        # elif self.loss_func == 'g':
-        #     criterion = nn.GaussianNLLLoss(full=False,eps=1e-6,reduction='mean')
-        else:
-            criterion = nn.MSELoss()
+        criterion = nn.MSELoss()
         return criterion
 
     def _select_scheduler(self, model_optim, train_loader):
@@ -64,17 +66,37 @@ class Exp_Forecast(Exp_Basic):
         return scheduler
 
     def _loss_function(self, criterion, pred, true, mu, sigma):
-        if self.likelihood == "g":
+        if self.loss == "g":
             loss = gaussian_likelihood_loss(true, mu, sigma)
             # loss = criterion(pred,true,sigma)
-        elif self.likelihood == "nb":
+        elif self.loss == "nb":
             loss = negative_binomial_loss(true, mu, sigma)
-        elif self.likelihood == "mse":
+        elif self.loss == "MSE":
             loss = criterion(pred, true)
-        elif self.likelihood == "msemu":
+        elif self.loss == "MSEmu":
             loss = criterion(mu, true)
-        elif self.likelihood == "hybridmu":
+        elif self.loss == "hybridmu":
             loss = criterion(mu, true) + gaussian_likelihood_loss(true, mu, sigma) * 0.1
+        elif self.loss == "adaptive":
+            if self.args.model == 'AttLLM':
+                mse_loss = 0
+                nll_loss = 0
+                for i in range(len(mu)):
+                    mse_loss += criterion(mu[i], true)
+                    # nll_loss += gaussian_likelihood_loss(true, mu[i], sigma[i])
+                mse_loss /= len(mu)
+                # nll_loss /= len(mu)
+                # mse_loss = criterion(mu[-1], true)
+                nll_loss = gaussian_likelihood_loss(true, mu[-1], sigma[-1])
+                loss = 0.5 * (torch.exp(-self.log_sigma_mse.to(true.device)) * mse_loss + torch.exp(-self.log_sigma_nll.to(true.device)) * nll_loss +
+                              self.log_sigma_mse.to(true.device) + self.log_sigma_nll.to(true.device))
+            else:
+                mse_loss = criterion(mu, true)
+                nll_loss = gaussian_likelihood_loss(true, mu, sigma)
+                # loss = 0.5 * (torch.exp(-self.log_sigma_mse.to(true.device)) * mse_loss + torch.exp(-self.log_sigma_nll.to(true.device)) * nll_loss)
+                loss = 0.5 * (torch.exp(-self.log_sigma_mse.to(true.device)) * mse_loss + torch.exp(-self.log_sigma_nll.to(true.device)) * nll_loss +
+                              self.log_sigma_mse.to(true.device) + self.log_sigma_nll.to(true.device))
+
         else:
             loss = criterion(mu, true) + gaussian_likelihood_loss(true, mu, sigma) * 0.1
         return loss
@@ -106,12 +128,14 @@ class Exp_Forecast(Exp_Basic):
                 batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:].to(self.device)
 
                 pred = outputs.detach().cpu()
-
                 true = batch_y.detach().cpu()
-                mu, sigma = mu.detach().cpu(), sigma.detach().cpu()
+                if self.args.model != 'AttLLM':
+                    mu, sigma = mu.detach().cpu(), sigma.detach().cpu()
+                else:
+                    mu = tuple(tensor.detach().cpu() for tensor in mu)
+                    sigma = tuple(tensor.detach().cpu() for tensor in sigma)
                 loss = self._loss_function(criterion, pred, true, mu, sigma)
-
-                total_loss.append(loss)
+                total_loss.append(np.array(loss))
         total_loss = np.average(total_loss)
         self.model.train()
         return total_loss
@@ -119,15 +143,13 @@ class Exp_Forecast(Exp_Basic):
     def train(self, setting):
         train_data, train_loader = self._get_data(flag='train')
         vali_data, vali_loader = self._get_data(flag='val')
-        test_data, test_loader = self._get_data(flag='test')
-
+        # test_data, test_loader = self._get_data(flag='test')
         path = os.path.join(self.args.checkpoints, setting, 'checkpoints')
         if not os.path.exists(path):
             os.makedirs(path)
         save_config(self.args, os.path.join(path, 'configs.pkl'))
 
         time_now = time.time()
-
         train_steps = len(train_loader)
         early_stopping = EarlyStopping(patience=self.args.patience, verbose=True,accelerator=self.accelerator)
 
@@ -143,6 +165,8 @@ class Exp_Forecast(Exp_Basic):
 
         # Initialize a dictionary to store loss values
         loss_records = {"epoch": [], "train_loss": [], "vali_loss": []}
+        if self.loss == 'adaptive':
+            loss_records = {"epoch": [], "train_loss": [], "vali_loss": [], "mse_weight": [], "nll_weight": []}
 
         for epoch in range(self.args.train_epochs):
             iter_count = 0
@@ -191,7 +215,6 @@ class Exp_Forecast(Exp_Basic):
                         train_loss.append(loss.item())
                 else:
                     outputs, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
-
                     outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
 
                     if self.args.accelerate:
@@ -200,7 +223,6 @@ class Exp_Forecast(Exp_Basic):
                         batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:].to(self.device)
 
                     loss = self._loss_function(criterion, outputs, batch_y, mu, sigma)
-
                     train_loss.append(loss.item())
 
                 if self.args.accelerate:
@@ -239,6 +261,9 @@ class Exp_Forecast(Exp_Basic):
             loss_records["epoch"].append(epoch + 1)
             loss_records["train_loss"].append(train_loss)
             loss_records["vali_loss"].append(vali_loss)
+            if self.loss == 'adaptive':
+                loss_records["mse_weight"].append(self.log_sigma_mse.detach().numpy())
+                loss_records["nll_weight"].append(self.log_sigma_nll.detach().numpy())
 
             # test_loss = self.vali(test_data, test_loader, criterion)
             cost_time = round((time.time() - epoch_time) / 60, 2)
@@ -280,6 +305,8 @@ class Exp_Forecast(Exp_Basic):
         loss_df = pd.DataFrame(loss_records)
         loss_df.to_csv(os.path.join(folder_path, "loss_records.csv"), index=False)
         print("Loss records saved to:", os.path.join(folder_path, "loss_records.csv"))
+        if self.loss == "adaptive":
+            print('mse weight: {}, nll weight: {}'.format(self.log_sigma_mse,self.log_sigma_nll))
         return self.model
 
     def test(self, setting, test=0, path=None):
@@ -321,8 +348,12 @@ class Exp_Forecast(Exp_Basic):
                 if self.args.use_amp:
                     with torch.amp.autocast():
                         outputs, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
+                        if self.args.model == 'AttLLM':
+                            outputs, mu, sigma = outputs, mu[-1], sigma[-1]
                 else:
                     outputs, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
+                    if self.args.model == 'AttLLM':
+                        outputs, mu, sigma = outputs, mu[-1], sigma[-1]
 
                 outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
                 batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:]  # .to(self.device)
@@ -471,10 +502,6 @@ class Exp_Forecast(Exp_Basic):
                 y_sample = gaussian_sample(torch.tensor(mu), torch.tensor(sigma))
             elif self.likelihood == 'nb':
                 y_sample = negative_binomial_sample(torch.tensor(mu), torch.tensor(sigma))
-            elif self.likelihood == 'mse':
-                y_sample = torch.tensor(y_pred)
-            else:
-                y_sample = gaussian_sample(torch.tensor(mu), torch.tensor(sigma))
 
             y_pred.append(y_sample.reshape(-1,1))
         y_pred = np.concatenate(y_pred, axis=1)

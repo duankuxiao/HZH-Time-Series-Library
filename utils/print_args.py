@@ -18,6 +18,13 @@ def print_args(args):
         print(f'  {"Inverse:":<20}{args.inverse:<20}')
         print()
 
+    if args.task_name in ['interval_forecast']:
+        print("\033[1m" + "Probability Forecasting Task" + "\033[0m")
+        print(f'  {"Seq Len:":<20}{args.seq_len:<20}{"Label Len:":<20}{args.label_len:<20}')
+        print(f'  {"Pred Len:":<20}{args.pred_len:<20}{"Seasonal Patterns:":<20}{args.seasonal_patterns:<20}')
+        print(f'  {"Loss:":<20}{args.likelihood:<20}')
+        print()
+
     if args.task_name == 'imputation':
         print("\033[1m" + "Imputation Task" + "\033[0m")
         print(f'  {"Mask Rate:":<20}{args.mask_rate:<20}')

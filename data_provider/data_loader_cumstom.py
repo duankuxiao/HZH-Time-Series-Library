@@ -48,7 +48,8 @@ class Dataset_cumstom(Dataset):
 
         self.enc_in = self.data_x.shape[-1]
         self.tot_len = len(self.data_x) - self.seq_len - self.pred_len + 1
-        self.std_ = self.target_scaler.scale_
+        if scale:
+            self.std_ = self.target_scaler.scale_
 
     def __getitem__(self, index):
         s_begin = index % self.tot_len
@@ -126,7 +127,8 @@ class Dataset_cumstom(Dataset):
             train_data = df_data_source_domain[border1s[0]:border2s[0]]
             self.scaler.fit(train_data.values)
             data = self.scaler.transform(df_data.values)
-            self.target_scaler.fit(df_target_source_domain.values)
+            df_target_data = df_target_source_domain[border1s[0]:border2s[0]]
+            self.target_scaler.fit(df_target_data.values)
 
         else:
             data = df_data.values

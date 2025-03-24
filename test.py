@@ -14,7 +14,7 @@ np.random.seed(fix_seed)
 
 
 def get_setting(args,ii):
-    setting = 'f_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_td{}_dm{}_df{}_el{}_dl{}_nh{}_ma{}_{}_{}'.format(
+    setting = 'f_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_td{}_dm{}_df{}_el{}_dl{}_nh{}_ma{}_factor{}_{}'.format(
         args.model_id,
         args.model,
         args.data,
@@ -30,7 +30,7 @@ def get_setting(args,ii):
         args.d_layers,
         args.n_heads,
         args.moving_avg,
-        args.des, args.likelihood)
+        args.factor, args.loss)
 
     if 'TimeLLM' in args.model:
         setting += '_{}_llmd{}_llmf{}_tk{}'.format(args.llm_model, args.llm_dim, args.llm_layers, args.top_k)
@@ -90,8 +90,8 @@ if __name__ == '__main__':
 
     all_results = []
 
-    for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLMformer']:
-    # for model in ['TimeLLMformer']:
+    # for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLMformer']:
+    for model in ['AttLLM']:
         args = deepcopy(default_args)
 
         args.seq_len = 72
@@ -101,8 +101,8 @@ if __name__ == '__main__':
         args.accelerate = False
         args.use_prompt = True
 
-        args.model_id = 'mse'
-        args.likelihood = 'mse'  # 'g' 'nb' 'mse' 'msemu' 'hybridmu'
+        args.model_id = 'test_fLinear'
+        args.loss = 'MSE'  # 'g' 'nb' 'mse' 'msemu' 'hybridmu'
 
         args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
 

@@ -30,7 +30,7 @@ def get_setting(args,ii):
         args.d_layers,
         args.n_heads,
         args.moving_avg,
-        args.factor, args.likelihood)
+        args.factor, args.loss)
 
     if 'TimeLLM' in args.model:
         setting += '_{}_llmd{}_llmf{}_tk{}'.format(args.llm_model, args.llm_dim, args.llm_layers, args.top_k)
@@ -87,11 +87,13 @@ if __name__ == '__main__':
     # from configs.solar_radiation_configs import args
 
     all_results = []
-    for likelihood in ['g','msemu','hybridmu']:
-    # for likelihood in ['g']:
-        for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLMformer']:
-        # for model in ['PatchTST','Transformer']:
+    # for likelihood in ['g','msemu','hybridmu','adaptive']:
+    for loss in ['adaptive']:
+        # for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLMformer']:
+        for model in ['AttLLM']:  # 'AttLLM'
             args = deepcopy(default_args)
+            # args.train_epochs = 3
+            # args.patience = 2
             args.task_name = 'interval_forecast'
             args.seq_len = 72
             args.pred_len = 24
@@ -100,13 +102,12 @@ if __name__ == '__main__':
             args.accelerate = False
             args.use_prompt = True
 
-            args.model_id = likelihood
-            args.likelihood = likelihood  # 'g' 'nb' 'mse' 'msemu' 'hybridmu'
+            args.model_id = 'test1'
+            args.loss = loss  # 'g' 'nb' 'mse' 'msemu' 'hybridmu'
 
             args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
 
             args = model_hyparameter_setup(args)
-
             _, res_metrics_df = main(args)
             res_metrics_df.insert(0, 'model', model)
             all_results.append(res_metrics_df)
