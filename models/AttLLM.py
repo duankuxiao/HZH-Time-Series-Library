@@ -584,6 +584,7 @@ class Model(nn.Module):
             self.projection = nn.Linear(transformer_d_model, configs.c_out)
 
         if self.task_name == 'interval_forecast':
+            # transformer_d_model = configs.c_out
             self.dec_embedding = DataEmbedding(configs.c_out, transformer_d_model, configs.embed, configs.freq, configs.dropout)
             # self.dec_embedding = DataEmbedding(configs.enc_in, configs.d_model, configs.embed, configs.freq, configs.dropout)
 
@@ -604,7 +605,7 @@ class Model(nn.Module):
                         dropout=configs.dropout,
                         activation=configs.activation,
                     )
-                    for l in range(1)
+                    for l in range(configs.d_layers)
                 ],
                 norm_layer=torch.nn.LayerNorm(transformer_d_model),
             )
@@ -648,15 +649,40 @@ class Model(nn.Module):
                 ],
                 norm_layer=torch.nn.LayerNorm(transformer_d_model),
             )
+            # self.decoder4 = Decoder(
+            #     [
+            #         DecoderLayer(
+            #             AttentionLayer(
+            #                 FullAttention(True, configs.factor, attention_dropout=configs.dropout,
+            #                               output_attention=False),
+            #                 transformer_d_model, configs.n_heads),
+            #             AttentionLayer(
+            #                 FullAttention(False, configs.factor, attention_dropout=configs.dropout,
+            #                               output_attention=False),
+            #                 transformer_d_model, configs.n_heads),
+            #             transformer_d_model,  # configs.d_model,
+            #             transformer_d_ff,  # 4 * configs.d_model,
+            #             dropout=configs.dropout,
+            #             activation=configs.activation,
+            #         )
+            #         for l in range(1)
+            #     ],
+            #     norm_layer=torch.nn.LayerNorm(transformer_d_model),
+            # )
             self.projection = nn.Linear(transformer_d_model, configs.c_out)
             # self.projection = nn.Linear(configs.d_model, configs.pred_len, bias=True)
             # self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len+configs.label_len)
         if self.task_name == 'interval_forecast':
             if configs.likelihood == "g":
                 # self.likelihood_layer = Gaussian(transformer_d_model, configs.c_out)
-                self.likelihood_layer1 = Gaussian(transformer_d_model, configs.c_out)
-                self.likelihood_layer2 = Gaussian(transformer_d_model, configs.c_out)
+                # self.likelihood_layer1 = Gaussian(transformer_d_model, configs.c_out)
+                self.likelihood_layer1 = nn.Linear(transformer_d_model, configs.c_out)
+
+                # self.likelihood_layer2 = Gaussian(transformer_d_model, configs.c_out)
+                self.likelihood_layer2 = nn.Linear(transformer_d_model, configs.c_out)
+
                 self.likelihood_layer3 = Gaussian(transformer_d_model, configs.c_out)
+                # self.likelihood_layer4 = Gaussian(transformer_d_model, configs.c_out)
 
             elif configs.likelihood == "nb":
                 self.likelihood_layer = NegativeBinomial(configs.d_model, configs.c_out)
@@ -733,29 +759,40 @@ class Model(nn.Module):
 
         dec_in = self.dec_embedding(enc_out_target, x_mark_dec)  # enc_out_target x_dec
         dec_out1 = self.decoder1(dec_in, enc_out, x_mask=None, cross_mask=None)
-        mu1,sigma1 = self.likelihood_layer1(dec_out1)
-        dec_out2 = self.decoder2(dec_out1, enc_out, x_mask=None, cross_mask=None)
-        mu2,sigma2 = self.likelihood_layer2(dec_out2)
-        dec_out3 = self.decoder3(dec_out2, enc_out, x_mask=None, cross_mask=None)
-        mu3,sigma3 = self.likelihood_layer3(dec_out3)
+        # mu1,sigma1 = self.likelihood_layer1(dec_out1)
+        # mu1 = self.likelihood_layer1(dec_out1)
+
+        # dec_out2 = self.decoder2(dec_out1, enc_out, x_mask=None, cross_mask=None)
+        # mu2,sigma2 = self.likelihood_layer2(dec_out2)
+        # mu2 = self.likelihood_layer2(dec_out2)
+
+        # dec_out3 = self.decoder3(dec_out2, enc_out, x_mask=None, cross_mask=None)
+        mu3,sigma3 = self.likelihood_layer3(dec_out1)
+        # dec_out4 = self.decoder4(dec_out3, enc_out, x_mask=None, cross_mask=None)
+        # mu4, sigma4 = self.likelihood_layer4(dec_out4)
 
         output_len = self.pred_len + self.seq_len
-        mu1 = mu1 * (stdev[:, :1, -self.c_out:].repeat(1, output_len, 1))  #  + self.seq_len
-        mu1 = mu1 + (means[:, :1, -self.c_out:].repeat(1, output_len, 1))
-        sigma1 = sigma1 * (stdev[:, :1, -self.c_out:].repeat(1, output_len, 1))
-        mu2 = mu2 * (stdev[:, :1, -self.c_out:].repeat(1, output_len, 1))
-        mu2 = mu2 + (means[:, :1, -self.c_out:].repeat(1, output_len, 1))
-        sigma2 = sigma2 * (stdev[:, :1, -self.c_out:].repeat(1, output_len, 1))
+        # mu1 = mu1 * (stdev[:, :1, -self.c_out:].repeat(1, output_len, 1))  #  + self.seq_len
+        # mu1 = mu1 + (means[:, :1, -self.c_out:].repeat(1, output_len, 1))
+        # sigma1 = sigma3 * (stdev[:, :1, -self.c_out:].repeat(1, output_len, 1))
+        # mu2 = mu2 * (stdev[:, :1, -self.c_out:].repeat(1, output_len, 1))
+        # mu2 = mu2 + (means[:, :1, -self.c_out:].repeat(1, output_len, 1))
+        # sigma2 = sigma3 * (stdev[:, :1, -self.c_out:].repeat(1, output_len, 1))
         mu3 = mu3 * (stdev[:, :1, -self.c_out:].repeat(1, output_len, 1))
         mu3 = mu3 + (means[:, :1, -self.c_out:].repeat(1,output_len, 1))
         sigma3 = sigma3 * (stdev[:, :1, -self.c_out:].repeat(1, output_len, 1))
+        # mu4 = mu4 * (stdev[:, :1, -self.c_out:].repeat(1, output_len, 1))
+        # mu4 = mu4 + (means[:, :1, -self.c_out:].repeat(1, output_len, 1))
+        # sigma4 = sigma4 * (stdev[:, :1, -self.c_out:].repeat(1, output_len, 1))
         # mu = self.projection(dec_out3)
         # # De-Normalization from Non-stationary Transformer
         # mu = mu * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len+self.seq_len, 1))
         # mu = mu + (means[:, :1, -self.c_out:].repeat(1, self.pred_len+self.seq_len, 1))
 
-        return mu3, (mu1[:, -self.pred_len:, -self.c_out:],mu2[:, -self.pred_len:, -self.c_out:],mu3[:, -self.pred_len:, -self.c_out:]), (sigma1[:, -self.pred_len:, -self.c_out:],sigma2[:, -self.pred_len:, -self.c_out:],sigma3[:, -self.pred_len:, -self.c_out:])
+        # mu = mu3[:, -self.pred_len:, -self.c_out:]
+        # sigma = sigma3[:, -self.pred_len:, -self.c_out:]
         # return mu2, (mu1[:, -self.pred_len:, -self.c_out:],mu2[:, -self.pred_len:, -self.c_out:]), (sigma1[:, -self.pred_len:, -self.c_out:],sigma2[:, -self.pred_len:, -self.c_out:])
+        return mu3, mu3, sigma3
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
         # Embedding
@@ -801,5 +838,5 @@ class Model(nn.Module):
             return dec_out  # [B, N]
         if self.task_name == 'interval_forecast':
             dec_out, mu, sigma = self.interval_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
-            return dec_out, mu, sigma
+            return dec_out[:, -self.pred_len:, -self.c_out:], mu[:, -self.pred_len:, -self.c_out:], sigma[:, -self.pred_len:, -self.c_out:]
         return None

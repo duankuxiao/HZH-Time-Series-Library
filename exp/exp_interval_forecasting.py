@@ -129,7 +129,7 @@ class Exp_Forecast(Exp_Basic):
 
                 pred = outputs.detach().cpu()
                 true = batch_y.detach().cpu()
-                if self.args.model != 'AttLLM':
+                if self.args.model != 'AttLLM1':
                     mu, sigma = mu.detach().cpu(), sigma.detach().cpu()
                 else:
                     mu = tuple(tensor.detach().cpu() for tensor in mu)

@@ -89,8 +89,8 @@ if __name__ == '__main__':
     all_results = []
     # for likelihood in ['g','msemu','hybridmu','adaptive']:
     for loss in ['adaptive']:
-        # for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLMformer']:
-        for model in ['AttLLM']:  # 'AttLLM'
+        # for model in ['RNN', 'Transformer',    'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLMformer']:
+        for model in ['TimeLLMformer']:  # 'AttLLM'
             args = deepcopy(default_args)
             # args.train_epochs = 3
             # args.patience = 2
@@ -102,10 +102,10 @@ if __name__ == '__main__':
             args.accelerate = False
             args.use_prompt = True
 
-            args.model_id = 'test1'
+            args.model_id = 'test13'
             args.loss = loss  # 'g' 'nb' 'mse' 'msemu' 'hybridmu'
 
-            args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
+            args.model = model  # [Autoformer, TimeLLM, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
 
             args = model_hyparameter_setup(args)
             _, res_metrics_df = main(args)

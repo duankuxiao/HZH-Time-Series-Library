@@ -8,7 +8,7 @@ from layers.Embed import DataEmbedding
 import torch.nn.functional as F
 
 from transformers import LlamaConfig, LlamaModel, LlamaTokenizer, GPT2Config, GPT2Model, GPT2Tokenizer, BertConfig, \
-    BertModel, BertTokenizer, AutoTokenizer
+    BertModel, BertTokenizer, AutoTokenizer, Qwen2Tokenizer, Qwen2Model, Qwen2Config
 from layers.Embed import PatchEmbedding
 import transformers
 from layers.StandardNorm import Normalize
@@ -204,13 +204,13 @@ class LLMBlock(nn.Module):
                     local_files_only=False
                 )
         elif configs.llm_model == 'QWEN':
-            self.bert_config = BertConfig.from_pretrained(r'D:\LLM\qwen')
+            self.bert_config = Qwen2Config.from_pretrained(r'D:\LLM\qwen')
 
             self.bert_config.num_hidden_layers = configs.llm_layers
             self.bert_config.output_attentions = True
             self.bert_config.output_hidden_states = True
             try:
-                self.llm_model = BertModel.from_pretrained(
+                self.llm_model = Qwen2Model.from_pretrained(
                     r'D:\LLM\qwen',
                     trust_remote_code=True,
                     local_files_only=True,
@@ -218,7 +218,7 @@ class LLMBlock(nn.Module):
                 )
             except EnvironmentError:  # downloads model from HF is not already done
                 print("Local model files not found. Attempting to download...")
-                self.llm_model = BertModel.from_pretrained(
+                self.llm_model = Qwen2Model.from_pretrained(
                     'Qwen/Qwen2-7B-Instruct',
                     trust_remote_code=True,
                     local_files_only=False,
@@ -226,14 +226,14 @@ class LLMBlock(nn.Module):
                 )
 
             try:
-                self.tokenizer = BertTokenizer.from_pretrained(
+                self.tokenizer = Qwen2Tokenizer.from_pretrained(
                     r'D:\LLM\qwen',
                     trust_remote_code=True,
                     local_files_only=True
                 )
             except EnvironmentError:  # downloads the tokenizer from HF if not already done
                 print("Local tokenizer files not found. Atempting to download them..")
-                self.tokenizer = BertTokenizer.from_pretrained(
+                self.tokenizer = Qwen2Tokenizer.from_pretrained(
                     'Qwen/Qwen2-7B-Instruct',
                     trust_remote_code=True,
                     local_files_only=False
@@ -306,7 +306,7 @@ class LLMBlock(nn.Module):
         self.head_nf = self.d_ff * self.patch_nums
 
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast' or self.task_name == 'interval_forecast':
-            self.output_projection = FlattenHead(configs.enc_in, self.head_nf, self.pred_len, head_dropout=configs.dropout)
+            self.output_projection = FlattenHead(configs.enc_in, self.head_nf, self.pred_len + self.seq_len, head_dropout=configs.dropout)
             self.output_projection.to(device=self.device)
 
         # if self.task_name == 'interval_forecast':
@@ -515,7 +515,7 @@ class ReprogrammingLayer(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, configs):
+    def __init__(self, configs,encoder_other_model = 'Linear'):
         super(Model, self).__init__()
         self.task_name = configs.task_name
         self.pred_len = configs.pred_len
@@ -525,17 +525,42 @@ class Model(nn.Module):
         self.likelihood = configs.likelihood
 
         # Encoder
-        # Embedding
-        self.enc_embedding = DataEmbedding(configs.enc_in-self.c_out, configs.d_model, configs.embed, configs.freq, configs.dropout)
+        self.encoder_other_model = encoder_other_model
+        transformer_d_model = 64  # configs.d_model
+        transformer_d_ff = transformer_d_model * 4  # configs.d_ff
+        transformer_enc_layers = configs.e_layers  # configs.e_layers
+        if self.encoder_other_model == 'Linear':
+            self.encoder_other = nn.Linear(configs.enc_in, transformer_d_model)
+            self.encoder_linear_projection = nn.Linear(configs.seq_len, configs.pred_len)
 
-        self.encoder = nn.Linear(configs.enc_in - configs.c_out, configs.d_model)  # 1
-        # self.encoder = nn.Linear(configs.enc_in, configs.d_model)  # 2
+        elif self.encoder_other_model == 'LSTM':
+            self.encoder_other = nn.LSTM(configs.enc_in, configs.rnn_dim, num_layers=configs.rnn_layers, batch_first=True)
+            self.encoder_linear_projection = nn.Linear(configs.seq_len, configs.pred_len)
 
+        elif self.encoder_other_model == 'Transformer':
+            self.enc_embedding = DataEmbedding(configs.enc_in, transformer_d_model, configs.embed, configs.freq, configs.dropout)
+            # self.encoder_linear_projection = nn.Linear(configs.seq_len, configs.pred_len)
+
+            self.encoder_other = Encoder(
+                [
+                    EncoderLayer(
+                        AttentionLayer(
+                            FullAttention(False, configs.factor, attention_dropout=configs.dropout,
+                                          output_attention=False), transformer_d_model, configs.n_heads),
+                        transformer_d_model,  # configs.d_model,
+                        transformer_d_ff,  # 4 * configs.d_model,
+                        dropout=configs.dropout,
+                        activation=configs.activation
+                    ) for l in range(transformer_enc_layers)
+                ],
+                norm_layer=torch.nn.LayerNorm(transformer_d_model)
+            )
         self.LLM_encoder = LLMBlock(configs)
 
         # Decoder
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast' or self.task_name == 'interval_forecast':
-            self.dec_embedding = DataEmbedding(configs.c_out, configs.d_model, configs.embed, configs.freq, configs.dropout)
+            # transformer_d_model = transformer_d_model
+            self.dec_embedding = DataEmbedding(configs.c_out, transformer_d_model, configs.embed, configs.freq, configs.dropout)
 
             # Embedding
             self.decoder = Decoder(
@@ -544,30 +569,30 @@ class Model(nn.Module):
                         AttentionLayer(
                             FullAttention(True, configs.factor, attention_dropout=configs.dropout,
                                           output_attention=False),
-                            configs.d_model, configs.n_heads),
+                            transformer_d_model, configs.n_heads),
                         AttentionLayer(
                             FullAttention(False, configs.factor, attention_dropout=configs.dropout,
                                           output_attention=False),
-                            configs.d_model, configs.n_heads),
-                        configs.d_model,
-                        4 * configs.d_model,
+                            transformer_d_model, configs.n_heads),
+                        transformer_d_model,
+                        4 * transformer_d_model,
                         dropout=configs.dropout,
                         activation=configs.activation,
                     )
                     for l in range(configs.d_layers)
                 ],
-                norm_layer=torch.nn.LayerNorm(configs.d_model),
+                norm_layer=torch.nn.LayerNorm(transformer_d_model),
             )
-            self.projection = nn.Linear(configs.d_model, configs.c_out)
+            self.projection = nn.Linear(transformer_d_model, configs.c_out)
             # self.projection = nn.Linear(configs.d_model, configs.pred_len, bias=True)
             # self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len+configs.label_len)
         if self.task_name == 'interval_forecast':
             if configs.likelihood == "g":
-                self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
+                self.likelihood_layer = Gaussian(transformer_d_model, configs.c_out)
             elif configs.likelihood == "nb":
-                self.likelihood_layer = NegativeBinomial(configs.d_model, configs.c_out)
+                self.likelihood_layer = NegativeBinomial(transformer_d_model, configs.c_out)
             else:
-                self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
+                self.likelihood_layer = Gaussian(transformer_d_model, configs.c_out)
         if self.task_name == 'imputation':
             self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
         if self.task_name == 'anomaly_detection':
@@ -627,15 +652,23 @@ class Model(nn.Module):
             x_forecast_ = self.forecast_projection(x_forecast[:,-self.pred_len:,:])
             x_enc = torch.cat((x_enc, x_forecast_), dim=1)
 
-        x_enc_other = x_enc[:,:,:-self.c_out]
         x_enc_target = x_enc[:,:,-self.c_out:]
 
         # 1
         enc_out_target = self.LLM_encoder(x_enc_target, x_mark_enc, x_dec, x_mark_dec, x_forecast)
-        enc_out_other = self.encoder(x_enc_other)
+        if self.encoder_other_model == 'Transformer':
+            enc_in = self.enc_embedding(x_enc, x_mark_enc)
+            enc_out, attns = self.encoder_other(enc_in)
+            # enc_out = self.encoder_linear_projection(enc_out.permute(0,2,1)).permute(0,2,1)
+        elif self.encoder_other_model == 'LSTM':
+            enc_out, (_) = self.encoder_other(x_enc)
+            enc_out = self.encoder_linear_projection(enc_out.permute(0, 2, 1)).permute(0, 2, 1)
+        elif self.encoder_other_model == 'Linear':
+            enc_out = self.encoder_other(x_enc)
+            enc_out = self.encoder_linear_projection(enc_out.permute(0, 2, 1)).permute(0, 2, 1)
         dec_in = enc_out_target
-        dec_in = self.dec_embedding(dec_in, x_mark_dec[:,-self.pred_len:,:])
-        dec_out = self.decoder(dec_in, enc_out_other, x_mask=None, cross_mask=None)
+        dec_in = self.dec_embedding(dec_in, x_mark_dec)
+        dec_out = self.decoder(dec_in, enc_out, x_mask=None, cross_mask=None)
         mu, sigma = self.likelihood_layer(dec_out)
 
         # 2
@@ -643,10 +676,11 @@ class Model(nn.Module):
         # enc_out = self.encoder(x_enc)
         # dec_in = self.dec_embedding(x_dec, x_mark_dec)
         # dec_out = self.decoder(dec_in, enc_out, x_mask=None, cross_mask=None)
+        output_len = self.pred_len + self.seq_len
 
-        mu = mu * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
-        mu = mu + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
-        sigma = sigma * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+        mu = mu * (stdev[:, :1, -self.c_out:].repeat(1, output_len, 1))
+        mu = mu + (means[:, :1, -self.c_out:].repeat(1, output_len, 1))
+        sigma = sigma * (stdev[:, :1, -self.c_out:].repeat(1, output_len, 1))
 
         # dec_out = self.projection(dec_out)
         # De-Normalization from Non-stationary Transformer

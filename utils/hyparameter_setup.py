@@ -6,13 +6,13 @@ import torch
 def model_hyparameter_setup(args):
     if args.model == 'TimeLLMformer' or args.model == 'AttLLM':
         args.learning_rate = 0.01  # 0.001 for imputation 0.0001 for forecast(0.01 for LLM model)
-        args.patience = 5
+        args.patience = 6
         args.lradj = 'PEMS'
-        args.llm_model = 'BERT'
+        args.llm_model = 'LLAMA1b'
         args.d_model = 32
         args.d_ff = 64
-        args.e_layers = 4
-        args.d_layers = 3
+        args.e_layers = 2
+        args.d_layers = 2
         args.llm_layers = 6
 
     if 'RNN' in args.model:
