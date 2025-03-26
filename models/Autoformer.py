@@ -23,6 +23,7 @@ class Model(nn.Module):
         self.pred_len = configs.pred_len
         self.c_out = configs.c_out
         self.output_attention = configs.output_attention
+        self.use_forecast = configs.use_forecast
         self.likelihood = configs.likelihood
 
         # Decomp
@@ -100,9 +101,9 @@ class Model(nn.Module):
                     for l in range(configs.d_layers)
                 ],
                 norm_layer=my_Layernorm(configs.d_model),
-                # projection=nn.Linear(configs.d_model, configs.d_model, bias=True)
+                projection=nn.Linear(configs.d_model, configs.d_model, bias=True)
             )
-            self.output_projection = nn.Linear(configs.d_model, configs.dec_in, bias=True)
+            # self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
 
         if self.task_name == 'imputation':
             self.projection = nn.Linear(
@@ -116,6 +117,8 @@ class Model(nn.Module):
             self.projection = nn.Linear(
                 configs.d_model * configs.seq_len, configs.num_class)
         if self.task_name == 'interval_forecast':
+            self.projection = nn.Linear(configs.dec_in, configs.d_model, bias=True)
+
             if configs.likelihood == "g":
                 self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
             elif configs.likelihood == "nb":
@@ -142,6 +145,19 @@ class Model(nn.Module):
         return dec_out
 
     def interval_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast):
+        # Normalization from Non-stationary Transformer
+        means = x_enc.mean(1, keepdim=True).detach()
+        x_enc = x_enc - means
+        stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
+        x_enc /= stdev
+        if self.use_forecast:
+            means_forecast = x_forecast.mean(1, keepdim=True).detach()
+            x_enc_forecast = x_forecast - means_forecast
+            stdev_forecast = torch.sqrt(torch.var(x_enc_forecast, dim=1, keepdim=True, unbiased=False) + 1e-5)
+            x_forecast /= stdev_forecast
+            x_forecast_ = self.forecast_projection(x_forecast[:, -self.pred_len:, :])
+            x_enc = torch.cat((x_enc, x_forecast_), dim=1)
+
         # decomp init
         mean = torch.mean(x_enc, dim=1).unsqueeze(1).repeat(1, self.pred_len, 1)
         zeros = torch.zeros([x_enc.shape[0], self.pred_len, x_enc.shape[2]], device=x_enc.device)
@@ -157,21 +173,15 @@ class Model(nn.Module):
         seasonal_part, trend_part = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None, trend=trend_init)
 
         # final
-        # dec_out = trend_part + seasonal_part
-        # mu, sigma = self.likelihood_layer(dec_out)
-        # if self.likelihood == "g":
-        #     dec_out_sample = gaussian_sample(mu, sigma)
-        # elif self.likelihood == "nb":
-        #     alpha_t = sigma
-        #     mu_t = mu
-        #     dec_out_sample = negative_binomial_sample(mu_t, alpha_t)
-        # else:
-        #     dec_out_sample = gaussian_sample(mu, sigma)
-        # dec_out = self.output_projection(dec_out)
+        dec_out = self.projection(trend_part) + seasonal_part
+        mu, sigma = self.likelihood_layer(dec_out)
+        mu = mu * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
+        mu = mu + (means[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
+        sigma = sigma * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
 
-        mu, sigma = self.likelihood_layer(seasonal_part)
-        seasonal_part = self.output_projection(seasonal_part)
-        dec_out = trend_part + seasonal_part
+        # mu, sigma = self.likelihood_layer(seasonal_part)
+        # seasonal_part = self.output_projection(seasonal_part)
+        # dec_out = trend_part + seasonal_part
 
         return dec_out, mu, sigma
 
@@ -223,5 +233,5 @@ class Model(nn.Module):
             return dec_out  # [B, N]
         if self.task_name == 'interval_forecast':
             dec_out, mu, sigama = self.interval_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
-            return dec_out[:, -self.pred_len:, :], mu[:, -self.pred_len:, :], sigama[:, -self.pred_len:, :]
+            return dec_out[:, -self.pred_len:, -self.c_out:], mu[:, -self.pred_len:, -self.c_out:], sigama[:, -self.pred_len:, -self.c_out:]
         return None

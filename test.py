@@ -91,7 +91,7 @@ if __name__ == '__main__':
     all_results = []
 
     # for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLMformer']:
-    for model in ['AttLLM']:
+    for model in ['TimeLLMformer']:
         args = deepcopy(default_args)
 
         args.seq_len = 72
@@ -101,7 +101,7 @@ if __name__ == '__main__':
         args.accelerate = False
         args.use_prompt = True
 
-        args.model_id = 'test_fLinear'
+        args.model_id = 'MSE'
         args.loss = 'MSE'  # 'g' 'nb' 'mse' 'msemu' 'hybridmu'
 
         args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]

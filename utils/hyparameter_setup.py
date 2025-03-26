@@ -8,7 +8,7 @@ def model_hyparameter_setup(args):
         args.learning_rate = 0.01  # 0.001 for imputation 0.0001 for forecast(0.01 for LLM model)
         args.patience = 6
         args.lradj = 'PEMS'
-        args.llm_model = 'LLAMA1b'
+        args.llm_model = 'GPT2'  # defalut GPT2
         args.d_model = 32
         args.d_ff = 64
         args.e_layers = 2
@@ -25,10 +25,13 @@ def model_hyparameter_setup(args):
     if args.model == 'Informer':  # default
         args.factor = 5
         args.e_layers = 4
-        args.d_layers = 2
+        args.d_layers = 1
 
     if args.model == 'Autoformer':  # default
+        # args.lradj = 'PEMS'
         args.dropout = 0.05
+        args.learning_rate = 0.0001
+        args.e_layers = 4
 
     if args.model == 'iTransformer':  # default
         args.learning_rate = 0.001

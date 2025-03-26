@@ -620,21 +620,29 @@ class Model(nn.Module):
             x_forecast_ = self.forecast_projection(x_forecast[:,-self.pred_len:,:])
             x_enc = torch.cat((x_enc, x_forecast_), dim=1)
 
-        x_enc_other = x_enc[:,:,:-self.c_out]
         x_enc_target = x_enc[:,:,-self.c_out:]
 
         enc_out_target = self.LLM_encoder(x_enc_target, x_mark_enc, x_dec, x_mark_dec, x_forecast)
-        enc_out_other = self.encoder(x_enc_other)
+        if self.encoder_other_model == 'Transformer':
+            enc_in = self.enc_embedding(x_enc, x_mark_enc)
+            enc_out, attns = self.encoder_other(enc_in)
+            # enc_out = self.encoder_linear_projection(enc_out.permute(0,2,1)).permute(0,2,1)
+        elif self.encoder_other_model == 'LSTM':
+            enc_out, (_) = self.encoder_other(x_enc)
+            enc_out = self.encoder_linear_projection(enc_out.permute(0, 2, 1)).permute(0, 2, 1)
+        elif self.encoder_other_model == 'Linear':
+            enc_out = self.encoder_other(x_enc)
+            enc_out = self.encoder_linear_projection(enc_out.permute(0, 2, 1)).permute(0, 2, 1)
 
         dec_in = enc_out_target
-        dec_in = self.dec_embedding(dec_in, x_mark_dec[:,-self.pred_len:,:])
+        dec_in = self.dec_embedding(dec_in, x_mark_dec)
 
-        dec_out = self.decoder(dec_in, enc_out_other, x_mask=None, cross_mask=None)
+        dec_out = self.decoder(dec_in, enc_out, x_mask=None, cross_mask=None)
         dec_out = self.projection(dec_out)
 
         # De-Normalization from Non-stationary Transformer
-        dec_out = dec_out * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len, 1))
-        dec_out = dec_out + (means[:, :1, -self.c_out:].repeat(1, self.pred_len, 1))
+        dec_out = dec_out * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len+self.seq_len, 1))
+        dec_out = dec_out + (means[:, :1, -self.c_out:].repeat(1, self.pred_len+self.seq_len, 1))
 
         return dec_out
 

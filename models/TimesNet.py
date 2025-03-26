@@ -170,15 +170,15 @@ class Model(nn.Module):
             enc_out = self.layer_norm(self.model[i](enc_out))
 
         mu, sigma = self.likelihood_layer(enc_out)
-        mu = mu * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
-        mu = mu + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
-        sigma = sigma * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
+        mu = mu * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
+        mu = mu + (means[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
+        sigma = sigma * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
         # porject back
         dec_out = self.projection(enc_out)
 
         # De-Normalization from Non-stationary Transformer
-        dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
-        dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
+        dec_out = dec_out * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
+        dec_out = dec_out + (means[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
         return dec_out, mu, sigma
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):

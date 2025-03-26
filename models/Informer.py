@@ -19,7 +19,8 @@ class Model(nn.Module):
         self.pred_len = configs.pred_len
         self.likelihood = configs.likelihood
         self.label_len = configs.label_len
-
+        self.use_forecast = configs.use_forecast
+        self.c_out = configs.c_out
         # Embedding
         self.enc_embedding = DataEmbedding(configs.enc_in, configs.d_model, configs.embed, configs.freq,
                                            configs.dropout)
@@ -94,14 +95,35 @@ class Model(nn.Module):
         return dec_out  # [B, L, D]
 
     def interval_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast=None):
-        enc_out = self.enc_embedding(x_enc, x_mark_enc)
-        dec_out = self.dec_embedding(x_dec, x_mark_dec)
-        enc_out, attns = self.encoder(enc_out, attn_mask=None)
+        # Normalization from Non-stationary Transformer
+        means = x_enc.mean(1, keepdim=True).detach()
+        x_enc = x_enc - means
+        stdev = torch.sqrt(
+            torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
+        x_enc /= stdev
+        if self.use_forecast:
+            means_forecast = x_forecast.mean(1, keepdim=True).detach()
+            x_enc_forecast = x_forecast - means_forecast
+            stdev_forecast = torch.sqrt(torch.var(x_enc_forecast, dim=1, keepdim=True, unbiased=False) + 1e-5)
+            x_forecast /= stdev_forecast
+            x_forecast_ = self.forecast_projection(x_forecast[:, -self.pred_len:, :])
+            x_enc = torch.cat((x_enc, x_forecast_), dim=1)
+            x_mark_enc = x_mark_dec
 
-        dec_out = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None)
+        enc_in = self.enc_embedding(x_enc, x_mark_enc)
+        enc_out, attns = self.encoder(enc_in, attn_mask=None)
+        dec_in = self.dec_embedding(x_dec, x_mark_dec)
+        dec_out = self.decoder(dec_in, enc_out, x_mask=None, cross_mask=None)
         mu, sigma = self.likelihood_layer(dec_out)
+        mu = mu * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
+        mu = mu + (means[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
+        sigma = sigma * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
 
         dec_out = self.projection(dec_out)
+        # De-Normalization from Non-stationary Transformer
+        dec_out = dec_out * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
+        dec_out = dec_out + (means[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
+
         return dec_out, mu, sigma  # [B, L, D]
 
     def short_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):

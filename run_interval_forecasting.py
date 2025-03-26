@@ -87,10 +87,10 @@ if __name__ == '__main__':
     # from configs.solar_radiation_configs import args
 
     all_results = []
-    # for likelihood in ['g','msemu','hybridmu','adaptive']:
+    # for loss in ['g','msemu','hybridmu','adaptive']:
     for loss in ['adaptive']:
         # for model in ['RNN', 'Transformer',    'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLMformer']:
-        for model in ['TimeLLMformer']:  # 'AttLLM'
+        for model in ['Informer']:  # 'AttLLM'
             args = deepcopy(default_args)
             # args.train_epochs = 3
             # args.patience = 2
@@ -102,12 +102,13 @@ if __name__ == '__main__':
             args.accelerate = False
             args.use_prompt = True
 
-            args.model_id = 'test13'
+            args.model_id = 'test'
             args.loss = loss  # 'g' 'nb' 'mse' 'msemu' 'hybridmu'
 
             args.model = model  # [Autoformer, TimeLLM, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
 
             args = model_hyparameter_setup(args)
+            # args.train_epochs = 1
             _, res_metrics_df = main(args)
             res_metrics_df.insert(0, 'model', model)
             all_results.append(res_metrics_df)

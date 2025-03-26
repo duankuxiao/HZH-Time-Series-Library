@@ -224,18 +224,20 @@ class Exp_Forecast(Exp_Basic):
 
                     loss = self._loss_function(criterion, outputs, batch_y, mu, sigma)
                     train_loss.append(loss.item())
+                    if torch.isnan(loss):
+                        break
 
                 if self.args.accelerate:
                     self.accelerator.print("\titers: {0}, epoch: {1} | loss: {2:.7f}".format(i + 1, epoch + 1, loss.item()))
                     speed = (time.time() - time_now) / iter_count
-                    left_time = speed * ((self.args.train_epochs - epoch) * train_steps - i)
+                    left_time = speed * ((self.args.train_epochs - epoch - 1) * train_steps - i)
                     self.accelerator.print('\tspeed: {:.4f}s/iter; left time: {:.2f}min'.format(speed, left_time / 60))
                 else:
                     verbose_interval = (len(train_loader) // 5) if len(train_loader) > 5 else 1
                     if (i + 1) % verbose_interval == 0:
                         print("\titers: {0}, epoch: {1} | loss: {2:.7f}".format(i + 1, epoch + 1, loss.item()))
                         speed = (time.time() - time_now) / iter_count
-                        left_time = speed * ((self.args.train_epochs - epoch) * train_steps - i)
+                        left_time = speed * ((self.args.train_epochs - epoch - 1) * train_steps - i)
                         print('\tspeed: {:.4f}s/iter; left time: {:.2f}min'.format(speed, left_time / 60))
                         iter_count = 0
                         time_now = time.time()
@@ -267,9 +269,11 @@ class Exp_Forecast(Exp_Basic):
 
             # test_loss = self.vali(test_data, test_loader, criterion)
             cost_time = round((time.time() - epoch_time) / 60, 2)
-            print(" Epoch: {} cost time: {} min".format(epoch + 1, cost_time))
-            print("☆☆☆☆☆Train Loss: {0:.7f} Vali Loss: {1:.7f}".format(train_loss, vali_loss))
+            print(" Epoch: {} cost time: {} min  ".format(epoch + 1, cost_time),"☆☆☆☆☆Train Loss: {0:.7f} Vali Loss: {1:.7f}".format(train_loss, vali_loss))
             early_stopping(vali_loss, self.model, path)
+
+            if np.isnan(vali_loss):
+                break
 
             if early_stopping.early_stop:
                 print("Early stopping")
