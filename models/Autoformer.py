@@ -75,8 +75,10 @@ class Model(nn.Module):
                     for l in range(configs.d_layers)
                 ],
                 norm_layer=my_Layernorm(configs.d_model),
-                projection=nn.Linear(configs.d_model, configs.c_out, bias=True)
+                projection=nn.Linear(configs.d_model, configs.dec_in, bias=True)
             )
+            # self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
+
         if self.task_name == 'interval_forecast':
             self.dec_embedding = DataEmbedding_wo_pos(configs.dec_in, configs.d_model, configs.embed, configs.freq,
                                                       configs.dropout)
@@ -101,7 +103,7 @@ class Model(nn.Module):
                     for l in range(configs.d_layers)
                 ],
                 norm_layer=my_Layernorm(configs.d_model),
-                projection=nn.Linear(configs.d_model, configs.d_model, bias=True)
+                projection=nn.Linear(configs.d_model, configs.dec_in, bias=True)
             )
             # self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
 
@@ -141,7 +143,8 @@ class Model(nn.Module):
         dec_out = self.dec_embedding(seasonal_init, x_mark_dec)
         seasonal_part, trend_part = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None, trend=trend_init)
         # final
-        dec_out = trend_part[:,:,-self.c_out:] + seasonal_part
+        dec_out = trend_part + seasonal_part
+        # dec_out = self.output_projection(dec_out)
         return dec_out
 
     def interval_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast):

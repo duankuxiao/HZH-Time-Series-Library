@@ -53,10 +53,10 @@ class Model(nn.Module):
 
     def encoder(self, x_enc,x_forecast=None):
         # Normalization from Non-stationary Transformer
-        # means = x_enc.mean(1, keepdim=True).detach()
-        # x_enc = x_enc - means
-        # stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
-        # x_enc /= stdev
+        means = x_enc.mean(1, keepdim=True).detach()
+        x_enc = x_enc - means
+        stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
+        x_enc /= stdev
 
         if self.use_forecast:
             # means_forecast = x_forecast.mean(1, keepdim=True).detach()
@@ -70,8 +70,8 @@ class Model(nn.Module):
         x = self.linear_predict(x.permute(0, 2, 1)).permute(0, 2, 1)
         dec_out = self.output_projection(x)
         # De-Normalization from Non-stationary Transformer
-        # dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
-        # dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+        dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+        dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
         return dec_out
 
     def forecast(self, x_enc,x_forecast=None):

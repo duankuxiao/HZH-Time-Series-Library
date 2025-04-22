@@ -7,7 +7,9 @@ args.data_path = 'Tokyo.csv'
 args.source_data_path = 'Tokyo.csv'
 
 args.features = 'M'
-args.target = ['Temperature','Global_horizontal_irradiance']
+# args.target = ['Temperature','Global_horizontal_irradiance']
+args.target = ['Global_horizontal_irradiance']
+
 args.num_train = 8760+24
 args.num_test = 8760
 args.seq_len = 24 * 3

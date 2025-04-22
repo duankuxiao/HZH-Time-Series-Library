@@ -61,8 +61,10 @@ def gaussian_likelihood_loss(target, mu, sigma,eps=1e-6):
     with torch.no_grad():
         sigma.clamp_(min=eps)
 
-    # negative_likelihood = torch.log(sigma + 1) + (target - mu) ** 2 / (2 * sigma ** 2) + 6
-    negative_likelihood = 0.5 * (torch.log(sigma+1) + (mu - target)**2 / sigma) + 0.5 * math.log(2 * torch.pi)
+    # negative_likelihood = torch.log(sigma + 1) + (target - mu) ** 2 / (2 * sigma ** 2) + 6  # deepar
+    negative_likelihood = 0.5 * (torch.log(sigma+1) + (mu - target)**2 / sigma) + 0.5 * math.log(2 * torch.pi)  # sigma1
+    # negative_likelihood = 0.5 * (torch.log(sigma) + (mu - target)**2 / sigma) + 0.5 * math.log(2 * torch.pi)  # g
+
     return negative_likelihood.mean()
 
 

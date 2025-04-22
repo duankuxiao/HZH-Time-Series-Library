@@ -17,6 +17,7 @@ class Model(nn.Module):
         super(Model, self).__init__()
         self.task_name = configs.task_name
         self.pred_len = configs.pred_len
+        self.seq_len = configs.seq_len
         self.likelihood = configs.likelihood
         self.label_len = configs.label_len
         self.use_forecast = configs.use_forecast

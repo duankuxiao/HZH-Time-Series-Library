@@ -10,16 +10,25 @@ def model_hyparameter_setup(args):
 
         args.patience = 6
         args.lradj = 'PEMS'
-        args.llm_model = 'GPT2'  # defalut GPT2
-        args.d_model = 32
-        args.d_ff = 64
-        args.e_layers = 8  # 2
-        args.d_layers = 3  # 2
-        args.llm_layers = 16
+        args.llm_model = 'BERT'  # defalut GPT2
+        # args.d_model = 32
+        # args.d_ff = args.d_model * 2
+        args.e_layers = 1  # 2
+        args.d_layers = 4  # 2
+        # args.llm_layers = 6
+
+        args.d_model = 8
+        args.d_ff = args.d_model * 2
+        args.llm_layers = 6
+
 
     if 'RNN' in args.model:
-        args.rnn_dim = 512
-        args.rnn_layers = 2
+        args.learning_rate = 0.001  # 0.0001 for forecast   0.001 for imputation
+        # args.rnn_dim = 512  # default
+        # args.rnn_layers = 2  # default
+
+        args.rnn_dim = 512  # default
+        args.rnn_layers = 4  # default
 
     if args.model == 'Transformer':
         args.d_model = 64
@@ -28,30 +37,39 @@ def model_hyparameter_setup(args):
         args.d_layers = 1  # default 2
 
     if args.model == 'DLinear':
+        args.learning_rate = 0.001  # 0.0001 for forecast   0.001 for imputation
         args.moving_avg = 25   # default 25
 
     if args.model == 'Informer':
-        # if
-        args.factor = 1  # default 5
+        args.factor = 5  # default 5
         args.d_model = 64
         args.d_ff = 256
-        args.e_layers = 2  # default 4
-        args.d_layers = 1  # default 2
+        args.e_layers = 4  # default 4
+        args.d_layers = 2  # default 2
 
     if args.model == 'Autoformer':  # default
         # args.lradj = 'PEMS'
-        args.dropout = 0.05
-        args.learning_rate = 0.001
+        args.dropout = 0.05  # default
+        args.learning_rate = 0.0011
+
         args.e_layers = 4
+        args.d_model = 256  # default
+        args.d_ff = 1024  # default
+
+        # args.dropout = 0.1
+        # args.d_model = 256
+        # args.d_ff = 1024
+        # args.e_layers = 2
+        # args.d_layers = 1
 
     if args.model == 'iTransformer':
-        # args.learning_rate = 0.001 # default
-        # args.e_layers = 3  # default
-        # args.d_model = 256  # default
-        # args.d_ff = 1024  # default
-        args.d_model = 128
-        args.d_ff = 512
-        args.e_layers = 4
+        args.learning_rate = 0.001  # default
+        args.factor = 3  # default
+        args.d_model = 256  # default
+        args.d_ff = 1024  # default
+        # args.d_model = 512
+        # args.d_ff = 2048
+        # args.e_layers = 4
 
     if args.model == 'TimeLLM':  # default
         args.patience = 3
@@ -74,9 +92,9 @@ def model_hyparameter_setup(args):
         args.n_heads = 16  # for small dataset 4
 
     if args.model == 'TimesNet':
-        args.learning_rate = 0.0001  # 0.0001 for forecast   0.001 for imputation
+        args.learning_rate = 0.001  # 0.0001 for forecast   0.001 for imputation
         args.d_model = 32  # min{max[2**log(seq_dim),32],512} for forecast   min{max[2**log(seq_dim),64],128} for imputation
-        args.d_ff = 4 * args.d_model
+        args.d_ff = 128
         args.e_layers = 2
         args.top_k = 5  # 5 for forecast   3 for imputation, classification, anomaly detection
 

@@ -1,6 +1,8 @@
 import os
 import urllib.request  # pip install urllib
 
+import numpy as np
+from tqdm import tqdm
 import pandas as pd
 from bs4 import BeautifulSoup  # pip3 install Beautifulsoup4
 import re
@@ -106,85 +108,106 @@ def TWH_scraping_48h():
     return temp_data, PoP_data, RH_data, C_data, Acc_data, Weather_data,WS_data,WD_data
 
 
-def get_JMA_data(start_date, end_date, city='Tokyo',freq='hour', output=True):
+def get_JMA_data(start_date, end_date, city='Tokyo', freq='hour', output=True):
     '''
+    获取气象厅气象数据
 
-    :param startdate: 開始日付
-    :param enddate: 終了日付
-    :param output: csv出力
-    :return: 気象庁気象データをいれたDataFrame
+    :param start_date: 开始日期（字符串或 datetime）
+    :param end_date: 结束日期（字符串或 datetime）
+    :param city: 城市名称
+    :param freq: 'hour' 或 '10min'
+    :param output: 是否保存为 CSV
+    :return: 包含气象数据的 DataFrame
     '''
     if isinstance(start_date, str):
         start_date = datetime.datetime.strptime(start_date, '%Y/%m/%d')
     if isinstance(end_date, str):
         end_date = datetime.datetime.strptime(end_date, '%Y/%m/%d')
+
     date = start_date
+
     if freq == 'hour':
-        columns = ['Year', 'Month', 'Day', 'Hour', 'Atmospheric_pressure_local', 'Atmospheric_pressure_sea_level', 'Precipitation', 'Temperature', 'Dew_point',
-                   'Vapor_pressure', 'Relative_humidity',
-                   'Wind_speed', 'Wind_direction', 'Sunshine_duration', 'Global_horizontal_irradiance', 'Snowfall', 'Snow_accumulation', 'Weather', 'Cloud_cover']
-    # ["年","月","日", "時間", "気圧（現地）", "気圧（海面）","降水量", "気温", "露点湿度", "蒸気圧", "湿度", "風速", "風向", "日照時間", "全天日射量", "降雪", "積雪","天気","雲量"]
+        columns = ['Year', 'Month', 'Day', 'Hour', 'Atmospheric_pressure_local', 'Atmospheric_pressure_sea_level',
+                   'Precipitation', 'Temperature', 'Dew_point', 'Vapor_pressure', 'Relative_humidity',
+                   'Wind_speed', 'Wind_direction', 'Sunshine_duration', 'Global_horizontal_irradiance',
+                   'Snowfall', 'Snow_accumulation', 'Weather', 'Cloud_cover']
     elif freq == '10min':
-        columns = ['Year', 'Month', 'Day', 'Hour', 'Min', 'Atmospheric_pressure_local', 'Atmospheric_pressure_sea_level', 'Precipitation', 'Temperature', 'Relative_humidity',
-                   'Wind_speed_mean', 'Wind_direction_mean', 'Wind_speed_max', 'Wind_direction_max', 'Sunshine_duration']
-    meteorologicaldata = pd.DataFrame(columns=columns)
+        columns = ['Year', 'Month', 'Day', 'Hour', 'Min', 'Atmospheric_pressure_local', 'Atmospheric_pressure_sea_level',
+                   'Precipitation', 'Temperature', 'Relative_humidity', 'Wind_speed_mean', 'Wind_direction_mean',
+                   'Wind_speed_max', 'Wind_direction_max', 'Sunshine_duration']
+    else:
+        raise ValueError("Only 'hour' and '10min' frequencies are supported.")
 
-    index_list = []
-    day_count = 0
+    data_frames = []
+
     try:
-        while date != end_date + datetime.timedelta(days=1):
+        while date <= end_date:
+            try:
+                data_list = JMA_scrap_1day(date, city=city, freq=freq)
+                daily_df = pd.DataFrame(columns=columns)
+                index_list = []
 
-            data_per_hour_list = JMA_scrap_1day(date,city=city,freq=freq)
-            if freq == 'hour':
-                for data_per_hour in data_per_hour_list:
-                    index_date = datetime.datetime(date.year, date.month, date.day, 1, 0, 0)
-                    index = data_per_hour_list.index(data_per_hour)
-                    index_date = index_date + datetime.timedelta(hours=index)
-                    index_date = datetime.datetime(index_date.year, index_date.month, index_date.day, index_date.hour, 0, 0)
-                    index_list.append(index_date)
-                    index = index + day_count * 24
-                    meteorologicaldata.loc[index, 'Year'] = index_date.year
-                    meteorologicaldata.loc[index, 'Month'] = index_date.month
-                    meteorologicaldata.loc[index, 'Day'] = index_date.day
-                    meteorologicaldata.loc[index, 'Hour'] = index_date.hour
-                    for i in range(len(data_per_hour) - 1):
-                        try:
-                            data = str2float(data_per_hour[i][0])
-                            meteorologicaldata.iloc[index, i + 4] = data
-                        except:
-                            meteorologicaldata.iloc[index, i + 4] = '--'
-            elif freq == '10min':
-                for data_per_10min in data_per_hour_list:
-                    index_date = datetime.datetime(date.year, date.month, date.day, 1, 0, 0)
-                    index = data_per_hour_list.index(data_per_10min)
-                    index_date = index_date + datetime.timedelta(minutes=10*index)
-                    index_date = datetime.datetime(index_date.year, index_date.month, index_date.day, index_date.hour, index_date.minute, 0)
-                    index_list.append(index_date)
-                    index = index + day_count * 6 * 24
-                    meteorologicaldata.loc[index, 'Year'] = index_date.year
-                    meteorologicaldata.loc[index, 'Month'] = index_date.month
-                    meteorologicaldata.loc[index, 'Day'] = index_date.day
-                    meteorologicaldata.loc[index, 'Hour'] = index_date.hour
-                    meteorologicaldata.loc[index, 'Min'] = index_date.minute
-                    for i in range(len(data_per_10min)):
-                        try:
-                            data = str2float(data_per_10min[i][0])
-                            meteorologicaldata.iloc[index, i + 5] = data
-                        except:
-                            meteorologicaldata.iloc[index, i + 5] = '--'
+                if freq == 'hour':
+                    for index in range(len(data_list)):
+                        data_per_hour = data_list[index]
+                        index_date = datetime.datetime(date.year, date.month, date.day, 1) + datetime.timedelta(hours=index)
+                        index_list.append(index_date)
 
-            day_count += 1
+                        row = [index_date.year, index_date.month, index_date.day, index_date.hour]
+                        for i in range(len(data_per_hour) - 1):
+                            try:
+                                row.append(str2float(data_per_hour[i][0]))
+                            except:
+                                row.append(None)
+                        daily_df.loc[len(daily_df)] = row
+
+                elif freq == '10min':
+                    for index in range(len(data_list)):
+                        data_per_10min = data_list[index]
+                        index_date = datetime.datetime(date.year, date.month, date.day) + datetime.timedelta(minutes=10 * (index + 1))
+                        index_list.append(index_date)
+
+                        row = [index_date.year, index_date.month, index_date.day, index_date.hour, index_date.minute]
+                        for i in range(len(data_per_10min)):
+                            try:
+                                row.append(str2float(data_per_10min[i][0]))
+                            except:
+                                row.append(None)
+                        daily_df.loc[len(daily_df)] = row
+
+                daily_df.index = index_list
+                data_frames.append(daily_df)
+                print(f"✅ {date.strftime('%Y-%m-%d')} done.")
+
+            except Exception as e:
+                print(f"❌ Error on {date.strftime('%Y-%m-%d')}: {e}")
+
             date += datetime.timedelta(days=1)
 
+        # 合并所有天的数据
+        meteorologicaldata = pd.concat(data_frames)
+        meteorologicaldata.index.name = 'Datetime'
+        meteorologicaldata['Precipitation'] = pd.to_numeric(meteorologicaldata['Precipitation'], errors='coerce')
+        meteorologicaldata['Sunshine_duration'] = pd.to_numeric(meteorologicaldata['Sunshine_duration'], errors='coerce')
+        meteorologicaldata['Global_horizontal_irradiance'] = pd.to_numeric(meteorologicaldata['Global_horizontal_irradiance'], errors='coerce')
+
+        meteorologicaldata['Precipitation'] = meteorologicaldata['Precipitation'].fillna(0)
+        meteorologicaldata['Sunshine_duration'] = meteorologicaldata['Sunshine_duration'].fillna(0)
+        meteorologicaldata['Global_horizontal_irradiance'] = meteorologicaldata['Global_horizontal_irradiance'].fillna(0)
+
+        # 输出为 CSV 文件
+        if output:
             startdate_str = start_date.strftime('%Y%m%d')
             enddate_str = end_date.strftime('%Y%m%d')
-            meteorologicaldata.index = index_list
-            if output == True:
-                meteorologicaldata.to_csv('{}_{}_{}_{}.csv'.format(city,startdate_str, enddate_str,freq),encoding='SHIFT-JIS')
+            filename = f'{city}_{startdate_str}_{enddate_str}_{freq}.csv'
+            meteorologicaldata.to_csv(filename, encoding='SHIFT-JIS')
+            print(f"✅ 文件已保存为：{filename}")
+
         return meteorologicaldata
 
-    except:
-        print('{}-{}-{} Meteorological data are not updated'.format(start_date.year, start_date.month, start_date.day))
+    except Exception as e:
+        print("发生异常:", e)
+        return pd.DataFrame()
 
 
 def get_TWH_data(output=True):
@@ -271,16 +294,22 @@ def get_data(start_date, output=True):
 
 
 if __name__ == '__main__':
-    start_date = '2024/12/6'
-    end_date = '2025/2/24'
-    city = 'Chiba'  # Sapporo Sendai Tokyo Osaka Fukuoka Naha Chiba
-    jma_data = get_JMA_data(start_date, end_date, freq='10min', city=city)
+    start_date = '2016/1/1'
+    end_date = '2019/12/31'
+    city = 'Tokyo'  # Sapporo Sendai Tokyo Osaka Fukuoka Naha Chiba
+    # jma_data = get_JMA_data(start_date, end_date, freq='10min', city=city)
+    jma_data = get_JMA_data(start_date, end_date, freq='hour', city=city)
 
-    jma_data = pd.read_csv('Chiba_20241206_20250224_10min.csv',index_col=0,encoding='SHIFT-JIS')
-    jma_data.index = pd.to_datetime(jma_data.index)
+    # start_date = '2024/12/6'
+    # end_date = '2025/2/24'
+    # city = 'Chiba'  # Sapporo Sendai Tokyo Osaka Fukuoka Naha Chiba
+    # jma_data = get_JMA_data(start_date, end_date, freq='10min', city=city)
 
-    df_resampled = jma_data.resample('5T').interpolate(method='linear')
-    df_resampled.to_csv('Chiba_20241206_20250224_5min.csv',encoding='SHIFT-JIS')
+    # jma_data = pd.read_csv('Chiba_20241206_20250224_10min.csv',index_col=0,encoding='SHIFT-JIS')
+    # jma_data.index = pd.to_datetime(jma_data.index)
+    #
+    # df_resampled = jma_data.resample('5T').interpolate(method='linear')
+    # df_resampled.to_csv('Chiba_20241206_20250224_5min.csv',encoding='SHIFT-JIS')
 
     # data = pd.read_csv('Chiba_20241207_20250204_5min.csv',encoding='SHIFT-JIS',index_col=0)
     # print(data.columns)

@@ -306,7 +306,7 @@ class LLMBlock(nn.Module):
         self.head_nf = self.d_ff * self.patch_nums
 
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast' or self.task_name == 'interval_forecast':
-            self.output_projection = FlattenHead(configs.enc_in, self.head_nf, self.pred_len + self.seq_len, head_dropout=configs.dropout)
+            self.output_projection = FlattenHead(configs.enc_in, self.head_nf, self.pred_len + configs.label_len, head_dropout=configs.dropout)
             self.output_projection.to(device=self.device)
 
         # if self.task_name == 'interval_forecast':
@@ -520,6 +520,7 @@ class Model(nn.Module):
         self.task_name = configs.task_name
         self.pred_len = configs.pred_len
         self.seq_len = configs.seq_len
+        self.label_len = configs.label_len
         self.c_out = configs.c_out
         self.output_attention = configs.output_attention
         self.likelihood = configs.likelihood
@@ -575,7 +576,7 @@ class Model(nn.Module):
                                           output_attention=False),
                             transformer_d_model, configs.n_heads),
                         transformer_d_model,
-                        4 * transformer_d_model,
+                        transformer_d_ff,
                         dropout=configs.dropout,
                         activation=configs.activation,
                     )
@@ -635,14 +636,14 @@ class Model(nn.Module):
             enc_out = self.encoder_linear_projection(enc_out.permute(0, 2, 1)).permute(0, 2, 1)
 
         dec_in = enc_out_target
-        dec_in = self.dec_embedding(dec_in, x_mark_dec)
+        dec_in = self.dec_embedding(dec_in, x_mark_dec[:,-self.label_len-self.pred_len:,:])
 
         dec_out = self.decoder(dec_in, enc_out, x_mask=None, cross_mask=None)
         dec_out = self.projection(dec_out)
 
         # De-Normalization from Non-stationary Transformer
-        dec_out = dec_out * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len+self.seq_len, 1))
-        dec_out = dec_out + (means[:, :1, -self.c_out:].repeat(1, self.pred_len+self.seq_len, 1))
+        dec_out = dec_out * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len+self.label_len, 1))
+        dec_out = dec_out + (means[:, :1, -self.c_out:].repeat(1, self.pred_len+self.label_len, 1))
 
         return dec_out
 

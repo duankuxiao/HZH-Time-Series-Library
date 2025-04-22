@@ -28,8 +28,46 @@ def res_evaluation(res_path,data=None):
         metrics_df.to_csv(os.path.join(res_path, 'metrics_results_{}.csv'.format(data)))
     print('RMSE: {} MAE: {} R2: {}'.format(rmse,mae,r2))
 
+import os
+import pandas as pd
+
+
+
+
 if __name__ == '__main__':
-    # data = 'Sapporo'
-    data = None
-    res_path = r'D:\Time-LLM-main\results\111_RNN_Tokyo_ftM_sl72_ll24_pl24_sd9_dm512_nh8_el2_dl1_df2048_fc3_dropout0.1_ebtimeF_test_0_LSTM_llmd256_llmf2'
-    res_evaluation(res_path,data)
+    # 设置主目录路径
+    import os
+    import pandas as pd
+
+    main_folder = r'D:\Time-LLM-main\results\interval_forecast\pred_len'
+
+    # 存储处理后的所有模型的 mean 数据
+    all_mean_rows = []
+
+    for filename in os.listdir(main_folder):
+        if filename.endswith(".csv"):
+            file_path = os.path.join(main_folder, filename)
+            df = pd.read_csv(file_path)
+
+            # 提取预测长度（例如从 'result_24.csv' 中提取 24）
+            pred_len = int("".join(filter(str.isdigit, filename)))
+
+            # 筛选 mean 行
+            mean_rows = df[df.iloc[:, 0] == 'mean']
+
+            for _, row in mean_rows.iterrows():
+                model = row['model']
+                metrics = row.iloc[2:]  # 除去前两列（预测目标和模型名）
+                metrics.index = [f"{col}_{model}" for col in metrics.index]  # 指标_模型名
+                metrics_df = metrics.to_frame().T
+                metrics_df.insert(0, 'pred_len', pred_len)
+                all_mean_rows.append(metrics_df)
+
+    # 合并所有 mean 行
+    final_df = pd.concat(all_mean_rows, ignore_index=True)
+
+    # 将 pred_len 作为 index，按列合并所有模型
+    final_df = final_df.groupby('pred_len').first()
+    final_df.to_csv("summary_metrics_pred_len.csv")
+
+    print("✅ 所有模型 mean 行合并完成！")

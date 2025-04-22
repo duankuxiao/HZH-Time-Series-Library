@@ -20,7 +20,7 @@ class Dataset_cumstom(Dataset):
 
         self.source_data_path = configs.source_data_path
         self.forecast_dim = configs.forecast_dim
-        self.feature_cols = configs.features_cols
+        self.feature_cols = configs.feature_cols
         self.c_out = configs.c_out
         if size == None:
             self.seq_len = 24 * 3

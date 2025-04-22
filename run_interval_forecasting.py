@@ -79,40 +79,37 @@ def main(args):
     return res_df, res_metrics_df
 
 
-
 if __name__ == '__main__':
     from utils.hyparameter_setup import model_hyparameter_setup
     from configs.electricity_configs import args as default_args
+    # from configs.solar_radiation_configs import args as default_args
     from copy import deepcopy
-    # from configs.solar_radiation_configs import args
 
-    all_results = []
-    # for loss in ['g','msemu','hybridmu','adaptive']:
-    for loss in ['adaptive']:
-        # for model in ['RNN', 'Transformer',    'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLMformer']:
-        for model in ['Informer']:  # 'AttLLM'
-            args = deepcopy(default_args)
-            # args.train_epochs = 3
-            # args.patience = 2
-            args.task_name = 'interval_forecast'
-            args.seq_len = 72
-            args.pred_len = 24
-            args.label_len = args.seq_len
-            args.is_training = 1
-            args.accelerate = False
-            args.use_prompt = True
+    # for pred_len in [72]:
+    for data in ['hokkaido', 'kyushu', 'tohoku']:  # 'Sapporo','Sendai','Fukuoka','Tokyo'   'hokkaido', 'kyushu', 'tohoku'
+        all_results = []
+        for loss in ['adaptive']:
+            for model in ['RNN', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLMformer']:
+            # for model in ['TimeLLMformer']:  # 'AttLLM'
+                args = deepcopy(default_args)
+                args.data_path = '{}.csv'.format(data)
+                args.source_data_path = '{}.csv'.format(data)
+                args.task_name = 'interval_forecast'
 
-            args.model_id = 'test'
-            args.loss = loss  # 'g' 'nb' 'mse' 'msemu' 'hybridmu'
+                args.seq_len = 72
+                args.pred_len = 24
+                args.label_len = args.seq_len
+                args.is_training = 1
+                args.use_prompt = True
 
-            args.model = model  # [Autoformer, TimeLLM, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
+                args.model_id = '{}'.format(data)
+                args.loss = 'adaptive'  # 'g' 'nb' 'mse' 'msemu' 'hybridmu'
 
-            args = model_hyparameter_setup(args)
-            # args.train_epochs = 1
-            _, res_metrics_df = main(args)
-            res_metrics_df.insert(0, 'model', model)
-            all_results.append(res_metrics_df)
-            final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
-            final_metrics_df.to_csv('./results/{}_all_models_comparison.csv'.format(args.model_id))
-
-
+                args.model = model  # [Autoformer, TimeLLM, TimeLLMformer, TimesNet, D Linear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
+                args = model_hyparameter_setup(args)
+                # args.learning_rate = 0.00015
+                _, res_metrics_df = main(args)
+                res_metrics_df.insert(0, 'model', model)
+                all_results.append(res_metrics_df)
+                final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
+                final_metrics_df.to_csv('./results/sr_{}_all_models_comparison.csv'.format(data))

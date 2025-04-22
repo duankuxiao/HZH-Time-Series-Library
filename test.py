@@ -91,7 +91,7 @@ if __name__ == '__main__':
     all_results = []
 
     # for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLMformer']:
-    for model in ['TimeLLMformer']:
+    for model in ['Transformer']:
         args = deepcopy(default_args)
 
         args.seq_len = 72
