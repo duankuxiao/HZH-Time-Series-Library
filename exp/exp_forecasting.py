@@ -107,6 +107,7 @@ class Exp_Forecast(Exp_Basic):
         save_config(self.args, os.path.join(path, 'configs.pkl'))
 
         time_now = time.time()
+        time_start = time.time()
 
         train_steps = len(train_loader)
         early_stopping = EarlyStopping(patience=self.args.patience, verbose=True,accelerator=self.accelerator)
@@ -122,7 +123,7 @@ class Exp_Forecast(Exp_Basic):
             self.accelerator.print(f"Process {self.accelerator.process_index} is using device {self.accelerator.device}")
 
         # Initialize a dictionary to store loss values
-        loss_records = {"epoch": [], "train_loss": [], "vali_loss": []}
+        loss_records = {"epoch": [], "time": [],"train_loss": [], "vali_loss": []}
 
         for epoch in range(self.args.train_epochs):
             iter_count = 0
@@ -183,6 +184,7 @@ class Exp_Forecast(Exp_Basic):
                         batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:].to(self.device)
                     loss = criterion(outputs, batch_y)
                     train_loss.append(loss.item())
+                print(torch.cuda.memory_summary(device=self.device, abbreviated=False))
                 if self.args.accelerate:
                     self.accelerator.print("\titers: {0}, epoch: {1} | loss: {2:.7f}".format(i + 1, epoch + 1, loss.item()))
                     speed = (time.time() - time_now) / iter_count
@@ -212,11 +214,13 @@ class Exp_Forecast(Exp_Basic):
                 if self.args.lradj == 'TST':
                     adjust_learning_rate(model_optim, scheduler, epoch + 1, self.args, printout=False,accelerator=self.accelerator)
                     scheduler.step()
+
             train_loss = np.average(train_loss)
             vali_loss = self.vali(vali_data, vali_loader, criterion)
 
             # Record loss values
             loss_records["epoch"].append(epoch + 1)
+            loss_records["time"].append(round((time.time() - time_start)/60,4))
             loss_records["train_loss"].append(train_loss)
             loss_records["vali_loss"].append(vali_loss)
 
@@ -260,6 +264,13 @@ class Exp_Forecast(Exp_Basic):
         loss_df = pd.DataFrame(loss_records)
         loss_df.to_csv(os.path.join(folder_path, "loss_records.csv"), index=False)
         print("Loss records saved to:", os.path.join(folder_path, "loss_records.csv"))
+        report = torch.cuda.memory_summary(device=self.device, abbreviated=False)
+        print(report)
+        peak_alloc = torch.cuda.max_memory_allocated(self.device)
+        used_bytes = torch.cuda.memory_allocated(self.device)
+        with open(os.path.join(folder_path,"memory_summary_{}_{}.txt".format(round(used_bytes*1024/(10**9),1),round(speed*1000,2))), "w") as f:
+            f.write(report)
+        print("Saved CUDA memory summary to cuda_memory_summary.txt")
         return self.model
 
     def test(self, setting, test=0, path=None):

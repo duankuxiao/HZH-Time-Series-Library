@@ -82,23 +82,23 @@ if __name__ == '__main__':
 
     # path = r'D:\Time-LLM-main\results\res\kyushu\kyushu_TimesNet_electricity_ftM_sl72_ll24_pl168_sd22_td3_dm64_nh8_el2_dl1_df256_fc3_dropout0.1_ebtimeF_test_0_scale'
     # for path in subfolders:
-    path = r'D:\Time-LLM-main\results\tokyo_RNN_electricity_ftM_sl72_ll24_pl168_sd22_td3_lr0.001_dm512_df2048_nh8_el2_dl1_ma25_factor1_dropout0.1_ebtimeF_0_LSTM_rnnd512_rnnf2_scale'
+    path = r'D:\Time-LLM-main\results\zero-shot-kyushu_Informer_electricity_ftM_sl72_ll24_pl168_sd8_td3_lr0.001_dm64_df256_nh8_el4_dl2_ma25_factor5_dropout0.1_ebtimeF_0_scale'
 
     args = load_config(os.path.join(path,'checkpoints','configs.pkl'))
     print(args)
-    # renamed_dfs = []
-    # for city in ['tokyo','hokkaido','tohoku','kyushu']:
-    # # for city in ['Sapporo','Sendai','Tokyo','Fukuoka']:
-    #
-    # #     args.feature_cols = ['Electricity', 'Renewable_energy', 'Coal']  # ['Electricity', 'Renewable_energy', 'Coal']
-    #     # args.feature_cols = ['Coal']  # ['Electricity', 'Renewable_energy', 'Coal']
-    #
-    #     # args.target = ['Electricity', 'Renewable_energy', 'Coal']  # ['Electricity', 'Renewable_energy', 'Coal']  _Electricity  _Renewable_energy _Coal
-    #     # args.target = ['Electricity', 'Renewable_energy', 'Coal']
-    #     args.data_path = '{}.csv'.format(city)
-    #     args.source_data_path = args.data_path
-    #     pred_res, metrics_df = transfer_test(args, path)
-    #     metrics_df.index = metrics_df.index + '_' + city
-    #     renamed_dfs.append(metrics_df)
-    #     combined_df = pd.concat(renamed_dfs, axis=0)
-    #     combined_df.to_csv(os.path.join(path,'zero-shot_res_metrics.csv'.format()))
+    renamed_dfs = []
+    for city in ['tokyo','hokkaido','tohoku','kyushu']:
+    # for city in ['Sapporo','Sendai','Tokyo','Fukuoka']:
+
+    #     args.feature_cols = ['Electricity', 'Renewable_energy', 'Coal']  # ['Electricity', 'Renewable_energy', 'Coal']
+        # args.feature_cols = ['Coal']  # ['Electricity', 'Renewable_energy', 'Coal']
+
+        # args.target = ['Electricity', 'Renewable_energy', 'Coal']  # ['Electricity', 'Renewable_energy', 'Coal']  _Electricity  _Renewable_energy _Coal
+        # args.target = ['Electricity', 'Renewable_energy', 'Coal']
+        args.data_path = '{}.csv'.format(city)
+        args.source_data_path = args.data_path
+        pred_res, metrics_df = transfer_test(args, path)
+        metrics_df.index = metrics_df.index + '_' + city
+        renamed_dfs.append(metrics_df)
+        combined_df = pd.concat(renamed_dfs, axis=0)
+        combined_df.to_csv(os.path.join(path,'zero-shot_res_metrics.csv'.format()))

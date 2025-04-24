@@ -27,6 +27,23 @@ args.scale = True
 if __name__ == '__main__':
     import pandas as pd
     import os
-    df = pd.read_csv(os.path.join('../dataset/weather', 'Tokyo_10min.csv'),encoding='SHIFT-JIS',low_memory=False)
-    df['Sunshine_duration'] = df['Sunshine_duration'].fillna(0)
-    df.to_csv(os.path.join('../dataset/weather', 'Tokyo_10min.csv'),encoding='SHIFT-JIS')
+    df = pd.read_csv(os.path.join('D:\Time-LLM-main\dataset\electricity', 'tokyo_2016.csv'),encoding='SHIFT-JIS',low_memory=False)
+    df.index = pd.to_datetime(df.index)
+    df_clean = df.apply(lambda col: pd.to_numeric(col, errors='coerce'))
+    df_filled = df_clean.interpolate(method='time')
+    df_filled.to_csv(os.path.join('D:\Time-LLM-main\dataset\electricity', 'tokyo_2016_.csv'),encoding='SHIFT-JIS')
+
+    # df_filled = df_filled.apply(lambda col: pd.to_numeric(col, errors='coerce'))
+    #
+    # # 再找出哪些位置原始不是 NaN 但转换后是 NaN
+    # mask_bad = df_filled.isna() & df.notna()
+    #
+    # # 将这些位置（行, 列）打印出来
+    # bad_locations = [(idx, col, df.loc[idx, col])
+    #                  for col in df.columns
+    #                  for idx in df.index
+    #                  if mask_bad.loc[idx, col]]
+    # print("这些单元格无法转为 float：")
+    # for loc in bad_locations:
+    #     print(f"  行 {loc[0]!r}，列 {loc[1]!r}，值 = {loc[2]!r}")
+

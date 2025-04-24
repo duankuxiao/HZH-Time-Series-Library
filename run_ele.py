@@ -84,16 +84,18 @@ if __name__ == '__main__':
     from copy import deepcopy
 
     # for model in ['RNN', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'TimeLLM', 'TimeLLMformer']:
-    for model in ['Informer']:
+    # for model in ['RNN','DLinear', 'iTransformer', 'TimeLLMformer']:
+    for model in ['TimeLLMformer',]:
 
         all_results = []
         # for pred_len in [1, 24, 72, 168, 336, 720]:
-        # for data in ['hokkaido','tohoku','kyushu']:
-        for data in ['tokyo']:
+        # for data in ['kyushu']:
+        for data in ['tokyo_2016_']:
 
-        # for model in ['Informer', 'Autoformer']:
             args = deepcopy(default_args)
-            args.model_id = 'test'
+            # args.model_id = 'zero-shot-{}'.format(data)
+            args.model_id = 'memory2'
+
             args.data_path = '{}.csv'.format(data)
             args.source_data_path = '{}.csv'.format(data)
             args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
@@ -104,17 +106,17 @@ if __name__ == '__main__':
             args.feature_cols = ['Electricity','Renewable_energy', 'Nuclear', 'Coal', 'Hydro', 'Geothermal', 'Biomass','Solar', 'Solar_curtailment', 'Wind', 'Wind_ccurtailment','Water_pumping',
                                  'Interconnection', 'Temperature', 'Relative_humidity', 'Precipitation', 'Dew_point', 'Vapor_pressure', 'Wind_speed', 'Sunshine_duration',
                                   'Global_horizontal_irradiance']
-            # args.feature_cols = ['Electricity', 'Renewable_energy','Coal', ]
+            # args.feature_cols = ['Electricity', 'Renewable_energy','Coal','Temperature', 'Relative_humidity', 'Wind_speed', 'Sunshine_duration',
+            #                     'Global_horizontal_irradiance' ]
             args.target = ['Electricity', 'Renewable_energy', 'Coal']
             # args.target = ['Renewable_energy']
 
             args = model_hyparameter_setup(args)
-
-
+            args.patience = 3
             _, res_metrics_df = main(args)
-            # res_metrics_df.insert(0, 'pred_len', pred_len)
-            # all_results.append(res_metrics_df)
-            # final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
-            # final_metrics_df.to_csv('./results/ele_{}_all_models_comparison.csv'.format(model))
+            res_metrics_df.insert(0, 'model', model)
+            all_results.append(res_metrics_df)
+            final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
+            final_metrics_df.to_csv('./results/ele_5year_all_models_comparison.csv')
 
 

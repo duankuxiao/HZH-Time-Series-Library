@@ -11,7 +11,7 @@ args.source_data_path = 'tokyo.csv'
 args.features = 'M'
 args.feature_cols = ['Electricity','Renewable_energy', 'Nuclear', 'Coal', 'Hydro', 'Geothermal', 'Biomass','Solar', 'Solar_curtailment', 'Wind', 'Wind_ccurtailment','Water_pumping',
                              'Interconnection', 'Temperature', 'Relative_humidity', 'Precipitation', 'Dew_point', 'Vapor_pressure', 'Wind_speed', 'Sunshine_duration',
-                             'Snowfall', 'Global_horizontal_irradiance']
+                             'Global_horizontal_irradiance']
 args.target = ['Electricity', 'Renewable_energy', 'Coal']
 args.num_train = 8760*2+24
 args.num_test = 8760
