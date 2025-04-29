@@ -184,7 +184,6 @@ class Exp_Forecast(Exp_Basic):
                         batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:].to(self.device)
                     loss = criterion(outputs, batch_y)
                     train_loss.append(loss.item())
-                print(torch.cuda.memory_summary(device=self.device, abbreviated=False))
                 if self.args.accelerate:
                     self.accelerator.print("\titers: {0}, epoch: {1} | loss: {2:.7f}".format(i + 1, epoch + 1, loss.item()))
                     speed = (time.time() - time_now) / iter_count

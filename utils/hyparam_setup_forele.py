@@ -4,6 +4,10 @@ import torch
 
 
 def model_hyparameter_setup(args):
+    args.d_model = 512
+    args.d_ff = 2048
+    args.e_layers = 2
+    args.d_layers = 1
     if args.model == 'TimeLLMformer' or args.model == 'AttLLM':
         args.learning_rate = 0.01  # 0.001 for imputation 0.0001 for forecast(0.01 for LLM model)  for electricity
         # args.learning_rate = 0.001  # 0.001 for imputation 0.0001 for forecast(0.01 for LLM model)
@@ -13,20 +17,16 @@ def model_hyparameter_setup(args):
         args.llm_model = 'LLAMA3b'  # defalut GPT2  LLAMA1b  LLAMA3b
         args.d_model = 32
         args.d_ff = args.d_model * 2
-        args.e_layers = 1  # 2
-        args.d_layers = 4  # 2
+        args.e_layers = 1
+        args.d_layers = 4
         args.llm_layers = 6
 
         # args.d_model = 8
         # args.d_ff = args.d_model * 2
         # args.llm_layers = 6
 
-
     if 'RNN' in args.model:
         args.learning_rate = 0.001  # 0.0001 for forecast   0.001 for imputation
-        # args.rnn_dim = 512  # default
-        # args.rnn_layers = 2  # default
-
         args.rnn_dim = 256  # default
         args.rnn_layers = 2  # default
 

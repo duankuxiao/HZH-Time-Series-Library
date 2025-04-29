@@ -4,6 +4,15 @@ import torch
 
 
 def model_hyparameter_setup(args):
+    # default
+    args.learning_rate = 0.0001
+    args.d_model = 512
+    args.d_ff = 2048
+    args.e_layers = 2
+    args.d_layers = 1
+    args.factor = 3
+    args.moving_avg = 25
+
     if args.model == 'TimeLLMformer' or args.model == 'AttLLM':
         args.learning_rate = 0.01  # 0.001 for imputation 0.0001 for forecast(0.01 for LLM model)  for electricity
         # args.learning_rate = 0.001  # 0.001 for imputation 0.0001 for forecast(0.01 for LLM model)
@@ -22,36 +31,26 @@ def model_hyparameter_setup(args):
         args.rnn_layers = 2
 
     if args.model == 'Transformer':
-        args.d_model = 64
-        args.d_ff = 256
-        args.e_layers = 2  # default 4
-        args.d_layers = 1  # default 2
+        pass
 
     if args.model == 'DLinear':
-        args.moving_avg = 25   # default 25
+        pass
 
-    if args.model == 'Informer':
-        # if
-        args.factor = 1  # default 5
-        args.d_model = 64
-        args.d_ff = 256
-        args.e_layers = 2  # default 4
-        args.d_layers = 1  # default 2
-
-    if args.model == 'Autoformer':  # default
-        # args.lradj = 'PEMS'
-        args.dropout = 0.05
-        args.learning_rate = 0.001
+    if args.model == 'Informer':  # default
+        args.factor = 5
+        args.d_model = 512
+        args.d_ff = 2048
         args.e_layers = 4
+        args.d_layers = 2
+
+    if args.model == 'Autoformer':
+        pass
 
     if args.model == 'iTransformer':
-        # args.learning_rate = 0.001 # default
-        # args.e_layers = 3  # default
-        # args.d_model = 256  # default
-        # args.d_ff = 1024  # default
-        args.d_model = 128
+        args.e_layers = 3  # default
+        args.d_model = 512
         args.d_ff = 512
-        args.e_layers = 4
+
 
     if args.model == 'TimeLLM':  # default
         args.patience = 3
@@ -67,20 +66,20 @@ def model_hyparameter_setup(args):
 
     if args.model == 'PatchTST':  # default
         args.dropout = 0.2
+        args.head_dropout = 0
         args.d_model = 128  # for small dataset 16
         args.d_ff = 256  # for small dataset 128
         args.e_layers = 3
-        args.d_layers = 1
-        args.n_heads = 16  # for small dataset 4
+        args.n_heads = 16  # for small dataset 4  large dataset 16
 
     if args.model == 'TimesNet':
         args.learning_rate = 0.0001  # 0.0001 for forecast   0.001 for imputation
         args.d_model = 32  # min{max[2**log(seq_dim),32],512} for forecast   min{max[2**log(seq_dim),64],128} for imputation
-        args.d_ff = 4 * args.d_model
-        args.e_layers = 2
+        args.d_ff = 32
         args.top_k = 5  # 5 for forecast   3 for imputation, classification, anomaly detection
 
     if args.model == 'SAITS':
+        args.learning_rate = 0.001
         args.e_layers = 2
         args.d_model = 256
         args.d_ff = 128
