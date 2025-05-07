@@ -31,7 +31,7 @@ class Model(nn.Module):
             self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len)
             if self.use_forecast:
                 self.linear_predict = nn.Linear(configs.seq_len + configs.pred_len, configs.pred_len)
-            self.output_projection = nn.Linear(configs.rnn_dim, configs.c_out)
+        self.output_projection = nn.Linear(configs.rnn_dim, configs.c_out)
 
         if self.task_name == 'interval_forecast':
             if configs.likelihood == "g":
@@ -67,7 +67,8 @@ class Model(nn.Module):
             x_enc = torch.cat((x_enc, x_forecast_), dim=1)
 
         x,_ = self.rnn_layer(x_enc)
-        x = self.linear_predict(x.permute(0, 2, 1)).permute(0, 2, 1)
+        if 'forecast' in self.task_name:
+            x = self.linear_predict(x.permute(0, 2, 1)).permute(0, 2, 1)
         dec_out = self.output_projection(x)
         # De-Normalization from Non-stationary Transformer
         dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
@@ -122,7 +123,6 @@ class Model(nn.Module):
             dec_out = self.forecast(x_enc,x_forecast)
             return dec_out[:, -self.pred_len:, :]  # [B, L, D]
         if self.task_name == 'imputation':
-            x_enc = x_enc * mask
             dec_out = self.imputation(x_enc)
             return dec_out  # [B, L, D]
         if self.task_name == 'anomaly_detection':

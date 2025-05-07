@@ -57,7 +57,7 @@ parser.add_argument('--ori_weight', type=float, default=1, help='ori_weight')
 parser.add_argument('--missing_weight', type=float, default=1, help='missing_weight')
 parser.add_argument('--interpolate_method', type=str, default='linear', help=['linear','polynomial', 'spline'])
 parser.add_argument('--interpolate_order', type=int, default=2, help='1<order<5 for spline, 2 or odd number for polynomial')
-
+parser.add_argument('--mask_target_only', action='store_true', default=False, help='mask_target_only')
 
 parser.add_argument('--seasonal_patterns', type=str, default='Hourly', help='subset for M4')
 parser.add_argument('--inverse', action='store_true', help='inverse output data', default=False)
@@ -120,7 +120,7 @@ parser.add_argument('--patience', type=int, default=8, help='early stopping pati
 parser.add_argument('--learning_rate', type=float, default=0.001, help='optimizer learning rate 0.0001 for other models  0.01 for LLM')
 parser.add_argument('--des', type=str, default='test', help='exp description')
 parser.add_argument('--loss', type=str, default='MSE', help='loss function')
-parser.add_argument('--loss_method', type=str, default='MSE', help='mse msemu fix adaptive hybird')
+parser.add_argument('--loss_method', type=str, default='MSE', help='mse msemu (fix missing) adaptive hybird')
 
 parser.add_argument('--lradj', type=str, default='type1', help='adjust learning rate')
 parser.add_argument('--pct_start', type=float, default=0.2, help='pct_start')

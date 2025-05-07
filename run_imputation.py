@@ -2,6 +2,7 @@ import pandas as pd
 import torch
 import os
 from exp.exp_imputation import Exp_Imputation
+from exp.exp_imputation_forecast import Exp_Imputation_Forecast
 import random
 import numpy as np
 
@@ -15,7 +16,7 @@ np.random.seed(fix_seed)
 
 
 def get_setting(args, ii):
-    setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_td{}_dm{}_df{}_nh{}_el{}_dl{}_ma{}_factor{}_dropout{}_eb{}_{}'.format(
+    setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_td{}_dm{}_df{}_nh{}_el{}_dl{}_ma{}_factor{}_dropout{}_loss{}_{}_mr{}'.format(
         args.model_id,
         args.model,
         args.data,
@@ -32,8 +33,7 @@ def get_setting(args, ii):
         args.d_layers,
         args.moving_avg,
         args.factor,
-        args.dropout,
-        args.embed, ii)
+        args.dropout, args.loss,args.loss_method,args.mask_rate)
 
     if 'TimeLLM' in args.model:
         setting += '_{}_llmd{}_llmf{}_tk{}'.format(args.llm_model, args.llm_dim, args.llm_layers, args.top_k)
@@ -51,7 +51,10 @@ def get_setting(args, ii):
     return setting
 
 def main(args):
-    Exp = Exp_Imputation
+    if args.task_name == 'imputation':
+        Exp = Exp_Imputation
+    elif args.task_name == 'imputation_forecast':
+        Exp = Exp_Imputation_Forecast
 
     if args.is_training:
         for ii in range(args.itr):
@@ -63,7 +66,7 @@ def main(args):
             exp.train(setting)
 
             print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-            res_df, res_metrics_df = exp.test(setting)
+            res_df, metrics_df, imputation_metrics_df, interpolation_metrics_df = exp.test(setting)
             torch.cuda.empty_cache()
     else:
         ii = 0
@@ -71,9 +74,9 @@ def main(args):
 
         exp = Exp(args)  # set experiments
         print(' >>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-        res_df, res_metrics_df = exp.test(setting, test=1)
+        res_df, metrics_df, imputation_metrics_df, interpolation_metrics_df= exp.test(setting, test=1)
         torch.cuda.empty_cache()
-    return res_df, res_metrics_df
+    return res_df, metrics_df, imputation_metrics_df, interpolation_metrics_df
 
 
 if __name__ == '__main__':
@@ -81,24 +84,27 @@ if __name__ == '__main__':
     from copy import deepcopy
     from utils.hyparameter_setup import model_hyparameter_setup
 
-    for pred_len in [1, 6, 12, 24, 36]:
+    # for mask_rate in [0.1, 0.2, 0.3, 0.4, 0.5]:
+    for mask_rate in [0.1]:
+
         args = deepcopy(default_args)
-        args.seq_len = 18
-        args.label_len = args.seq_len
-        args.pred_len = pred_len
+        args.mask_rate = mask_rate
         all_results = []
-        for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'PatchTST', 'TimesNet', 'TimeLLMformer']:
-        # for model in ['Transformer']:
+        # for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'PatchTST', 'TimesNet', 'TimeLLMformer']:
+        for model in ['Transformer']:
 
             args.model_id = 'test'
+            args.model = model
+            args.loss_method = "fix"  # missing fix adaptive
             # args.data_path = '{}.csv'.format(args.model_id)
             # args.source_data_path = '{}.csv'.format(args.model_id)
 
             args = model_hyparameter_setup(args)
-            args.task_name = 'imputation'
+            args.task_name = 'imputation_forecast'  # imputation_forecast
+            args.patience = 2
 
-            _, res_metrics_df = main(args)
-            res_metrics_df.insert(0, 'model', model)
-            all_results.append(res_metrics_df)
+            res_df, metrics_df, imputation_metrics_df, interpolation_metrics_df = main(args)
+            imputation_metrics_df.insert(0, 'model', model)
+            all_results.append(imputation_metrics_df)
             final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
-            final_metrics_df.to_csv('./results/{}_all_models_comparison_pl{}.csv'.format(args.model_id,pred_len))
+            final_metrics_df.to_csv('./results/{}_all_models_comparison_mr{}.csv'.format(args.model_id, mask_rate))

@@ -5,7 +5,7 @@ from layers.Transformer_EncDec import Decoder, DecoderLayer, Encoder, EncoderLay
 from layers.SelfAttention_Family import FullAttention, AttentionLayer
 from layers.Embed import DataEmbedding
 from utils.interval_forecasting_tools import gaussian_sample, negative_binomial_sample
-from .Distribution import Gaussian,NegativeBinomial
+from .Distribution import Gaussian, NegativeBinomial
 
 
 class Model(nn.Module):
@@ -93,11 +93,11 @@ class Model(nn.Module):
             self.dropout = nn.Dropout(configs.dropout)
             self.projection = nn.Linear(configs.d_model * configs.seq_len, configs.num_class)
 
-    def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast=None):
+    def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None):
         # if self.use_forecast:
         #     x_forecast_ = self.forecast_projection(x_forecast)
         #     x_enc = torch.cat((x_enc, x_forecast_), dim=1)
-            # x_mark_enc = x_mark_dec
+        # x_mark_enc = x_mark_dec
         # Embedding
         enc_out = self.enc_embedding(x_enc, x_mark_enc)
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
@@ -109,11 +109,11 @@ class Model(nn.Module):
         # dec_out = self.linear_projection(dec_out.permute(0, 2, 1)).permute(0, 2, 1)
         return dec_out
 
-    def interval_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast=None):
+    def interval_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None):
         # if self.use_forecast:
         #     x_forecast_ = self.forecast_projection(x_forecast)
         #     x_enc = torch.cat((x_enc, x_forecast_), dim=1)
-            # x_mark_enc = x_mark_dec
+        # x_mark_enc = x_mark_dec
         # Embedding
         enc_out = self.enc_embedding(x_enc, x_mark_enc)
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
@@ -157,9 +157,9 @@ class Model(nn.Module):
         output = self.projection(output)  # (batch_size, num_classes)
         return output
 
-    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast=None, mask=None):
+    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None, mask=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
-            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)
+            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
             return dec_out[:, -self.pred_len:, :]  # [B, L, D]
         if self.task_name == 'imputation':
             dec_out = self.imputation(x_enc, x_mark_enc, x_dec, x_mark_dec, mask)
@@ -171,6 +171,6 @@ class Model(nn.Module):
             dec_out = self.classification(x_enc, x_mark_enc)
             return dec_out  # [B, N]
         if self.task_name == 'interval_forecast':
-            dec_out, mu, sigama = self.interval_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)
+            dec_out, mu, sigama = self.interval_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
             return dec_out[:, -self.pred_len:, :], mu[:, -self.pred_len:, :], sigama[:, -self.pred_len:, :]
         return None

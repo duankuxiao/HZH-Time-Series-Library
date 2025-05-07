@@ -22,13 +22,14 @@ from torch.optim import lr_scheduler
 
 warnings.filterwarnings('ignore')
 
-class Exp_Imputation(Exp_Basic):
+
+class Exp_Imputation_Forecast(Exp_Basic):
     def __init__(self, args):
-        super(Exp_Imputation, self).__init__(args)
+        super(Exp_Imputation_Forecast, self).__init__(args)
         if self.args.loss_method == "adaptive":
             self.log_ori_loss = nn.Parameter(torch.zeros(1))
             self.log_missing_loss = nn.Parameter(torch.zeros(1))
-
+            self.log_forecast_loss = nn.Parameter(torch.zeros(1))
 
     def _build_model(self):
         model = self.model_dict[self.args.model].Model(self.args).float()
@@ -61,36 +62,39 @@ class Exp_Imputation(Exp_Basic):
                                                 max_lr=self.args.learning_rate)
         return scheduler
 
-    def _loss_function(self, imputation, true, mask):
+    def _loss_function(self, outputs, true, mask):
         if self.args.loss == 'MSE':
-            loss_func = calc_mse
+            loss = calc_mse
         elif self.args.loss == 'MAE':
-            loss_func = calc_mae
+            loss = calc_mae
         else:
             raise NotImplementedError
 
+        pred = outputs[:, -self.args.pred_len:, :]
+        imputation = outputs[:, :self.args.seq_len, :]
+
+        forecast_loss = loss(pred, true)
+
         if self.args.loss_method == "fix":
-            ori_loss = loss_func(imputation, true, mask)
-            missing_loss = loss_func(imputation, true, mask ^ 1)
-            loss = self.args.ori_weight * ori_loss + self.args.missing_weight * missing_loss
-        elif self.args.loss_method == "missing":
-            missing_loss = loss_func(imputation, true, mask ^ 1)
-            loss = self.args.missing_weight * missing_loss
+            ori_loss = loss(imputation, true, mask)
+            missing_loss = loss(imputation, true, mask ^ 1)
+            loss = self.args.ori_weight * ori_loss + self.args.missing_weight * missing_loss + self.args.forecast_weight * forecast_loss
 
         elif self.args.loss_method == "adaptive":
             if self.args.model == 'TimeLLMformer':
                 missing_loss = 0
                 for i, tensor in enumerate(imputation):
-                    missing_loss += loss_func(tensor, true, mask)
+                    missing_loss += loss(tensor, true, mask)
                     if i == len(imputation) - 1:  # 仅在最后一个 tensor 时计算 MIT_loss
                         ori_loss = self.args.ori_weight * self.loss_func(tensor, true, mask ^ 1)
                 missing_loss = self.args.missing_weight * missing_loss / len(imputation)
             else:
-                ori_loss = loss_func(imputation, true, mask)
-                missing_loss = loss_func(imputation, true, mask ^ 1)
+                ori_loss = loss(imputation, true, mask)
+                missing_loss = loss(imputation, true, mask ^ 1)
 
-            loss = 0.5 * (torch.exp(-self.log_ori_loss.to(true.device)) * ori_loss + torch.exp(-self.log_missing_loss.to(true.device)) * missing_loss +
-                              self.log_ori_loss.to(true.device) + self.log_missing_loss.to(true.device))
+            loss = 0.5 * (torch.exp(-self.log_ori_loss.to(true.device)) * ori_loss + torch.exp(-self.log_missing_loss.to(true.device)) * missing_loss + torch.exp(
+                -self.log_forecast_loss.to(true.device)) * forecast_loss +
+                          self.log_ori_loss.to(true.device) + self.log_missing_loss.to(true.device) + self.log_forecast_loss.to(true.device))
 
         return loss
 
@@ -99,34 +103,42 @@ class Exp_Imputation(Exp_Basic):
         self.model.eval()
         with torch.no_grad():
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark, x_forecast) in enumerate(vali_loader):
+
                 if self.args.mask_target_only:
                     inp = mask_custom(batch_x[:, :, -self.f_dim:], mask_rate=self.args.mask_rate, method='rdo')
                 else:
                     inp = mask_custom(batch_x, mask_rate=self.args.mask_rate, method='rdo')
                 mask = (np.isnan(inp) ^ np.isnan(batch_x)) ^ 1
                 inp = batch_x.masked_fill(mask == 0, 0)
-                inp = inp.float().to(self.device)
+                batch_x = batch_x.float()
+                batch_y = batch_y.float()
                 batch_x_mark = batch_x_mark.float().to(self.device)
+                batch_y_mark = batch_y_mark.float().to(self.device)
+                x_forecast = x_forecast.float().to(self.device)
+                inp = inp.float().to(self.device)
+                mask = mask.float().to(self.device)
 
+                # decoder input
+                dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
+                dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
                 # encoder - decoder
-
                 if self.args.output_attention:
-                    outputs = self.model(inp, batch_x_mark, None, None, None,mask=mask)[0]
+                    outputs = self.model(inp, batch_x_mark, dec_inp, batch_y_mark, x_forecast, mask=mask)[0]
                 else:
-                    outputs = self.model(inp, batch_x_mark, None, None, None,mask=mask)
+                    outputs = self.model(inp, batch_x_mark, dec_inp, batch_y_mark, x_forecast, mask=mask)
 
                 if self.args.accelerate:
-                    outputs, batch_x = self.accelerator.gather_for_metrics((outputs, batch_x))
-                outputs = outputs[:, :self.args.seq_len, -self.f_dim:]
-                batch_x = batch_x[:, :self.args.seq_len, -self.f_dim:]
-                mask = mask[:, :self.args.seq_len, -self.f_dim:]
-
+                    outputs, batch_y = self.accelerator.gather_for_metrics((outputs, batch_y))
+                outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
+                true = torch.cat([batch_x[:, :self.args.seq_len, -self.f_dim:], batch_y[:, -self.args.pred_len:, -self.f_dim:]], dim=1).detach().cpu()
                 outputs = outputs.detach().cpu()
                 mask = mask.detach().cpu()
-                if self.args.model == 'TimeLLMformer':
+                if self.args.model != 'TimeLLMformer':
+                    outputs = outputs.detach().cpu()
+                else:
                     outputs = tuple(tensor.detach().cpu() for tensor in outputs)
 
-                loss = self._loss_function(outputs, batch_x, mask)
+                loss = self._loss_function(outputs, true, mask)
 
                 total_loss.append(loss)
         total_loss = np.average(total_loss)
@@ -147,7 +159,7 @@ class Exp_Imputation(Exp_Basic):
         time_start = time.time()
 
         train_steps = len(train_loader)
-        early_stopping = EarlyStopping(patience=self.args.patience, verbose=True,accelerator=self.accelerator)
+        early_stopping = EarlyStopping(patience=self.args.patience, verbose=True, accelerator=self.accelerator)
 
         model_optim = self._select_optimizer()
         scheduler = self._select_scheduler(model_optim, train_loader)
@@ -155,7 +167,7 @@ class Exp_Imputation(Exp_Basic):
         if self.args.use_amp:
             scaler = torch.cuda.amp.GradScaler()
         if self.args.accelerate:
-            self.model,train_loader,vali_loader, model_optim,scheduler = self.accelerator.prepare(self.model,train_loader,vali_loader,model_optim,scheduler)
+            self.model, train_loader, vali_loader, model_optim, scheduler = self.accelerator.prepare(self.model, train_loader, vali_loader, model_optim, scheduler)
             self.accelerator.print(f"Process {self.accelerator.process_index} is using device {self.accelerator.device}")
 
         # Initialize a dictionary to store loss values
@@ -171,8 +183,13 @@ class Exp_Imputation(Exp_Basic):
                 iter_count += 1
                 model_optim.zero_grad()
                 batch_x = batch_x.float()
+                batch_y = batch_y.float()
                 batch_x_mark = batch_x_mark.float()
-
+                batch_y_mark = batch_y_mark.float()
+                x_forecast = x_forecast.float()
+                # decoder input
+                dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :])
+                dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float()
                 # imputation input
                 if self.args.mask_target_only:
                     inp = mask_custom(batch_x[:, :, -self.f_dim:], mask_rate=self.args.mask_rate, method='rdo')
@@ -185,23 +202,29 @@ class Exp_Imputation(Exp_Basic):
                     pass
 
                 else:
-                    batch_x = batch_x.to(self.device)
+                    batch_y = batch_y.to(self.device)
                     batch_x_mark = batch_x_mark.to(self.device)
+                    batch_y_mark = batch_y_mark.to(self.device)
+                    x_forecast = x_forecast.to(self.device)
+                    dec_inp = dec_inp.to(self.device)
                     inp = inp.to(self.device)
                     mask = mask.to(self.device)
 
-                    # encoder - decoder
-                    if self.args.output_attention:
-                        outputs = self.model(inp, batch_x_mark, None, None, None, mask=mask)[0]
-                    else:
-                        outputs = self.model(inp, batch_x_mark, None, None, None, mask=mask)
+                # encoder - decoder
+                if self.args.output_attention:
+                    outputs = self.model(inp, batch_x_mark, dec_inp, batch_y_mark, x_forecast, mask=mask)[0]
+                else:
+                    outputs = self.model(inp, batch_x_mark, dec_inp, batch_y_mark, x_forecast, mask=mask)
 
-                    outputs = outputs[:, :self.args.seq_len:, -self.f_dim:]
-                    batch_x = batch_x[:, :self.args.seq_len, -self.f_dim:]
-                    mask = mask[:, :self.args.seq_len, -self.f_dim:]
-                    loss = self._loss_function(outputs, batch_x, mask)
-                    train_loss.append(loss.item())
+                outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
+                if self.args.accelerate:
+                    batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:]
+                else:
+                    batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:].to(self.device)
+                trues = torch.cat([batch_x[:, :self.args.seq_len, -self.f_dim:], batch_y[:, -self.args.pred_len:, -self.f_dim:]], dim=1).detach().cpu()
+                loss = self._loss_function(outputs, trues, mask)
 
+                train_loss.append(loss.item())
                 if self.args.accelerate:
                     self.accelerator.print("\titers: {0}, epoch: {1} | loss: {2:.7f}".format(i + 1, epoch + 1, loss.item()))
                     speed = (time.time() - time_now) / iter_count
@@ -229,7 +252,7 @@ class Exp_Imputation(Exp_Basic):
                         model_optim.step()
 
                 if self.args.lradj == 'TST':
-                    adjust_learning_rate(model_optim, scheduler, epoch + 1, self.args, printout=False,accelerator=self.accelerator)
+                    adjust_learning_rate(model_optim, scheduler, epoch + 1, self.args, printout=False, accelerator=self.accelerator)
                     scheduler.step()
 
             train_loss = np.average(train_loss)
@@ -237,7 +260,7 @@ class Exp_Imputation(Exp_Basic):
 
             # Record loss values
             loss_records["epoch"].append(epoch + 1)
-            loss_records["time"].append(round((time.time() - time_start)/60,4))
+            loss_records["time"].append(round((time.time() - time_start) / 60, 4))
             loss_records["train_loss"].append(train_loss)
             loss_records["vali_loss"].append(vali_loss)
 
@@ -252,7 +275,7 @@ class Exp_Imputation(Exp_Basic):
                 break
 
             left_time = 1 + (self.args.patience - early_stopping.counter) * cost_time
-            print("  Left time: {} min".format(round(left_time,2)))
+            print("  Left time: {} min".format(round(left_time, 2)))
 
             if self.args.lradj != 'TST':
                 if self.args.lradj == 'COS':
@@ -285,7 +308,7 @@ class Exp_Imputation(Exp_Basic):
         print(report)
         peak_alloc = torch.cuda.max_memory_allocated(self.device)
         used_bytes = torch.cuda.memory_allocated(self.device)
-        with open(os.path.join(folder_path,"memory_summary_{}_{}.txt".format(round(used_bytes*1024/(10**9),1),round(speed*1000,2))), "w") as f:
+        with open(os.path.join(folder_path, "memory_summary_{}_{}.txt".format(round(used_bytes * 1024 / (10 ** 9), 1), round(speed * 1000, 2))), "w") as f:
             f.write(report)
         print("Saved CUDA memory summary to cuda_memory_summary.txt")
         return self.model
@@ -309,7 +332,7 @@ class Exp_Imputation(Exp_Basic):
             if not os.path.exists(folder_path):
                 os.makedirs(folder_path)
 
-        imputation_trues, imputations, masks = [], [], []
+        preds, trues, masks = [], [], []
 
         self.model.eval()
 
@@ -317,64 +340,66 @@ class Exp_Imputation(Exp_Basic):
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark, x_forecast) in enumerate(test_loader):
 
                 if self.args.mask_target_only:
-                    x_withnan = mask_custom(batch_x[:, :, -self.f_dim:], mask_rate=self.args.mask_rate, method='rdo')
+                    inp = mask_custom(batch_x[:, :, -self.f_dim:], mask_rate=self.args.mask_rate, method='rdo')
                 else:
-                    x_withnan = mask_custom(batch_x, mask_rate=self.args.mask_rate, method='rdo')
-                mask = (np.isnan(x_withnan) ^ np.isnan(batch_x)) ^ 1
+                    inp = mask_custom(batch_x, mask_rate=self.args.mask_rate, method='rdo')
+                mask = (np.isnan(inp) ^ np.isnan(batch_x)) ^ 1
                 inp = batch_x.masked_fill(mask == 0, 0)
 
+                batch_x = batch_x.float().to(self.device)
+                batch_y = batch_y.float().to(self.device)
                 batch_x_mark = batch_x_mark.float().to(self.device)
+                batch_y_mark = batch_y_mark.float().to(self.device)
+                x_forecast = x_forecast.float().to(self.device)
                 inp = inp.float().to(self.device)
                 mask = mask.float().to(self.device)
-
+                # decoder input
+                dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
+                dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
                 # encoder - decoder
                 if self.args.output_attention:
-                    output = self.model(inp, batch_x_mark, None, None, None, mask=mask)[0]
+                    outputs = self.model(inp, batch_x_mark, dec_inp, batch_y_mark, x_forecast, mask=mask)[0]
 
                 else:
-                    output = self.model(inp, batch_x_mark, None, None, None, mask=mask)
+                    outputs = self.model(inp, batch_x_mark, dec_inp, batch_y_mark, x_forecast, mask=mask)
 
                 if self.args.accelerate:
                     self.accelerator.wait_for_everyone()
-                    output = self.accelerator.gather_for_metrics(output)
+                    outputs = self.accelerator.gather_for_metrics(outputs)
 
-
-                mask = mask[:,:self.args.seq_len, -self.f_dim:]
-                output = output[:, :self.args.seq_len, -self.f_dim:]
-                true = batch_x[:, :self.args.seq_len, -self.f_dim:]
-
-                imputation = output.detach().cpu().numpy()
-                mask = mask.detach().cpu().numpy()
-
+                inp = outputs[:, :self.args.seq_len, -self.f_dim:]
+                mask = outputs[:, :self.args.seq_len, -self.f_dim:]
+                outputs = outputs[:, :, -self.f_dim:]
+                true = torch.cat([batch_x[:, :self.args.seq_len, -self.f_dim:], batch_y[:, -self.args.pred_len:, -self.f_dim:]], dim=1)
+                outputs = outputs.detach().cpu().numpy()
                 true = true.detach().cpu().numpy()
-
                 if test_data.scale and self.args.inverse:
-                    shape = imputation.shape
-                    imputation = test_data.inverse_transform(imputation.reshape(shape[0] * shape[1], -1)).reshape(shape)
+                    shape = outputs.shape
+                    outputs = test_data.inverse_transform(outputs.reshape(shape[0] * shape[1], -1)).reshape(shape)
                     true = test_data.inverse_transform(true.reshape(shape[0] * shape[1], -1)).reshape(shape)
 
-
                 masks.append(mask)
-                imputation_trues.append(true)
-                imputations.append(imputation)
+                trues.append(true)
+                preds.append(outputs)
 
+        preds = np.concatenate(preds, axis=0)
         masks = np.concatenate(masks, axis=0)
-        imputation_trues = np.concatenate(imputation_trues, axis=0)
-        imputations = np.concatenate(imputations, axis=0)
+        trues = np.concatenate(trues, axis=0)
+        preds = np.concatenate(preds, axis=0)
 
-        print('test shape:', imputations.shape, imputation_trues.shape)
+        print('test shape:', preds.shape, trues.shape)
+        preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
+        trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
 
-        imputations = imputations.reshape(-1, imputations.shape[-2], imputations.shape[-1])
-        imputation_trues = imputation_trues.reshape(-1, imputation_trues.shape[-2], imputation_trues.shape[-1])
-        print('test shape:', imputations.shape, imputation_trues.shape)
+        print('test shape:', preds.shape, trues.shape)
 
         # dtw calculation
         if self.args.use_dtw:
             dtw_list = []
             manhattan_distance = lambda x, y: np.abs(x - y)
-            for i in range(imputations.shape[0]):
-                x = imputations[i].reshape(-1, 1)
-                y = imputation_trues[i].reshape(-1, 1)
+            for i in range(preds.shape[0]):
+                x = preds[i].reshape(-1, 1)
+                y = trues[i].reshape(-1, 1)
                 if i % 100 == 0:
                     print("calculating dtw iter:", i)
                 d, _, _, _ = accelerated_dtw(x, y, dist=manhattan_distance)
@@ -384,7 +409,7 @@ class Exp_Imputation(Exp_Basic):
             dtw = -999
         trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
 
-        [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(imputation_trues.flatten(), imputations.flatten())
+        [mse, rmse, nrmse, mae, mape, rae, r2, corr] = results_evaluation(trues.flatten(), preds.flatten())
         print('mae:{}, r2:{}, dtw:{}'.format(mae, r2, dtw))
         f = open(os.path.join('./results', "result_long_term_forecast.txt"), 'a')
         f.write(setting + "  \n")
@@ -392,42 +417,41 @@ class Exp_Imputation(Exp_Basic):
         f.write('\n')
         f.write('\n')
         f.close()
-        np.save(os.path.join(folder_path, 'metrics_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), np.array([mae, mse, rmse, r2, corr]))
-        np.save(os.path.join(folder_path, 'imputations_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), imputations)
-        np.save(os.path.join(folder_path, 'imputation_trues_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), imputation_trues)
+        np.save(os.path.join(folder_path, 'metrics_{}_{}.npy'.format(self.args.data, self.args.data_path[:-4])), np.array([mae, mse, rmse, r2, corr]))
+        np.save(os.path.join(folder_path, 'preds_{}_{}.npy'.format(self.args.data, self.args.data_path[:-4])), preds)
+        np.save(os.path.join(folder_path, 'trues_{}_{}.npy'.format(self.args.data, self.args.data_path[:-4])), trues)
 
-        res_df, metrics_df, imputation_metrics_df, interpolation_metrics_df = self.res_evaluation_multi_target(imputations,imputation_trues, masks, trainable_params, folder_path)
-        return res_df, metrics_df, imputation_metrics_df, interpolation_metrics_df
+        pred_res, metrics_df, imputation_metrics_df, interpolation_metrics_df = self.res_evaluation_multi_target(preds, trues, masks, trainable_params, folder_path)
 
+        return pred_res, metrics_df
 
-    def res_evaluation_multi_target(self,imputations, trues, mask, trainable_params, path):
-        stride = self.args.pred_len
-        X_withnan = np.where(mask == 0, np.nan, trues)
-        true = trues[::stride, :, :].reshape(-1, len(self.args.target))
-        imputations = imputations[::stride, :, :].reshape(-1, len(self.args.target))
-        X_withnan = X_withnan[::stride, :, :].reshape(-1, len(self.args.target))
+    def res_evaluation_multi_target(self, pred, true, mask, trainable_params, path):
+        stride = self.args.pred_len + self.args.seq_len
+
+        imputation_true = true[:,:self.args.seq_len,:][::stride, :, :].reshape(-1, len(self.args.target))
+        imputation = pred[:,:self.args.seq_len,:][::stride, :, :].reshape(-1, len(self.args.target))
+        pred_true = true[:,-self.args.pred_len:,:][::stride, :, :].reshape(-1, len(self.args.target))
+        pred = pred[:,-self.args.pred_len:,:][::stride, :, :].reshape(-1, len(self.args.target))
+
         mask = mask[::stride, :, :].reshape(-1, len(self.args.target))
-        mask_int = mask.astype(int)  # 转成整数 0/1
-        mask = mask_int ^ 1  # 0↔1 取反
-        pred_interpolate = interpolate_nan_matrix(X_withnan, method=self.args.interpolate_method, order=self.args.interpolate_order)
+        X_withnan = np.where(mask == 0, np.nan, imputation_true)
+        interpolate = interpolate_nan_matrix(X_withnan, method=self.args.interpolate_method, order=self.args.interpolate_order)
 
         # Create DataFrame for true and predicted values
-        columns = [f"{i}_{col}" for col in ["ori", "pred", "pred_inter", "X_withnan"] for i in self.args.target ]
-        res_df = pd.DataFrame(np.hstack([true, imputations, pred_interpolate, X_withnan]), columns=columns)
+        columns = [f"{i}_{col}" for col in ["imputation_true", "imputation","interpolate", "withnan","pred_true", "pred"] for i in self.args.target]
+        res_df = pd.DataFrame(np.hstack([imputation_true, imputation,interpolate,X_withnan, pred_true, pred]), columns=columns)
 
         # Initialize metrics dictionaries
-        metrics = {key: [] for key in ["trainable_params","mse", "rmse", "nrmse", "mae", "mape", "rae", "r2", "corr"]}
-        imputation_metrics = {key: [] for key in ["trainable_params","mse_imputation", "rmse_imputation", "mae_imputation", "mre_imputation"]}
+        metrics = {key: [] for key in ["trainable_params", "mse", "rmse", "nrmse", "mae", "mape", "rae", "r2", "corr"]}
+        imputation_metrics = {key: [] for key in ["trainable_params", "mse_imputation", "rmse_imputation", "mae_imputation", "mre_imputation"]}
         interpolation_metrics = {key: [] for key in ["mse_imputation_inter", "rmse_imputation_inter", "mae_imputation_inter", "mre_imputation_inter"]}
 
         # Calculate metrics for each target
         for idx, target in enumerate(self.args.target):
-            y_true, y_imputation, y_pred_inter, y_withnan, y_mask = (
-                true[:, idx], imputations[:, idx], pred_interpolate[:, idx], X_withnan[:, idx], mask[:, idx])
-            self._show_plot(idx,y_withnan=y_withnan,y_true=y_true,y_imputation=y_imputation,y_inter=y_pred_inter,path=path)
+            imputation_true, pred_true, imputation, pred, interplote, withnan, mask = imputation_true[:, idx], pred_true[:, idx], imputation[:, idx], pred[:, idx], interpolate[:,idx], X_withnan[:,idx], mask[:,idx]
 
             # Metrics for full sequence
-            mse, rmse, nrmse, mae, mape, rae, r2, corr = results_evaluation(y_true, y_imputation)
+            mse, rmse, nrmse, mae, mape, rae, r2, corr = results_evaluation(pred_true, pred)
             metrics['trainable_params'] = trainable_params
             metrics["mse"].append(mse)
             metrics["rmse"].append(rmse)
@@ -439,7 +463,7 @@ class Exp_Imputation(Exp_Basic):
             metrics["corr"].append(corr)
 
             # Metrics for imputation (model output)
-            mse_imp, rmse_imp, mae_imp, mre_imp = results_evaluation_imputation(y_true, y_imputation, y_mask)
+            mse_imp, rmse_imp, mae_imp, mre_imp = results_evaluation_imputation(imputation_true, imputation, mask ^ 1)
             imputation_metrics['trainable_params'] = trainable_params
             imputation_metrics["mse_imputation"].append(mse_imp)
             imputation_metrics["rmse_imputation"].append(rmse_imp)
@@ -447,7 +471,8 @@ class Exp_Imputation(Exp_Basic):
             imputation_metrics["mre_imputation"].append(mre_imp)
 
             # Metrics for imputation (interpolation)
-            mse_imp_inter, rmse_imp_inter, mae_imp_inter, mre_imp_inter = results_evaluation_imputation(y_true, y_pred_inter, y_mask)
+            mse_imp_inter, rmse_imp_inter, mae_imp_inter, mre_imp_inter = results_evaluation_imputation(
+                imputation_true, interplote, mask ^ 1)
 
             interpolation_metrics["mse_imputation_inter"].append(mse_imp_inter)
             interpolation_metrics["rmse_imputation_inter"].append(rmse_imp_inter)
@@ -473,26 +498,26 @@ class Exp_Imputation(Exp_Basic):
 
         return res_df, metrics_df, imputation_metrics_df, interpolation_metrics_df
 
-    def _show_plot(self,i,y_withnan,y_true,y_imputation,y_inter,path=None):
-        x_range = np.arange(self.args.num_train -self.args.pred_len*7, self.args.num_train)
-        y_true_plot = y_true[-self.args.pred_len*7:]
-        plt.figure(i+1, figsize=(20, 5))
+    def _show_plot(self, i, y_withnan, y_true, y_imputation, y_inter, path=None):
+        x_range = np.arange(self.args.num_train - self.args.pred_len * 7, self.args.num_train)
+        y_true_plot = y_true[-self.args.pred_len * 7:]
+        plt.figure(self.args.target.index(i) + 1, figsize=(20, 5))
         plt.plot(x_range, y_true_plot, "r-", label="True values")
 
-        y_withnan_plot = y_withnan[-self.args.pred_len*7:]
+        y_withnan_plot = y_withnan[-self.args.pred_len * 7:]
         plt.plot(x_range, y_withnan_plot, "k-", label="With nan values")
 
         y_imputation_plot = y_imputation[-self.args.pred_len * 7:]
-        plt.plot(x_range, y_imputation_plot, "g--", label="Imputation values")
+        plt.plot(x_range, y_imputation_plot, "g-", linestyles="dashed", label="Imputation values")
 
         y_inter_plot = y_inter[-self.args.pred_len * 7:]
-        plt.plot(x_range, y_inter_plot, "b--", label="Interpolate values")
+        plt.plot(x_range, y_inter_plot, "b-", linestyles="dashed", label="Interplote values")
         ymin, ymax = plt.ylim()
-        plt.vlines(self.args.num_train - self.args.pred_len*7, ymin, ymax, color="blue", linestyles="dashed", linewidth=2)
+        plt.vlines(self.args.num_train - self.args.pred_len * 7, ymin, ymax, color="blue", linestyles="dashed", linewidth=2)
         plt.ylim(ymin, ymax)
         plt.legend(loc="upper left")
         plt.title('Prediction')
         plt.xlabel("Periods")
         plt.ylabel("Y")
-        plt.savefig(os.path.join(path,'{}.png'.format(i)))
+        plt.savefig(os.path.join(path, '{}.png'.format(i)))
         plt.close()
