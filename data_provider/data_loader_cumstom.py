@@ -44,6 +44,10 @@ class Dataset_cumstom(Dataset):
 
         self.root_path = root_path
         self.data_path = data_path
+        if flag == 'test':
+            self.source_data_path = 'operational_data.csv'
+            self.data_path = 'operational_data.csv'
+
         self.__read_data__()
 
         self.enc_in = self.data_x.shape[-1]

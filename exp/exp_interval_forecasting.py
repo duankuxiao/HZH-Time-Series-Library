@@ -25,8 +25,8 @@ class Exp_Forecast(Exp_Basic):
     def __init__(self, args):
         super(Exp_Forecast, self).__init__(args)
         self.likelihood = args.likelihood
-        self.loss = args.loss
-        if self.loss == "adaptive":
+        self.loss_method = args.loss_method
+        if self.loss_method == "adaptive":
             self.log_sigma_mse = nn.Parameter(torch.zeros(1))
             self.log_sigma_nll = nn.Parameter(torch.zeros(1))
 
@@ -50,7 +50,8 @@ class Exp_Forecast(Exp_Basic):
         return model_optim
 
     def _select_criterion(self):
-        criterion = nn.MSELoss()
+        if self.args.loss == 'MSE':
+            criterion = nn.MSELoss()
         return criterion
 
     def _select_scheduler(self, model_optim, train_loader):
@@ -66,18 +67,18 @@ class Exp_Forecast(Exp_Basic):
         return scheduler
 
     def _loss_function(self, criterion, pred, true, mu, sigma):
-        if self.loss == "g":
+        if self.loss_method == "g":
             loss = gaussian_likelihood_loss(true, mu, sigma)
             # loss = criterion(pred,true,sigma)
-        elif self.loss == "nb":
+        elif self.loss_method == "nb":
             loss = negative_binomial_loss(true, mu, sigma)
-        elif self.loss == "MSE":
+        elif self.loss_method == "mse":
             loss = criterion(pred, true)
-        elif self.loss == "MSEmu":
+        elif self.loss_method == "msemu":
             loss = criterion(mu, true)
-        elif self.loss == "hybridmu":
+        elif self.loss_method == "hybridmu":
             loss = criterion(mu, true) + gaussian_likelihood_loss(true, mu, sigma) * 0.1
-        elif self.loss == "adaptive":
+        elif self.loss_method == "adaptive":
             if self.args.model == 'AttLLM':
                 mse_loss = 0
                 nll_loss = 0
@@ -150,6 +151,8 @@ class Exp_Forecast(Exp_Basic):
         save_config(self.args, os.path.join(path, 'configs.pkl'))
 
         time_now = time.time()
+        time_start = time.time()
+
         train_steps = len(train_loader)
         early_stopping = EarlyStopping(patience=self.args.patience, verbose=True,accelerator=self.accelerator)
 
@@ -165,7 +168,7 @@ class Exp_Forecast(Exp_Basic):
 
         # Initialize a dictionary to store loss values
         loss_records = {"epoch": [], "train_loss": [], "vali_loss": []}
-        if self.loss == 'adaptive':
+        if self.loss_method == 'adaptive':
             loss_records = {"epoch": [], "train_loss": [], "vali_loss": [], "mse_weight": [], "nll_weight": []}
 
         for epoch in range(self.args.train_epochs):
@@ -261,15 +264,17 @@ class Exp_Forecast(Exp_Basic):
 
             # Record loss values
             loss_records["epoch"].append(epoch + 1)
+            loss_records["time"].append(round((time.time() - time_start)/60,4))
             loss_records["train_loss"].append(train_loss)
             loss_records["vali_loss"].append(vali_loss)
-            if self.loss == 'adaptive':
+            if self.loss_method == 'adaptive':
                 loss_records["mse_weight"].append(self.log_sigma_mse.detach().numpy())
                 loss_records["nll_weight"].append(self.log_sigma_nll.detach().numpy())
 
             # test_loss = self.vali(test_data, test_loader, criterion)
             cost_time = round((time.time() - epoch_time) / 60, 2)
-            print(" Epoch: {} cost time: {} min  ".format(epoch + 1, cost_time),"☆☆☆☆☆Train Loss: {0:.7f} Vali Loss: {1:.7f}".format(train_loss, vali_loss))
+            print(" Epoch: {} cost time: {} min".format(epoch + 1, cost_time))
+            print("☆☆☆☆☆Train Loss: {0:.7f} Vali Loss: {1:.7f}".format(train_loss, vali_loss))
             early_stopping(vali_loss, self.model, path)
 
             if np.isnan(vali_loss):
@@ -309,7 +314,14 @@ class Exp_Forecast(Exp_Basic):
         loss_df = pd.DataFrame(loss_records)
         loss_df.to_csv(os.path.join(folder_path, "loss_records.csv"), index=False)
         print("Loss records saved to:", os.path.join(folder_path, "loss_records.csv"))
-        if self.loss == "adaptive":
+        report = torch.cuda.memory_summary(device=self.device, abbreviated=False)
+        print(report)
+        peak_alloc = torch.cuda.max_memory_allocated(self.device)
+        used_bytes = torch.cuda.memory_allocated(self.device)
+        with open(os.path.join(folder_path, "memory_summary_{}_{}.txt".format(round(used_bytes * 1024 / (10 ** 9), 1), round(speed * 1000, 2))), "w") as f:
+            f.write(report)
+        print("Saved CUDA memory summary to cuda_memory_summary.txt")
+        if self.loss_method == "adaptive":
             print('mse weight: {}, nll weight: {}'.format(self.log_sigma_mse,self.log_sigma_nll))
         return self.model
 

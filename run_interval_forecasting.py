@@ -30,7 +30,7 @@ def get_setting(args,ii):
         args.d_layers,
         args.n_heads,
         args.moving_avg,
-        args.factor, args.loss)
+        args.factor, args.loss_method)
 
     if 'TimeLLM' in args.model:
         setting += '_{}_llmd{}_llmf{}_tk{}'.format(args.llm_model, args.llm_dim, args.llm_layers, args.top_k)
@@ -88,7 +88,7 @@ if __name__ == '__main__':
     # for pred_len in [72]:
     for data in ['hokkaido', 'kyushu', 'tohoku']:  # 'Sapporo','Sendai','Fukuoka','Tokyo'   'hokkaido', 'kyushu', 'tohoku'
         all_results = []
-        for loss in ['adaptive']:
+        for loss_method in ['adaptive']:
             for model in ['RNN', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLMformer']:
             # for model in ['TimeLLMformer']:  # 'AttLLM'
                 args = deepcopy(default_args)
@@ -103,7 +103,7 @@ if __name__ == '__main__':
                 args.use_prompt = True
 
                 args.model_id = '{}'.format(data)
-                args.loss = 'adaptive'  # 'g' 'nb' 'mse' 'msemu' 'hybridmu'
+                args.loss_method = 'adaptive'  # 'g' 'nb' 'mse' 'msemu' 'hybridmu'
 
                 args.model = model  # [Autoformer, TimeLLM, TimeLLMformer, TimesNet, D Linear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
                 args = model_hyparameter_setup(args)

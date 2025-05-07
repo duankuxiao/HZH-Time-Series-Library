@@ -135,26 +135,24 @@ class Exp_Forecast(Exp_Basic):
                 iter_count += 1
                 model_optim.zero_grad()
 
+                batch_x = batch_x.float()
+                batch_y = batch_y.float()
+                batch_x_mark = batch_x_mark.float()
+                batch_y_mark = batch_y_mark.float()
+                x_forecast = x_forecast.float()
+
+                # decoder input
+                dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
+                dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float()
                 if self.args.accelerate:
-                    batch_x = batch_x.float()
-                    batch_y = batch_y.float()
-                    batch_x_mark = batch_x_mark.float()
-                    batch_y_mark = batch_y_mark.float()
-                    x_forecast = x_forecast.float()
-
-                    # decoder input
-                    dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
-                    dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float()
+                    pass
                 else:
-                    batch_x = batch_x.float().to(self.device)
-                    batch_y = batch_y.float().to(self.device)
-                    batch_x_mark = batch_x_mark.float().to(self.device)
-                    batch_y_mark = batch_y_mark.float().to(self.device)
-                    x_forecast = x_forecast.float().to(self.device)
-
-                    # decoder input
-                    dec_inp = torch.zeros_like(batch_y[:, -self.args.pred_len:, :]).float()
-                    dec_inp = torch.cat([batch_y[:, :self.args.label_len, :], dec_inp], dim=1).float().to(self.device)
+                    batch_x = batch_x.to(self.device)
+                    batch_y = batch_y.to(self.device)
+                    batch_x_mark = batch_x_mark.to(self.device)
+                    batch_y_mark = batch_y_mark.to(self.device)
+                    x_forecast = x_forecast.to(self.device)
+                    dec_inp = dec_inp.to(self.device)
 
                 # encoder - decoder
                 if self.args.use_amp:

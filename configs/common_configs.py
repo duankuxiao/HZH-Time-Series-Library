@@ -51,6 +51,13 @@ parser.add_argument('--feature_cols', type=list, default=None, help="input featu
 #        'Wind_speed', 'Sunshine_duration', 'Snowfall',
 #        'Global_horizontal_irradiance']
 
+# imputation task
+parser.add_argument('--mask_rate', type=float, default=0.2, help='mask_rate')
+parser.add_argument('--ori_weight', type=float, default=1, help='ori_weight')
+parser.add_argument('--missing_weight', type=float, default=1, help='missing_weight')
+
+
+
 parser.add_argument('--seasonal_patterns', type=str, default='Hourly', help='subset for M4')
 parser.add_argument('--inverse', action='store_true', help='inverse output data', default=False)
 
@@ -93,6 +100,7 @@ parser.add_argument('--llm_model', type=str, default='BERT', help='LLM model')  
 parser.add_argument('--llm_dim', type=int, default=768, help='LLM model dimension')  # LLama7b:4096; GPT2-small:768; BERT-base:768
 parser.add_argument('--llm_layers', type=int, default=6, help='bert_layers=6 llama_layers=32')
 parser.add_argument('--use_prompt', action='store_true', help='input forecast data', default=True)
+parser.add_argument('--scale', action='store_true', help='scale', default=True)
 
 # RNN
 parser.add_argument('--rnn_model', type=str, default='LSTM', help='RNN model')  # GRU, LSTM, seq2seq
@@ -111,6 +119,8 @@ parser.add_argument('--patience', type=int, default=8, help='early stopping pati
 parser.add_argument('--learning_rate', type=float, default=0.001, help='optimizer learning rate 0.0001 for other models  0.01 for LLM')
 parser.add_argument('--des', type=str, default='test', help='exp description')
 parser.add_argument('--loss', type=str, default='MSE', help='loss function')
+parser.add_argument('--loss_method', type=str, default='MSE', help='mse msemu fix adaptive hybird')
+
 parser.add_argument('--lradj', type=str, default='type1', help='adjust learning rate')
 parser.add_argument('--pct_start', type=float, default=0.2, help='pct_start')
 parser.add_argument('--use_amp', action='store_true', help='use automatic mixed precision training', default=False)
