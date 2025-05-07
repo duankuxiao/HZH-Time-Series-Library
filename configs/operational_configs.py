@@ -9,7 +9,7 @@ args.data_path = 'operational_data_5min.csv'
 args.source_data_path = 'operational_data_5min.csv'
 args.freq = 't'
 args.features = 'M'
-
+1
 args.num_train = 88693 - 31 * 24 * 12 * 2 - 30 * 24 * 12  # 71113
 args.num_test = 30 * 24 * 12 + 31 * 24 * 12  # 1465  # 4320   val 5622
 
