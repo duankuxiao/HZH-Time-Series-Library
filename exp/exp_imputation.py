@@ -16,7 +16,7 @@ from utils.dtw_metric import dtw, accelerated_dtw
 from utils.augmentation import run_augmentation, run_augmentation_single
 from utils.tools import results_evaluation, save_config
 from utils.masking import mask_custom
-from utils.metrics_imputation import calc_mae, calc_mse
+from utils.metrics_imputation import calc_mae, calc_mse, results_evaluation_imputation, interpolate_nan_matrix
 
 from torch.optim import lr_scheduler
 
@@ -353,8 +353,12 @@ class Exp_Imputation(Exp_Basic):
             if not os.path.exists(folder_path):
                 os.makedirs(folder_path)
 
+        imputation_trues = []
+        pred_trues = []
+        imputations = []
         preds = []
-        trues = []
+        x_withnans = []
+        masks = []
 
         self.model.eval()
 
@@ -395,7 +399,10 @@ class Exp_Imputation(Exp_Basic):
                     self.accelerator.wait_for_everyone()
                     outputs = self.accelerator.gather_for_metrics(outputs)
 
-                outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
+                inp = outputs[:,:self.args.seq_len, -self.f_dim:]
+                mask = outputs[:,:self.args.seq_len, -self.f_dim:]
+                outputs = outputs[:, :, -self.f_dim:]
+                batch_x = batch_x[:, :self.args.seq_len, -self.f_dim:]
                 batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:]  # .to(self.device)
                 outputs = outputs.detach().cpu().numpy()
                 batch_y = batch_y.detach().cpu().numpy()
@@ -404,43 +411,34 @@ class Exp_Imputation(Exp_Basic):
                     outputs = test_data.inverse_transform(outputs.reshape(shape[0] * shape[1], -1)).reshape(shape)
                     batch_y = test_data.inverse_transform(batch_y.reshape(shape[0] * shape[1], -1)).reshape(shape)
 
-                outputs = outputs[:, :, -self.f_dim:]
-                batch_y = batch_y[:, :, -self.f_dim:]
+                x_withnans.append(inp)
+                masks.append(mask)
+                imputation_trues.append(batch_x)
+                pred_trues.append(batch_y)
+                imputations.append(outputs[:, :self.args.seq_len, :])
+                preds.append(outputs[:, -self.args.pred_len:, :])
 
-                pred = outputs
-                true = batch_y
-
-                preds.append(pred)
-                trues.append(true)
-                verbose_interval = (len(test_data) // 2) if len(test_data) > 2 else 1
-                verbose = False
-                if verbose:
-                    if (i + 1) % verbose_interval == 0:
-                        input = batch_x.detach().cpu().numpy()
-                        if test_data.scale and self.args.inverse:
-                            shape = input.shape
-                            input = test_data.inverse_transform(input.reshape(shape[0] * shape[1], -1)).reshape(shape)
-                        gt = np.concatenate((input[0, :, -1], true[0, :, -1]), axis=0)
-                        pd = np.concatenate((input[0, :, -1], pred[0, :, -1]), axis=0)
-                        res_path = os.path.join(folder_path + '/test_results/')
-                        if not os.path.exists(res_path):
-                            os.makedirs(res_path)
-                        visual(gt, pd, os.path.join(res_path, str(i) + '.pdf'))
-
+        x_withnans = np.concatenate(x_withnans, axis=0)
         preds = np.concatenate(preds, axis=0)
-        trues = np.concatenate(trues, axis=0)
-        print('test shape:', preds.shape, trues.shape)
+        masks = np.concatenate(masks, axis=0)
+        imputation_trues = np.concatenate(imputation_trues, axis=0)
+        pred_trues = np.concatenate(pred_trues, axis=0)
+        imputations = np.concatenate(imputations, axis=0)
+
+        print('test shape:', preds.shape, imputation_trues.shape)
         preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
-        trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
-        print('test shape:', preds.shape, trues.shape)
+        pred_trues = pred_trues.reshape(-1, pred_trues.shape[-2], pred_trues.shape[-1])
+        imputations = imputations.reshape(-1, imputations.shape[-2], imputations.shape[-1])
+        imputation_trues = imputation_trues.reshape(-1, imputation_trues.shape[-1])
+        print('test shape:', preds.shape, imputations.shape)
 
         # dtw calculation
         if self.args.use_dtw:
             dtw_list = []
             manhattan_distance = lambda x, y: np.abs(x - y)
-            for i in range(preds.shape[0]):
-                x = preds[i].reshape(-1, 1)
-                y = trues[i].reshape(-1, 1)
+            for i in range(imputations.shape[0]):
+                x = imputations[i].reshape(-1, 1)
+                y = imputation_trues[i].reshape(-1, 1)
                 if i % 100 == 0:
                     print("calculating dtw iter:", i)
                 d, _, _, _ = accelerated_dtw(x, y, dist=manhattan_distance)
@@ -450,7 +448,7 @@ class Exp_Imputation(Exp_Basic):
             dtw = -999
         trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
 
-        [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(trues.flatten(), preds.flatten())
+        [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(imputation_trues.flatten(), imputations.flatten())
         print('mae:{}, r2:{}, dtw:{}'.format(mae, r2, dtw))
         f = open(os.path.join('./results', "result_long_term_forecast.txt"), 'a')
         f.write(setting + "  \n")
@@ -459,78 +457,126 @@ class Exp_Imputation(Exp_Basic):
         f.write('\n')
         f.close()
         np.save(os.path.join(folder_path, 'metrics_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), np.array([mae, mse, rmse, r2, corr]))
-        np.save(os.path.join(folder_path, 'pred_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), preds)
-        np.save(os.path.join(folder_path, 'true_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), trues)
+        np.save(os.path.join(folder_path, 'preds_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), preds)
+        np.save(os.path.join(folder_path, 'pred_trues_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), pred_trues)
+        np.save(os.path.join(folder_path, 'imputations_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), imputations)
+        np.save(os.path.join(folder_path, 'imputation_trues_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), imputation_trues)
 
         if self.args.features == 'M':
-            pred_res,metrics_df = self.res_evaluation_multi_target(trues, preds,trainable_params, folder_path)
+            pred_res, metrics_df, imputation_metrics_df, interpolation_metrics_df = self.res_evaluation_multi_target(imputation_trues, imputations, x_withnans, masks,
+                                                                                                                     trainable_params, self.folder_path)
         else:
-            pred_res,metrics_df = self.res_evaluation(trues,preds,trainable_params, folder_path)
+            pred_res, metrics_df = self.res_evaluation(imputation_trues, imputations, x_withnans, masks, trainable_params, self.folder_path)
         return pred_res,metrics_df
 
-    def res_evaluation(self,true, pred,trainable_params, path):
+    def res_evaluation(self, X_ori, pred, X_withnan, indicating_mask, trainable_params, path):
+
         stride = self.args.pred_len
-        pred_output = np.squeeze(pred,axis=-1)[::stride, :].reshape(-1, 1)
-        true_output = np.squeeze(true,axis=-1)[::stride, :].reshape(-1, 1)
+        pred_output = np.squeeze(pred, axis=-1)[::stride, :].reshape(-1, 1)
+        true_output = np.squeeze(X_ori, axis=-1)[::stride, :].reshape(-1, 1)
+        X_withnan = np.squeeze(X_withnan, axis=-1)[::stride, :].reshape(-1, 1)
+        indicating_mask = np.squeeze(indicating_mask, axis=-1)[::stride, :].reshape(-1, 1)
 
-        pred_res = pd.DataFrame({'pred': pred_output.flatten(), 'true': true_output.flatten()})
-        pred_res.loc[pred_res['true'] < 1e-3, 'true'] = 0
-        pred_res.loc[pred_res['true'] < 1e-3, 'pred'] = 0
+        pred_interpolate = interpolate_nan_matrix(X_withnan.reshape(-1, 1), method=self.args.interpolate_method, order=self.args.interpolate_order)
+        nan_mask = np.isnan(pred_interpolate)
+        pred_interpolate[nan_mask] = true_output[nan_mask]
+        # if np.isnan(pred_interpolate[0,0]):
+        #     pred_interpolate[0, 0] = true_output[0, 0]
 
-        [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(pred_res['true'].values, pred_res['pred'].values)
+        pred_res = pd.DataFrame(
+            {'X_ori': true_output.flatten(), 'X_pred': pred_output.flatten(), 'X_pred_interpolate': pred_interpolate.flatten(), 'X_withnan': X_withnan.flatten()})
+        pred_res.loc[pred_res['X_ori'] < 1e-3, 'X_pred'] = 0
+        pred_res.loc[pred_res['X_ori'] < 1e-3, 'X_pred_interpolate'] = 0
+        pred_res.loc[pred_res['X_ori'] < 1e-3, 'X_ori'] = 0
+        pred_res.loc[pred_res['X_ori'] < 1e-3, 'X_withnan'] = 0
 
-        pred_res.to_csv(os.path.join(path, 'pred_results_{}_{}.csv'.format(self.args.data,self.args.data_path[:-4])))
-        metrics_df = pd.DataFrame({'trainable_params':trainable_params,'mse':mse,'rmse': rmse,'nrmse':nrmse, 'mae': mae, 'mape': mape,'rae':rae,'r2': r2,'corr':corr}, index=[0])
-        metrics_df.to_csv(os.path.join(path, 'metrics_results_{}_{}.csv'.format(self.args.data,self.args.data_path[:-4])))
+        [mse, rmse, nrmse, mae, mape, rae, r2, corr] = results_evaluation(pred_res['X_ori'].values, pred_res['X_pred'].values)
+        [mse_imputation, rmse_imputation, mae_imputation, mre_imputation] = results_evaluation_imputation(np.nan_to_num(X_withnan), pred_output, indicating_mask)
+        [mse_imputation_inter, rmse_imputation_inter, mae_imputation_inter, mre_imputation_inter] = results_evaluation_imputation(np.nan_to_num(X_withnan), pred_interpolate,
+                                                                                                                                  indicating_mask)
 
-        print('RMSE: {} MAE: {} R2: {}'.format(rmse, mae, r2))
-        return pred_res,metrics_df
+        pred_res.to_csv(os.path.join(path, 'pred_results_{}_{}.csv'.format(self.args.data, self.args.data_path[:-4])))
+        metrics_df = pd.DataFrame({'trainable_params': trainable_params, 'mse': mse, 'rmse': rmse, 'nrmse': nrmse, 'mae': mae, 'mape': mape, 'rae': rae, 'r2': r2, 'corr': corr},
+                                  index=[0])
+        metrics_df.to_csv(os.path.join(path, 'metrics_results_{}_{}.csv'.format(self.args.data, self.args.data_path[:-4])))
 
-    def res_evaluation_multi_target(self,true,pred,trainable_params,path):
+        metrics_df_imputation = pd.DataFrame({'mse_imputation': mse_imputation, 'rmse_imputation': rmse_imputation, 'mae_imputation': mae_imputation,
+                                              'mre_imputation': mre_imputation, 'mse_imputation_inter': mse_imputation_inter, 'rmse_imputation_inter': rmse_imputation_inter,
+                                              'mae_imputation_inter': mae_imputation_inter, 'mre_imputation_inter': mre_imputation_inter, }, index=[0])
+        metrics_df_imputation.to_csv(os.path.join(path, 'metrics_results_imputation_{}_{}.csv'.format(self.args.data, self.args.data_path[:-4])))
+
+        print('MAE: {} NAE_inter: {}'.format(mae_imputation, mae_imputation_inter))
+        return pred_res, metrics_df
+
+    def res_evaluation_multi_target(self, X_ori, pred, X_withnan, indicating_mask, trainable_params, path):
         stride = self.args.pred_len
-        true = true[::stride,:,:].reshape(-1,len(self.args.target))
-        pred = pred[::stride,:,:].reshape(-1,len(self.args.target))
-        columns_list = []
-        for i in self.args.target:
-            columns_list.append('{}_true'.format(i))
-            columns_list.append('{}_pred'.format(i))
-        res_df = pd.DataFrame(columns=columns_list)
-        mse_list, rmse_list, mae_list, r2_list, corr_list,mape_list = [], [], [], [], [], []
-        nrmse_list,rae_list = [],[]
-        for i in self.args.target:
-            res_df['{}_pred'.format(i)] = pred[:, self.args.target.index(i)]
-            res_df['{}_true'.format(i)] = true[:, self.args.target.index(i)]
-            self._show_plot(i,y_true=true[:, self.args.target.index(i)],y_pred=pred[:, self.args.target.index(i)],path=path)
+        true = X_ori[::stride, :, :].reshape(-1, len(self.args.target))
+        pred = pred[::stride, :, :].reshape(-1, len(self.args.target))
+        X_withnan = X_withnan[::stride, :, :].reshape(-1, len(self.args.target))
+        indicating_mask = indicating_mask[::stride, :, :].reshape(-1, len(self.args.target))
+        pred_interpolate = interpolate_nan_matrix(X_withnan, method=self.args.interpolate_method, order=self.args.interpolate_order)
 
-            [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(true[:, self.args.target.index(i)], pred[:, self.args.target.index(i)])
-            print('{} mse:{}, rmse:{} mae:{} r2:{} corr:{}'.format(i, mse, rmse, mae, r2, corr))
-            np.save(os.path.join(path, 'metrics_{}.npy'.format(i)), np.array([mse, rmse, mae, r2, corr]))
+        # Create DataFrame for true and predicted values
+        columns = [f"{i}_{col}" for i in self.args.target for col in ["ori", "pred", "pred_inter", "X_withnan"]]
+        res_df = pd.DataFrame(np.hstack([true, pred, pred_interpolate, X_withnan]), columns=columns)
 
-            mse_list.append(mse)
-            rmse_list.append(rmse)
-            nrmse_list.append(nrmse)
-            mae_list.append(mae)
-            mape_list.append(mape)
-            rae_list.append(rae)
-            r2_list.append(r2)
-            corr_list.append(corr)
+        # Initialize metrics dictionaries
+        metrics = {key: [] for key in ["mse", "rmse", "nrmse", "mae", "mape", "rae", "r2", "corr"]}
+        imputation_metrics = {key: [] for key in ["mse_imputation", "rmse_imputation", "mae_imputation", "mre_imputation"]}
+        interpolation_metrics = {key: [] for key in ["mse_imputation_inter", "rmse_imputation_inter", "mae_imputation_inter", "mre_imputation_inter"]}
 
-        res_metrics_df = pd.DataFrame(columns=['trainable_params','mse', 'rmse','nrmse', 'mae','mape','rae', 'r2','corr'],
-                                      index=[i for i in self.args.target])
-        res_metrics_df['trainable_params'] = trainable_params
-        res_metrics_df['mse'] = mse_list
-        res_metrics_df['rmse'] = rmse_list
-        res_metrics_df['nrmse'] = nrmse_list
-        res_metrics_df['rae'] = rae_list
-        res_metrics_df['mae'] = mae_list
-        res_metrics_df['mape'] = mape_list
-        res_metrics_df['r2'] = r2_list
-        res_metrics_df['corr'] = corr_list
-        res_metrics_df.loc['mean'] = res_metrics_df.mean()
-        print(res_metrics_df.loc['mean'])
-        res_df.to_csv(os.path.join(path, 'pred_res_{}.csv'.format(self.args.data_path[:-4])))
-        res_metrics_df.to_csv(os.path.join(path, 'res_metrics_df_{}.csv'.format(self.args.data_path[:-4])))
-        return res_df,res_metrics_df
+        # Calculate metrics for each target
+        for idx, target in enumerate(self.args.target):
+            t_true, t_pred, t_pred_inter, t_withnan, t_mask = (
+                true[:, idx], pred[:, idx], pred_interpolate[:, idx], X_withnan[:, idx], indicating_mask[:, idx])
+
+            # Metrics for full sequence
+            mse, rmse, nrmse, mae, mape, rae, r2, corr = results_evaluation(t_true, t_pred)
+            metrics["mse"].append(mse)
+            metrics["rmse"].append(rmse)
+            metrics["nrmse"].append(nrmse)
+            metrics["mae"].append(mae)
+            metrics["mape"].append(mape)
+            metrics["rae"].append(rae)
+            metrics["r2"].append(r2)
+            metrics["corr"].append(corr)
+
+            # Metrics for imputation (model output)
+            mse_imp, rmse_imp, mae_imp, mre_imp = results_evaluation_imputation(
+                np.nan_to_num(t_withnan), t_pred, t_mask)
+
+            imputation_metrics["mse_imputation"].append(mse_imp)
+            imputation_metrics["rmse_imputation"].append(rmse_imp)
+            imputation_metrics["mae_imputation"].append(mae_imp)
+            imputation_metrics["mre_imputation"].append(mre_imp)
+
+            # Metrics for imputation (interpolation)
+            mse_imp_inter, rmse_imp_inter, mae_imp_inter, mre_imp_inter = results_evaluation_imputation(
+                np.nan_to_num(t_withnan), t_pred_inter, t_mask)
+
+            interpolation_metrics["mse_imputation_inter"].append(mse_imp_inter)
+            interpolation_metrics["rmse_imputation_inter"].append(rmse_imp_inter)
+            interpolation_metrics["mae_imputation_inter"].append(mae_imp_inter)
+            interpolation_metrics["mre_imputation_inter"].append(mre_imp_inter)
+
+        # Create DataFrames for metrics
+        metrics_df = pd.DataFrame(metrics, index=self.args.target)
+        imputation_metrics_df = pd.DataFrame(imputation_metrics, index=self.args.target)
+        interpolation_metrics_df = pd.DataFrame(interpolation_metrics, index=self.args.target)
+
+        # Add mean row
+        metrics_df.loc["mean"] = metrics_df.mean()
+        imputation_metrics_df.loc["mean"] = imputation_metrics_df.mean()
+        interpolation_metrics_df.loc["mean"] = interpolation_metrics_df.mean()
+        print(imputation_metrics_df.loc["mean"])
+
+        # Save DataFrames
+        res_df.to_csv(os.path.join(path, f"pred_res_{self.args.data_path[:-4]}.csv"))
+        metrics_df.to_csv(os.path.join(path, f"metrics_df_{self.args.data_path[:-4]}.csv"))
+        imputation_metrics_df.to_csv(os.path.join(path, f"imputation_metrics_df_{self.args.data_path[:-4]}.csv"))
+        interpolation_metrics_df.to_csv(os.path.join(path, f"interpolation_metrics_df_{self.args.data_path[:-4]}.csv"))
+
+        return res_df, metrics_df, imputation_metrics_df, interpolation_metrics_df
 
     def _show_plot(self,i,y_true,y_pred,path=None):
         x_range = np.arange(self.args.num_train -self.args.pred_len*7, self.args.num_train)

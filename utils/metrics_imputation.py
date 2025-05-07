@@ -8,6 +8,7 @@ Evaluation metrics related to error calculation (like in tasks regression, imput
 from typing import Union, Optional
 
 import numpy as np
+import pandas as pd
 import torch
 
 
@@ -376,3 +377,39 @@ def calc_quantile_crps_sum(
         q_loss = calc_quantile_loss(targets, q_pred, quantiles[i], masks)
         CRPS += q_loss / denominator
     return CRPS.item() / len(quantiles)
+
+def results_evaluation_imputation(y_test_seq, y_pred_seq,mask):
+    mae = calc_mae(targets=y_test_seq, predictions=y_pred_seq,masks=mask)
+    mse = calc_mse(targets=y_test_seq, predictions=y_pred_seq,masks=mask)
+    rmse = calc_rmse(targets=y_test_seq, predictions=y_pred_seq,masks=mask)
+    mre = calc_mre(targets=y_test_seq, predictions=y_pred_seq,masks=mask)
+    return [mse, rmse, mae,mre]
+
+def interpolate_nan_matrix(matrix, method='linear', axis=0, order=None):
+    """
+    对带有 NaN 值的矩阵进行插值，返回插值后的完整矩阵。
+
+    参数：
+    - matrix (ndarray): 输入的带有 NaN 值的矩阵。
+    - method (str): 插值方法，默认是 'linear'。
+                    其他可选方法包括 'polynomial', 'spline' 等。
+    - axis (int): 插值方向，0 表示按列插值，1 表示按行插值。
+    - order (int): 多项式或样条插值的阶数，仅在方法为 'polynomial' 或 'spline' 时使用。
+
+    返回：
+    - interpolated_matrix (ndarray): 插值后的完整矩阵。
+    """
+    # 将输入矩阵转换为 DataFrame，以便使用 pandas 的插值功能
+    df = pd.DataFrame(matrix)
+
+    if method in ['polynomial', 'spline'] and order is not None:
+        if method == 'spline':
+            assert 1 <= order <= 5, "order should be more than 1 and less than 5"
+        df_interpolated = df.interpolate(method=method, axis=axis, order=order)
+    else:
+        df_interpolated = df.interpolate(method=method)
+
+    # 将 DataFrame 转换回 ndarray
+    interpolated_matrix = df_interpolated.to_numpy()
+
+    return interpolated_matrix

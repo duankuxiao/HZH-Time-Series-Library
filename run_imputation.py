@@ -1,7 +1,7 @@
 import pandas as pd
 import torch
 import os
-from exp.exp_forecasting import Exp_Forecast
+from exp.exp_imputation import Exp_Imputation
 import random
 import numpy as np
 
@@ -50,9 +50,8 @@ def get_setting(args, ii):
         setting += '_scale'
     return setting
 
-
 def main(args):
-    Exp = Exp_Forecast
+    Exp = Exp_Imputation
 
     if args.is_training:
         for ii in range(args.itr):
@@ -78,7 +77,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    from configs.aircon_configs import args as default_args
+    from configs.operational_configs import args as default_args
     from copy import deepcopy
     from utils.hyparameter_setup import model_hyparameter_setup
 
@@ -88,22 +87,15 @@ if __name__ == '__main__':
         args.label_len = args.seq_len
         args.pred_len = pred_len
         all_results = []
-        for model in ['RNN', 'DLinear', 'Transformer', 'iTransformer', 'PatchTST', 'TimesNet', 'TimeLLMformer']:
+        for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'PatchTST', 'TimesNet', 'TimeLLMformer']:
         # for model in ['Transformer']:
-        # for model in ['TimesNet', 'TimeLLMformer']:
 
-            args.model_id = '1'
+            args.model_id = 'test'
             # args.data_path = '{}.csv'.format(args.model_id)
             # args.source_data_path = '{}.csv'.format(args.model_id)
-            args.features = 'M'
-            args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
-            args.llm_model = 'BERT'
-            args.is_training = 1
-            args.accelerate = False
-            args.use_prompt = True
-            args.use_forecast = True
 
             args = model_hyparameter_setup(args)
+            args.task_name = 'imputation'
 
             _, res_metrics_df = main(args)
             res_metrics_df.insert(0, 'model', model)

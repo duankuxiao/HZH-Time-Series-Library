@@ -122,6 +122,7 @@ class Model(nn.Module):
             dec_out = self.forecast(x_enc,x_forecast)
             return dec_out[:, -self.pred_len:, :]  # [B, L, D]
         if self.task_name == 'imputation':
+            x_enc = x_enc * mask
             dec_out = self.imputation(x_enc)
             return dec_out  # [B, L, D]
         if self.task_name == 'anomaly_detection':
