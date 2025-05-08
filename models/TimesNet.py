@@ -204,6 +204,28 @@ class Model(nn.Module):
         dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.seq_len, 1))
         return dec_out
 
+    def imputation_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None,mask=None):
+        # Normalization from Non-stationary Transformer
+        means = torch.sum(x_enc, dim=1) / torch.sum(mask == 1, dim=1)
+        means = means.unsqueeze(1).detach()
+        x_enc = x_enc - means
+        x_enc = x_enc.masked_fill(mask == 0, 0)
+        stdev = torch.sqrt(torch.sum(x_enc * x_enc, dim=1) / torch.sum(mask == 1, dim=1) + 1e-5)
+        stdev = stdev.unsqueeze(1).detach()
+        x_enc /= stdev
+
+        # embedding
+        enc_out = self.enc_embedding(x_enc, x_mark_enc)  # [B,T,C]
+        # TimesNet
+        for i in range(self.layer):
+            enc_out = self.layer_norm(self.model[i](enc_out))
+        # porject back
+        dec_out = self.projection(enc_out)
+
+        # De-Normalization from Non-stationary Transformer
+        dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
+        dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
+        return dec_out
     def anomaly_detection(self, x_enc):
         # Normalization from Non-stationary Transformer
         means = x_enc.mean(1, keepdim=True).detach()
@@ -249,6 +271,9 @@ class Model(nn.Module):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
             return dec_out[:, -self.pred_len:, :]  # [B, L, D]
+        if self.task_name == 'imputation_forecast':
+            dec_out = self.imputation_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
+            return dec_out  # [B, L, D]
         if self.task_name == 'imputation':
             dec_out = self.imputation(
                 x_enc, x_mark_enc, x_dec, x_mark_dec, mask)

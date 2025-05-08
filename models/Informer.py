@@ -183,6 +183,9 @@ class Model(nn.Module):
         if self.task_name == 'imputation':
             dec_out = self.imputation(x_enc, x_mark_enc, x_dec, x_mark_dec, mask)
             return dec_out  # [B, L, D]
+        if self.task_name == 'imputation_forecast':
+            dec_out = self.long_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec)
+            return dec_out # [B, L, D]
         if self.task_name == 'anomaly_detection':
             dec_out = self.anomaly_detection(x_enc)
             return dec_out  # [B, L, D]

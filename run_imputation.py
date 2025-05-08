@@ -82,7 +82,6 @@ def main(args):
 if __name__ == '__main__':
     # from configs.operational_configs import args as default_args
     from configs.electricity_configs import args as default_args
-
     from copy import deepcopy
     from utils.hyparameter_setup import model_hyparameter_setup
 
@@ -102,7 +101,7 @@ if __name__ == '__main__':
             # args.source_data_path = '{}.csv'.format(args.model_id)
 
             args = model_hyparameter_setup(args)
-            args.task_name = 'imputation'  # imputation_forecast  imputation
+            args.task_name = 'imputation_forecast'  # imputation_forecast  imputation
             args.patience = 2
 
             res_df, metrics_df, imputation_metrics_df = main(args)

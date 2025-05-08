@@ -28,7 +28,12 @@ class Exp_Imputation(Exp_Basic):
         if self.args.loss_method == "adaptive":
             self.log_ori_loss = nn.Parameter(torch.zeros(1))
             self.log_missing_loss = nn.Parameter(torch.zeros(1))
-
+        if self.args.loss == 'MSE':
+            self.loss_func = calc_mse
+        elif self.args.loss == 'MAE':
+            self.loss_func = calc_mae
+        else:
+            raise NotImplementedError
 
     def _build_model(self):
         model = self.model_dict[self.args.model].Model(self.args).float()
@@ -62,32 +67,25 @@ class Exp_Imputation(Exp_Basic):
         return scheduler
 
     def _loss_function(self, imputation, true, mask):
-        if self.args.loss == 'MSE':
-            loss_func = calc_mse
-        elif self.args.loss == 'MAE':
-            loss_func = calc_mae
-        else:
-            raise NotImplementedError
-
         if self.args.loss_method == "fix":
-            ori_loss = loss_func(imputation, true, mask)
-            missing_loss = loss_func(imputation, true, mask ^ 1)
+            ori_loss = self.loss_func(imputation, true, mask)
+            missing_loss = self.loss_func(imputation, true, mask ^ 1)
             loss = self.args.ori_weight * ori_loss + self.args.missing_weight * missing_loss
         elif self.args.loss_method == "missing":
-            missing_loss = loss_func(imputation, true, mask ^ 1)
+            missing_loss = self.loss_func(imputation, true, mask ^ 1)
             loss = self.args.missing_weight * missing_loss
 
         elif self.args.loss_method == "adaptive":
             if self.args.model == 'TimeLLMformer':
                 missing_loss = 0
                 for i, tensor in enumerate(imputation):
-                    missing_loss += loss_func(tensor, true, mask)
+                    missing_loss += self.loss_func(tensor, true, mask)
                     if i == len(imputation) - 1:  # 仅在最后一个 tensor 时计算 MIT_loss
                         ori_loss = self.args.ori_weight * self.loss_func(tensor, true, mask ^ 1)
                 missing_loss = self.args.missing_weight * missing_loss / len(imputation)
             else:
-                ori_loss = loss_func(imputation, true, mask)
-                missing_loss = loss_func(imputation, true, mask ^ 1)
+                ori_loss = self.loss_func(imputation, true, mask)
+                missing_loss = self.loss_func(imputation, true, mask ^ 1)
 
             loss = 0.5 * (torch.exp(-self.log_ori_loss.to(true.device)) * ori_loss + torch.exp(-self.log_missing_loss.to(true.device)) * missing_loss +
                               self.log_ori_loss.to(true.device) + self.log_missing_loss.to(true.device))
@@ -160,6 +158,8 @@ class Exp_Imputation(Exp_Basic):
 
         # Initialize a dictionary to store loss values
         loss_records = {"epoch": [], "time": [], "train_loss": [], "vali_loss": []}
+        if self.args.loss_method == 'adaptive':
+            loss_records = {"epoch": [], "train_loss": [], "vali_loss": [], "ori_weight": [], "missing_weight": []}
 
         for epoch in range(self.args.train_epochs):
             iter_count = 0
@@ -240,6 +240,9 @@ class Exp_Imputation(Exp_Basic):
             loss_records["time"].append(round((time.time() - time_start)/60,4))
             loss_records["train_loss"].append(train_loss)
             loss_records["vali_loss"].append(vali_loss)
+            if self.args.loss_method == 'adaptive':
+                loss_records["ori_weight"].append(self.log_ori_loss.detach().numpy())
+                loss_records["missing_weight"].append(self.log_missing_loss.detach().numpy())
 
             # test_loss = self.vali(test_data, test_loader, criterion)
             cost_time = round((time.time() - epoch_time) / 60, 2)
@@ -325,7 +328,7 @@ class Exp_Imputation(Exp_Basic):
 
                 batch_x_mark = batch_x_mark.float().to(self.device)
                 inp = inp.float().to(self.device)
-                mask = mask.float().to(self.device)
+                mask = mask.to(self.device)
 
                 # encoder - decoder
                 if self.args.output_attention:
@@ -416,12 +419,12 @@ class Exp_Imputation(Exp_Basic):
 
         # Calculate metrics for each target
         for idx, target in enumerate(self.args.target):
-            y_true, y_imputation, y_pred_inter, y_withnan, y_mask = (
+            true_i, imputation_i, inter_i, withnan_i, mask_i = (
                 true[:, idx], imputations[:, idx], pred_interpolate[:, idx], X_withnan[:, idx], mask[:, idx])
-            self._show_plot(idx,y_withnan=y_withnan,y_true=y_true,y_imputation=y_imputation,y_inter=y_pred_inter,path=path)
+            self._show_plot(idx,y_withnan=withnan_i,y_true=true_i,y_imputation=imputation_i,y_inter=inter_i,path=path)
 
             # Metrics for full sequence
-            mse, rmse, nrmse, mae, mape, rae, r2, corr = results_evaluation(y_true, y_imputation)
+            mse, rmse, nrmse, mae, mape, rae, r2, corr = results_evaluation(true_i, imputation_i)
             metrics['trainable_params'] = trainable_params
             metrics["mse"].append(mse)
             metrics["rmse"].append(rmse)
@@ -433,7 +436,7 @@ class Exp_Imputation(Exp_Basic):
             metrics["corr"].append(corr)
 
             # Metrics for imputation (model output)
-            mse_imp, rmse_imp, mae_imp, mre_imp = results_evaluation_imputation(y_true, y_imputation, y_mask)
+            mse_imp, rmse_imp, mae_imp, mre_imp = results_evaluation_imputation(true_i, imputation_i, mask_i)
             imputation_metrics['trainable_params'] = trainable_params
             imputation_metrics["mse_imputation"].append(mse_imp)
             imputation_metrics["rmse_imputation"].append(rmse_imp)
@@ -441,7 +444,7 @@ class Exp_Imputation(Exp_Basic):
             imputation_metrics["mre_imputation"].append(mre_imp)
 
             # Metrics for imputation (interpolation)
-            mse_imp_inter, rmse_imp_inter, mae_imp_inter, mre_imp_inter = results_evaluation_imputation(y_true, y_pred_inter, y_mask)
+            mse_imp_inter, rmse_imp_inter, mae_imp_inter, mre_imp_inter = results_evaluation_imputation(true_i, inter_i, mask_i)
 
             imputation_metrics["mse_imputation_inter"].append(mse_imp_inter)
             imputation_metrics["rmse_imputation_inter"].append(rmse_imp_inter)
