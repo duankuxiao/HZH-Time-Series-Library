@@ -17,6 +17,7 @@ class Dataset_cumstom(Dataset):
 
         self.num_train = configs.num_train
         self.num_test = configs.num_test
+        self.task_name = configs.task_name
 
         self.source_data_path = configs.source_data_path
         self.forecast_dim = configs.forecast_dim
@@ -51,27 +52,40 @@ class Dataset_cumstom(Dataset):
         self.__read_data__()
 
         self.enc_in = self.data_x.shape[-1]
-        self.tot_len = len(self.data_x) - self.seq_len - self.pred_len + 1
+        if 'forecast' in self.task_name:
+            self.tot_len = len(self.data_x) - self.seq_len - self.pred_len + 1
+        else:
+            self.tot_len = len(self.data_x) - self.seq_len + 1
         if scale:
             self.std_ = self.target_scaler.scale_
 
     def __getitem__(self, index):
-        s_begin = index % self.tot_len
-        # s_begin = (index // 24) * 24
-        s_end = s_begin + self.seq_len
-        r_begin = s_end - self.label_len
-        r_end = r_begin + self.label_len + self.pred_len
-        seq_x = self.data_x[s_begin:s_end, :]
-        seq_y = self.data_y[r_begin:r_end, :]
-        seq_x_mark = self.data_stamp[s_begin:s_end]
-        seq_y_mark = self.data_stamp[r_begin:r_end]
-        # x_forecast = self.data_forecast[r_begin:r_end, :self.forecast_dim]
-        x_forecast = self.data_forecast[r_begin:r_end, :self.forecast_dim]
-
-        return seq_x, seq_y, seq_x_mark, seq_y_mark, x_forecast
+        if self.task_name == 'imputation':
+            s_begin = index % self.tot_len
+            # s_begin = (index // 24) * 24
+            s_end = s_begin + self.seq_len
+            seq_x = self.data_x[s_begin:s_end, :]
+            seq_x_mark = self.data_stamp[s_begin:s_end]
+            return seq_x, seq_x, seq_x_mark, seq_x_mark, seq_x
+        else:
+            s_begin = index % self.tot_len
+            # s_begin = (index // 24) * 24
+            s_end = s_begin + self.seq_len
+            r_begin = s_end - self.label_len
+            r_end = r_begin + self.label_len + self.pred_len
+            seq_x = self.data_x[s_begin:s_end, :]
+            seq_y = self.data_y[r_begin:r_end, :]
+            seq_x_mark = self.data_stamp[s_begin:s_end]
+            seq_y_mark = self.data_stamp[r_begin:r_end]
+            # x_forecast = self.data_forecast[r_begin:r_end, :self.forecast_dim]
+            x_forecast = self.data_forecast[r_begin:r_end, :self.forecast_dim]
+            return seq_x, seq_y, seq_x_mark, seq_y_mark, x_forecast
 
     def __len__(self):
-        return len(self.data_x) - self.seq_len - self.pred_len + 1
+        if 'forecast' in self.task_name:
+            return len(self.data_x) - self.seq_len - self.pred_len + 1
+        else:
+            return len(self.data_x) - self.seq_len + 1
 
     def inverse_transform(self, data):
         return self.target_scaler.inverse_transform(data)
@@ -103,14 +117,20 @@ class Dataset_cumstom(Dataset):
         df_source_domain = df_source_domain[['date'] + cols + self.target]
 
         num_vali = len(df_raw) - self.num_train - self.num_test
-        border1s = [0, self.num_train - self.seq_len, len(df_raw) - self.num_test - self.seq_len]
-        border2s = [self.num_train, self.num_train + num_vali, len(df_raw)]
+        if 'forecast' in self.task_name:
+            border1s = [0, self.num_train - self.seq_len, len(df_raw) - self.num_test - self.seq_len]
+            border2s = [self.num_train, self.num_train + num_vali, len(df_raw)]
+        else:
+            border1s = [0, self.num_train, len(df_raw) - self.num_test]
+            border2s = [self.num_train, self.num_train + num_vali, len(df_raw)]
+
 
         if self.data_path == 'tokyo_2016_.csv':
             self.num_train = 8760*4 - 8760 - 8760  # 67944
             num_vali = 8760
             border1s = [0, - num_vali - self.num_test - self.seq_len, - self.num_test - self.seq_len]
             border2s = [self.num_train, - self.num_test - self.seq_len, len(df_raw)]
+
 
         border1 = border1s[self.set_type]
         border2 = border2s[self.set_type]
@@ -157,7 +177,6 @@ class Dataset_cumstom(Dataset):
         elif self.timeenc == 1:
             data_stamp = time_features(pd.to_datetime(df_stamp['date'].values), freq=self.freq)
             data_stamp = data_stamp.transpose(1, 0)
-
 
         if self.features == 'S':
             self.data_x = data[border1:border2, -1:]

@@ -330,14 +330,12 @@ class Exp_Imputation(Exp_Basic):
                 # encoder - decoder
                 if self.args.output_attention:
                     output = self.model(inp, batch_x_mark, None, None, None, mask=mask)[0]
-
                 else:
                     output = self.model(inp, batch_x_mark, None, None, None, mask=mask)
 
                 if self.args.accelerate:
                     self.accelerator.wait_for_everyone()
                     output = self.accelerator.gather_for_metrics(output)
-
 
                 mask = mask[:,:self.args.seq_len, -self.f_dim:]
                 output = output[:, :self.args.seq_len, -self.f_dim:]
@@ -353,7 +351,6 @@ class Exp_Imputation(Exp_Basic):
                     imputation = test_data.inverse_transform(imputation.reshape(shape[0] * shape[1], -1)).reshape(shape)
                     true = test_data.inverse_transform(true.reshape(shape[0] * shape[1], -1)).reshape(shape)
 
-
                 masks.append(mask)
                 imputation_trues.append(true)
                 imputations.append(imputation)
@@ -362,10 +359,6 @@ class Exp_Imputation(Exp_Basic):
         imputation_trues = np.concatenate(imputation_trues, axis=0)
         imputations = np.concatenate(imputations, axis=0)
 
-        print('test shape:', imputations.shape, imputation_trues.shape)
-
-        imputations = imputations.reshape(-1, imputations.shape[-2], imputations.shape[-1])
-        imputation_trues = imputation_trues.reshape(-1, imputation_trues.shape[-2], imputation_trues.shape[-1])
         print('test shape:', imputations.shape, imputation_trues.shape)
 
         # dtw calculation
@@ -396,12 +389,12 @@ class Exp_Imputation(Exp_Basic):
         np.save(os.path.join(folder_path, 'imputations_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), imputations)
         np.save(os.path.join(folder_path, 'imputation_trues_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), imputation_trues)
 
-        res_df, metrics_df, imputation_metrics_df, interpolation_metrics_df = self.res_evaluation_multi_target(imputations,imputation_trues, masks, trainable_params, folder_path)
-        return res_df, metrics_df, imputation_metrics_df, interpolation_metrics_df
+        res_df, metrics_df, imputation_metrics_df = self.res_evaluation_multi_target(imputations,imputation_trues, masks, trainable_params, folder_path)
+        return res_df, metrics_df, imputation_metrics_df
 
 
     def res_evaluation_multi_target(self,imputations, trues, mask, trainable_params, path):
-        stride = self.args.pred_len
+        stride = self.args.seq_len
         X_withnan = np.where(mask == 0, np.nan, trues)
         true = trues[::stride, :, :].reshape(-1, len(self.args.target))
         imputations = imputations[::stride, :, :].reshape(-1, len(self.args.target))
@@ -412,13 +405,14 @@ class Exp_Imputation(Exp_Basic):
         pred_interpolate = interpolate_nan_matrix(X_withnan, method=self.args.interpolate_method, order=self.args.interpolate_order)
 
         # Create DataFrame for true and predicted values
-        columns = [f"{i}_{col}" for col in ["ori", "pred", "pred_inter", "X_withnan"] for i in self.args.target ]
-        res_df = pd.DataFrame(np.hstack([true, imputations, pred_interpolate, X_withnan]), columns=columns)
+        columns = [f"{i}_{col}" for i in self.args.target for col in ["ori", "pred", "pred_inter", "X_withnan"]]
+        data_blocks = [true, imputations, pred_interpolate, X_withnan]
+        data_parts = [np.hstack([block[:, i].reshape(-1, 1) for block in data_blocks]) for i in range(len(self.args.target))]
+        res_df = pd.DataFrame(np.hstack(data_parts), columns=columns)
 
         # Initialize metrics dictionaries
         metrics = {key: [] for key in ["trainable_params","mse", "rmse", "nrmse", "mae", "mape", "rae", "r2", "corr"]}
-        imputation_metrics = {key: [] for key in ["trainable_params","mse_imputation", "rmse_imputation", "mae_imputation", "mre_imputation"]}
-        interpolation_metrics = {key: [] for key in ["mse_imputation_inter", "rmse_imputation_inter", "mae_imputation_inter", "mre_imputation_inter"]}
+        imputation_metrics = {key: [] for key in ["trainable_params","mse_imputation", "rmse_imputation", "mae_imputation", "mre_imputation","mse_imputation_inter", "rmse_imputation_inter", "mae_imputation_inter", "mre_imputation_inter"]}
 
         # Calculate metrics for each target
         for idx, target in enumerate(self.args.target):
@@ -449,29 +443,26 @@ class Exp_Imputation(Exp_Basic):
             # Metrics for imputation (interpolation)
             mse_imp_inter, rmse_imp_inter, mae_imp_inter, mre_imp_inter = results_evaluation_imputation(y_true, y_pred_inter, y_mask)
 
-            interpolation_metrics["mse_imputation_inter"].append(mse_imp_inter)
-            interpolation_metrics["rmse_imputation_inter"].append(rmse_imp_inter)
-            interpolation_metrics["mae_imputation_inter"].append(mae_imp_inter)
-            interpolation_metrics["mre_imputation_inter"].append(mre_imp_inter)
+            imputation_metrics["mse_imputation_inter"].append(mse_imp_inter)
+            imputation_metrics["rmse_imputation_inter"].append(rmse_imp_inter)
+            imputation_metrics["mae_imputation_inter"].append(mae_imp_inter)
+            imputation_metrics["mre_imputation_inter"].append(mre_imp_inter)
 
         # Create DataFrames for metrics
         metrics_df = pd.DataFrame(metrics, index=self.args.target)
         imputation_metrics_df = pd.DataFrame(imputation_metrics, index=self.args.target)
-        interpolation_metrics_df = pd.DataFrame(interpolation_metrics, index=self.args.target)
 
         # Add mean row
         metrics_df.loc["mean"] = metrics_df.mean()
         imputation_metrics_df.loc["mean"] = imputation_metrics_df.mean()
-        interpolation_metrics_df.loc["mean"] = interpolation_metrics_df.mean()
         print(imputation_metrics_df.loc["mean"])
 
         # Save DataFrames
         res_df.to_csv(os.path.join(path, f"pred_res_{self.args.data_path[:-4]}.csv"))
         metrics_df.to_csv(os.path.join(path, f"metrics_df_{self.args.data_path[:-4]}.csv"))
         imputation_metrics_df.to_csv(os.path.join(path, f"imputation_metrics_df_{self.args.data_path[:-4]}.csv"))
-        interpolation_metrics_df.to_csv(os.path.join(path, f"interpolation_metrics_df_{self.args.data_path[:-4]}.csv"))
 
-        return res_df, metrics_df, imputation_metrics_df, interpolation_metrics_df
+        return res_df, metrics_df, imputation_metrics_df
 
     def _show_plot(self,i,y_withnan,y_true,y_imputation,y_inter,path=None):
         x_range = np.arange(self.args.num_train -self.args.pred_len*7, self.args.num_train)

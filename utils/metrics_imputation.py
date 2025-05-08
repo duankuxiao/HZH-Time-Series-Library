@@ -405,10 +405,10 @@ def interpolate_nan_matrix(matrix, method='linear', axis=0, order=None):
     if method in ['polynomial', 'spline'] and order is not None:
         if method == 'spline':
             assert 1 <= order <= 5, "order should be more than 1 and less than 5"
-        df_interpolated = df.interpolate(method=method, axis=axis, order=order)
+        df = df.interpolate(method=method, axis=axis, order=order)
     else:
-        df_interpolated = df.interpolate(method=method)
-
+        df = df.interpolate(method=method)
+    df_interpolated = df.interpolate(method='linear').fillna(method='bfill').fillna(method='ffill')
     # 将 DataFrame 转换回 ndarray
     interpolated_matrix = df_interpolated.to_numpy()
 

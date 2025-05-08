@@ -66,7 +66,7 @@ def main(args):
             exp.train(setting)
 
             print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-            res_df, metrics_df, imputation_metrics_df, interpolation_metrics_df = exp.test(setting)
+            res_df, metrics_df, imputation_metrics_df  = exp.test(setting)
             torch.cuda.empty_cache()
     else:
         ii = 0
@@ -74,18 +74,20 @@ def main(args):
 
         exp = Exp(args)  # set experiments
         print(' >>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-        res_df, metrics_df, imputation_metrics_df, interpolation_metrics_df= exp.test(setting, test=1)
+        res_df, metrics_df, imputation_metrics_df = exp.test(setting, test=1)
         torch.cuda.empty_cache()
-    return res_df, metrics_df, imputation_metrics_df, interpolation_metrics_df
+    return res_df, metrics_df, imputation_metrics_df
 
 
 if __name__ == '__main__':
-    from configs.operational_configs import args as default_args
+    # from configs.operational_configs import args as default_args
+    from configs.electricity_configs import args as default_args
+
     from copy import deepcopy
     from utils.hyparameter_setup import model_hyparameter_setup
 
-    # for mask_rate in [0.1, 0.2, 0.3, 0.4, 0.5]:
-    for mask_rate in [0.1]:
+    # for mask_rate in [0.1, 0.2, 0.3, 0.4, 0.5]:-
+    for mask_rate in [0.3]:
 
         args = deepcopy(default_args)
         args.mask_rate = mask_rate
@@ -93,17 +95,17 @@ if __name__ == '__main__':
         # for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'PatchTST', 'TimesNet', 'TimeLLMformer']:
         for model in ['Transformer']:
 
-            args.model_id = 'test'
+            args.model_id = 'test2'
             args.model = model
             args.loss_method = "fix"  # missing fix adaptive
             # args.data_path = '{}.csv'.format(args.model_id)
             # args.source_data_path = '{}.csv'.format(args.model_id)
 
             args = model_hyparameter_setup(args)
-            args.task_name = 'imputation_forecast'  # imputation_forecast
+            args.task_name = 'imputation'  # imputation_forecast  imputation
             args.patience = 2
 
-            res_df, metrics_df, imputation_metrics_df, interpolation_metrics_df = main(args)
+            res_df, metrics_df, imputation_metrics_df = main(args)
             imputation_metrics_df.insert(0, 'model', model)
             all_results.append(imputation_metrics_df)
             final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)

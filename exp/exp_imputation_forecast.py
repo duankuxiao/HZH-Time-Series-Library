@@ -202,6 +202,7 @@ class Exp_Imputation_Forecast(Exp_Basic):
                     pass
 
                 else:
+                    batch_x = batch_x.to(self.device)
                     batch_y = batch_y.to(self.device)
                     batch_x_mark = batch_x_mark.to(self.device)
                     batch_y_mark = batch_y_mark.to(self.device)
@@ -385,11 +386,6 @@ class Exp_Imputation_Forecast(Exp_Basic):
         preds = np.concatenate(preds, axis=0)
         masks = np.concatenate(masks, axis=0)
         trues = np.concatenate(trues, axis=0)
-        preds = np.concatenate(preds, axis=0)
-
-        print('test shape:', preds.shape, trues.shape)
-        preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
-        trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
 
         print('test shape:', preds.shape, trues.shape)
 
