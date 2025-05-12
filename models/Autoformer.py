@@ -25,6 +25,7 @@ class Model(nn.Module):
         self.output_attention = configs.output_attention
         self.use_forecast = configs.use_forecast
         self.likelihood = configs.likelihood
+        self.use_norm = configs.use_norm
 
         # Decomp
         kernel_size = configs.moving_avg

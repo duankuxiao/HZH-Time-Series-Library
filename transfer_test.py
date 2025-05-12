@@ -76,29 +76,34 @@ def get_direct_subfolders(root_folder):
 if __name__ == '__main__':
     import pandas as pd
 
-    # root_path = r"D:\Time-LLM-main\results\res\tokyo_r1\test"  # 替换为实际路径
-    # subfolders = get_direct_subfolders(root_path)
+    root_path = r"D:\Time-LLM-main\results\test11"  # 替换为实际路径
+    subfolders = get_direct_subfolders(root_path)
     # print(subfolders)
 
     # path = r'D:\Time-LLM-main\results\res\kyushu\kyushu_TimesNet_electricity_ftM_sl72_ll24_pl168_sd22_td3_dm64_nh8_el2_dl1_df256_fc3_dropout0.1_ebtimeF_test_0_scale'
-    # for path in subfolders:
-    path = r'D:\Time-LLM-main\results\zero-shot-kyushu_Informer_electricity_ftM_sl72_ll24_pl168_sd8_td3_lr0.001_dm64_df256_nh8_el4_dl2_ma25_factor5_dropout0.1_ebtimeF_0_scale'
+    for path in subfolders:
+        renamed_dfs = []
+        # path = r'D:\Time-LLM-main\results\zero-shot-kyushu_Informer_electricity_ftM_sl72_ll24_pl168_sd8_td3_lr0.001_dm64_df256_nh8_el4_dl2_ma25_factor5_dropout0.1_ebtimeF_0_scale'
 
-    args = load_config(os.path.join(path,'checkpoints','configs.pkl'))
-    print(args)
-    renamed_dfs = []
-    for city in ['tokyo','hokkaido','tohoku','kyushu']:
-    # for city in ['Sapporo','Sendai','Tokyo','Fukuoka']:
-
-    #     args.feature_cols = ['Electricity', 'Renewable_energy', 'Coal']  # ['Electricity', 'Renewable_energy', 'Coal']
-        # args.feature_cols = ['Coal']  # ['Electricity', 'Renewable_energy', 'Coal']
+        args = load_config(os.path.join(path,'checkpoints','configs.pkl'))
+        print(args)
+        # for city in ['tokyo','hokkaido','tohoku','kyushu']:
+        # for city in ['Sapporo','Sendai','Tokyo','Fukuoka']:
+        for time in ['30min','1hour']:
+        #     args.feature_cols = ['Electricity', 'Renewable_energy', 'Coal']  # ['Electricity', 'Renewable_energy', 'Coal']
+            # args.feature_cols = ['Coal']  # ['Electricity', 'Renewable_energy', 'Coal']
 
         # args.target = ['Electricity', 'Renewable_energy', 'Coal']  # ['Electricity', 'Renewable_energy', 'Coal']  _Electricity  _Renewable_energy _Coal
         # args.target = ['Electricity', 'Renewable_energy', 'Coal']
-        args.data_path = '{}.csv'.format(city)
-        args.source_data_path = args.data_path
-        pred_res, metrics_df = transfer_test(args, path)
-        metrics_df.index = metrics_df.index + '_' + city
-        renamed_dfs.append(metrics_df)
-        combined_df = pd.concat(renamed_dfs, axis=0)
-        combined_df.to_csv(os.path.join(path,'zero-shot_res_metrics.csv'.format()))
+            args.data_path = 'operational_data_{}.csv'.format(time)
+            args.source_data_path = args.data_path
+            args.num_train = 3000
+            if time == '30min':
+                args.num_test = 2929
+            elif time == '1hour':
+                args.num_test = 1465
+            pred_res, metrics_df = transfer_test(args, path)
+            metrics_df.index = metrics_df.index + '_' + time
+            renamed_dfs.append(metrics_df)
+            combined_df = pd.concat(renamed_dfs, axis=0)
+            combined_df.to_csv(os.path.join(path,'zero-shot_res_metrics.csv'.format()))

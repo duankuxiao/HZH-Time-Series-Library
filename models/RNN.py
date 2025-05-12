@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from layers.Autoformer_EncDec import series_decomp
 from utils.interval_forecasting_tools import gaussian_sample, negative_binomial_sample
 from .Distribution import Gaussian,NegativeBinomial
 
@@ -20,6 +19,7 @@ class Model(nn.Module):
         self.seq_len = configs.seq_len
         self.use_forecast = configs.use_forecast
         self.likelihood = configs.likelihood
+        self.use_norm = configs.use_norm
         if self.use_forecast:
             self.forecast_projection = nn.Linear(configs.forecast_dim, configs.enc_in)
         if configs.rnn_model == 'GRU':
@@ -52,17 +52,19 @@ class Model(nn.Module):
             self.output_projection = nn.Linear(configs.enc_in * configs.seq_len, configs.num_class)
 
     def encoder(self, x_enc,x_forecast=None):
-        # Normalization from Non-stationary Transformer
-        means = x_enc.mean(1, keepdim=True).detach()
-        x_enc = x_enc - means
-        stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
-        x_enc /= stdev
+        if self.use_norm:
+            # Normalization from Non-stationary Transformer
+            means = x_enc.mean(1, keepdim=True).detach()
+            x_enc = x_enc - means
+            stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
+            x_enc /= stdev
 
         if self.use_forecast:
-            # means_forecast = x_forecast.mean(1, keepdim=True).detach()
-            # x_enc_forecast = x_forecast - means_forecast
-            # stdev_forecast = torch.sqrt(torch.var(x_enc_forecast, dim=1, keepdim=True, unbiased=False) + 1e-5)
-            # x_forecast /= stdev_forecast
+            if self.use_norm:
+                means_forecast = x_forecast.mean(1, keepdim=True).detach()
+                x_enc_forecast = x_forecast - means_forecast
+                stdev_forecast = torch.sqrt(torch.var(x_enc_forecast, dim=1, keepdim=True, unbiased=False) + 1e-5)
+                x_forecast /= stdev_forecast
             x_forecast_ = self.forecast_projection(x_forecast[:,-self.pred_len:,:])
             x_enc = torch.cat((x_enc, x_forecast_), dim=1)
 
@@ -70,9 +72,10 @@ class Model(nn.Module):
         if 'forecast' in self.task_name:
             x = self.linear_predict(x.permute(0, 2, 1)).permute(0, 2, 1)
         dec_out = self.output_projection(x)
-        # De-Normalization from Non-stationary Transformer
-        dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
-        dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+        if self.use_norm:
+            # De-Normalization from Non-stationary Transformer
+            dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+            dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
         return dec_out
 
     def forecast(self, x_enc,x_forecast=None):

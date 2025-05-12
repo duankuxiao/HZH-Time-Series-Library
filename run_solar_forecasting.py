@@ -91,14 +91,22 @@ if __name__ == '__main__':
     all_results = []
     # for model in ['RNN', 'Transformer','DLinear','Informer','Autoformer', 'iTransformer', 'TimesNet','PatchTST','TimeLLM', 'TimeLLMformer']:
     for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST']:
+    # for model in ['TimesNet']:
 
         args = deepcopy(op_configs)
 
         args.is_training = 1
 
-        args.model_id = 'daxiang_operation_data'
+        args.model_id = 'dx_opdata11'
         args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
         args = model_hyparameter_setup(args)
+        args.num_train = 71124   # 35688   71124
+        args.num_test = 17569   # 53005   17569
+        args.val = False
+        args.use_norm = False
+        args.patience = 6
+        args.learning_rate = 0.0001
+
         _, res_metrics_df = main(args)
         res_metrics_df.insert(0, 'model', model)
         all_results.append(res_metrics_df)

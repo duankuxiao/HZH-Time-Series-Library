@@ -6,12 +6,14 @@ import torch
 def model_hyparameter_setup(args):
     # default
     args.learning_rate = 0.0001
-    args.d_model = 512
-    args.d_ff = 2048
-    args.e_layers = 2
+    # args.d_model = 512
+    # args.d_ff = 2048
+    args.d_model = 64
+    args.d_ff = 256
+    args.e_layers = 4
     args.d_layers = 1
     args.factor = 3
-    args.moving_avg = 25
+    args.moving_avg = 13
 
     if args.model == 'TimeLLMformer' or args.model == 'AttLLM':
         args.learning_rate = 0.01  # 0.001 for imputation 0.0001 for forecast(0.01 for LLM model)  for electricity
