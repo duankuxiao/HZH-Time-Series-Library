@@ -98,8 +98,10 @@ class Exp_Forecast(Exp_Basic):
 
     def train(self, setting):
         train_data, train_loader = self._get_data(flag='train')
-        vali_data, vali_loader = self._get_data(flag='val')
-        test_data, test_loader = self._get_data(flag='test')
+        if self.args.val:
+            vali_data, vali_loader = self._get_data(flag='val')
+        else:
+            vali_data, vali_loader = self._get_data(flag='test')
 
         path = os.path.join(self.args.checkpoints, setting, 'checkpoints')
         if not os.path.exists(path):

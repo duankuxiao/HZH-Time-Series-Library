@@ -43,13 +43,7 @@ parser.add_argument('--pred_len', type=int, default=24*7, help='prediction seque
 parser.add_argument('--seq_dim', type=int, default=11, help='input sequence length')
 parser.add_argument('--pred_dim', type=int, default=1, help='input sequence length')
 parser.add_argument('--forecast_dim', type=int, default=2, help='input sequence length')
-parser.add_argument('--feature_cols', type=list, default=None, help="input features")
-# ['Electricity', 'Nuclear', 'Coal', 'Hydro', 'Geothermal', 'Biomass',
-#        'Solar', 'Solar_curtailment', 'Wind', 'Wind_ccurtailment',
-#        'Water_pumping', 'Interconnection', 'Total', 'Temperature',
-#        'Relative_humidity', 'Precipitation', 'Dew_point', 'Vapor_pressure',
-#        'Wind_speed', 'Sunshine_duration', 'Snowfall',
-#        'Global_horizontal_irradiance']
+parser.add_argument('--feature_cols', nargs='+', default=None, help="input features")
 
 # imputation task
 parser.add_argument('--mask_rate', type=float, default=0.2, help='mask_rate')
@@ -112,6 +106,7 @@ parser.add_argument('--rnn_layers', type=int, default=2, help='bert_layers=6 lla
 # optimization
 parser.add_argument('--num_workers', type=int, default=1, help='data loader num workers')
 parser.add_argument('--accelerate', type=bool, default=False, help='accelerator')
+parser.add_argument('--val', type=bool, default=True, help='validation')
 
 parser.add_argument('--itr', type=int, default=1, help='experiments times')
 parser.add_argument('--train_epochs', type=int, default=50, help='train epochs')
