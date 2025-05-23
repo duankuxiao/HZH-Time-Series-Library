@@ -84,7 +84,7 @@ def main(args):
 
 if __name__ == '__main__':
     # from configs.solar_radiation_configs import args as default_args
-    from configs.operational_configs import args as op_configs
+    from configs.operational_configs import args as default_args
     from copy import deepcopy
     from utils.hyparameter_setup import model_hyparameter_setup
 
@@ -93,19 +93,17 @@ if __name__ == '__main__':
     for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST']:
     # for model in ['TimesNet']:
 
-        args = deepcopy(op_configs)
+        args = deepcopy(default_args)
 
         args.is_training = 1
 
-        args.model_id = 'dx_opdata11'
+        args.model_id = 'test2'
         args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
         args = model_hyparameter_setup(args)
-        args.num_train = 71124   # 35688   71124
-        args.num_test = 17569   # 53005   17569
-        args.val = False
-        args.use_norm = False
-        args.patience = 6
-        args.learning_rate = 0.0001
+
+        # args.patience = 6
+        # args.learning_rate = 0.001
+        # args.train_epochs = 10
 
         _, res_metrics_df = main(args)
         res_metrics_df.insert(0, 'model', model)

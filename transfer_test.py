@@ -76,7 +76,7 @@ def get_direct_subfolders(root_folder):
 if __name__ == '__main__':
     import pandas as pd
 
-    root_path = r"D:\Time-LLM-main\results\test11"  # 替换为实际路径
+    root_path = r"D:\Time-LLM-main\results\test7"  # 替换为实际路径
     subfolders = get_direct_subfolders(root_path)
     # print(subfolders)
 
@@ -97,11 +97,11 @@ if __name__ == '__main__':
         # args.target = ['Electricity', 'Renewable_energy', 'Coal']
             args.data_path = 'operational_data_{}.csv'.format(time)
             args.source_data_path = args.data_path
-            args.num_train = 3000
+            args.num_train = 2000
             if time == '30min':
-                args.num_test = 2929
+                args.num_test = 8833  # 2929
             elif time == '1hour':
-                args.num_test = 1465
+                args.num_test = 4417  # 1465
             pred_res, metrics_df = transfer_test(args, path)
             metrics_df.index = metrics_df.index + '_' + time
             renamed_dfs.append(metrics_df)

@@ -29,7 +29,7 @@ def model_hyparameter_setup(args):
         args.llm_layers = 16
 
     if 'RNN' in args.model:
-        args.rnn_dim = 512
+        args.rnn_dim = 256
         args.rnn_layers = 2
 
     if args.model == 'Transformer':
@@ -75,7 +75,7 @@ def model_hyparameter_setup(args):
         args.n_heads = 16  # for small dataset 4  large dataset 16
 
     if args.model == 'TimesNet':
-        args.learning_rate = 0.0001  # 0.0001 for forecast   0.001 for imputation
+        args.learning_rate = 0.001  # 0.0001 for forecast   0.001 for imputation
         args.d_model = 32  # min{max[2**log(seq_dim),32],512} for forecast   min{max[2**log(seq_dim),64],128} for imputation
         args.d_ff = 32
         args.top_k = 5  # 5 for forecast   3 for imputation, classification, anomaly detection
