@@ -47,7 +47,11 @@ class Exp_Imputation(Exp_Basic):
         return data_set, data_loader
 
     def _select_optimizer(self):
-        model_optim = optim.Adam(self.model.parameters(), lr=self.args.learning_rate)
+        params = list(self.model.parameters())
+        if self.args.loss_method == "adaptive":
+            # … plus your two learnable scalars
+            params += [self.log_ori_loss, self.log_missing_loss]
+        model_optim = optim.Adam(params, lr=self.args.learning_rate)
         return model_optim
 
     def _select_criterion(self):
@@ -105,6 +109,7 @@ class Exp_Imputation(Exp_Basic):
                 inp = batch_x.masked_fill(mask == 0, 0)
                 inp = inp.float().to(self.device)
                 batch_x_mark = batch_x_mark.float().to(self.device)
+                mask = mask.to(self.device)
 
                 # encoder - decoder
 
@@ -126,7 +131,7 @@ class Exp_Imputation(Exp_Basic):
 
                 loss = self._loss_function(outputs, batch_x, mask)
 
-                total_loss.append(loss)
+                total_loss.append(loss.item())
         total_loss = np.average(total_loss)
         self.model.train()
         return total_loss
@@ -159,7 +164,7 @@ class Exp_Imputation(Exp_Basic):
         # Initialize a dictionary to store loss values
         loss_records = {"epoch": [], "time": [], "train_loss": [], "vali_loss": []}
         if self.args.loss_method == 'adaptive':
-            loss_records = {"epoch": [], "train_loss": [], "vali_loss": [], "ori_weight": [], "missing_weight": []}
+            loss_records = {"epoch": [], "time": [],"train_loss": [], "vali_loss": [], "ori_weight": [], "missing_weight": []}
 
         for epoch in range(self.args.train_epochs):
             iter_count = 0
@@ -468,21 +473,21 @@ class Exp_Imputation(Exp_Basic):
         return res_df, metrics_df, imputation_metrics_df
 
     def _show_plot(self,i,y_withnan,y_true,y_imputation,y_inter,path=None):
-        x_range = np.arange(self.args.num_train -self.args.pred_len*7, self.args.num_train)
-        y_true_plot = y_true[-self.args.pred_len*7:]
+        x_range = np.arange(self.args.num_train -self.args.seq_len*7, self.args.num_train)
+        y_true_plot = y_true[-self.args.seq_len*7:]
         plt.figure(i+1, figsize=(20, 5))
         plt.plot(x_range, y_true_plot, "r-", label="True values")
 
-        y_withnan_plot = y_withnan[-self.args.pred_len*7:]
+        y_withnan_plot = y_withnan[-self.args.seq_len*7:]
         plt.plot(x_range, y_withnan_plot, "k-", label="With nan values")
 
-        y_imputation_plot = y_imputation[-self.args.pred_len * 7:]
+        y_imputation_plot = y_imputation[-self.args.seq_len * 7:]
         plt.plot(x_range, y_imputation_plot, "g--", label="Imputation values")
 
-        y_inter_plot = y_inter[-self.args.pred_len * 7:]
+        y_inter_plot = y_inter[-self.args.seq_len * 7:]
         plt.plot(x_range, y_inter_plot, "b--", label="Interpolate values")
         ymin, ymax = plt.ylim()
-        plt.vlines(self.args.num_train - self.args.pred_len*7, ymin, ymax, color="blue", linestyles="dashed", linewidth=2)
+        plt.vlines(self.args.num_train - self.args.seq_len*7, ymin, ymax, color="blue", linestyles="dashed", linewidth=2)
         plt.ylim(ymin, ymax)
         plt.legend(loc="upper left")
         plt.title('Prediction')

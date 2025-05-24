@@ -221,12 +221,14 @@ class Model(nn.Module):
 
         self.patch_nums = int((configs.seq_len - self.patch_len) / self.stride + 2)
         if self.use_forecast:
-            self.patch_nums = int((configs.seq_len+configs.pred_len - self.patch_len) / self.stride + 2)
+            self.patch_nums = int((configs.seq_len + configs.pred_len - self.patch_len) / self.stride + 2)
 
         self.head_nf = self.d_ff * self.patch_nums
 
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             self.output_projection = FlattenHead(configs.enc_in, self.head_nf, self.pred_len, head_dropout=configs.dropout)
+        if self.task_name == 'imputation':
+            self.output_projection = FlattenHead(configs.enc_in, self.head_nf, self.seq_len, head_dropout=configs.dropout)
         else:
             raise NotImplementedError
 
@@ -242,6 +244,9 @@ class Model(nn.Module):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)
             return dec_out[:, -self.pred_len:, :]
+        if self.task_name == 'imputation':
+            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)
+            return dec_out[:, :self.seq_len, :]
         return None
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
@@ -285,6 +290,64 @@ class Model(nn.Module):
                 #     f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information <|end_prompt|> "
                 # )
 
+                prompt.append(prompt_)
+        # x_enc [B * N, T, 1]
+        x_enc = x_enc.reshape(B, N, T).permute(0, 2, 1).contiguous()  # [B, T, N]
+        if self.use_prompt:
+            prompt = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
+            prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)
+
+        source_embeddings = self.mapping_layer(self.word_embeddings.permute(1, 0)).permute(1, 0)
+
+        x_enc = x_enc.permute(0, 2, 1).contiguous()
+        enc_out, n_vars = self.patch_embedding(x_enc.to(torch.bfloat16))
+        enc_out = self.reprogramming_layer(enc_out, source_embeddings, source_embeddings)
+        llama_enc_out = enc_out
+        if self.use_prompt:
+            llama_enc_out = torch.cat([prompt_embeddings, enc_out], dim=1)
+
+        dec_out = self.llm_model(inputs_embeds=llama_enc_out).last_hidden_state
+        dec_out = dec_out[:, :, :self.d_ff]
+
+        dec_out = torch.reshape(
+            dec_out, (-1, n_vars, dec_out.shape[-2], dec_out.shape[-1]))
+        dec_out = dec_out.permute(0, 1, 3, 2).contiguous()
+
+        dec_out = self.output_projection(dec_out[:, :, :, -self.patch_nums:])
+        dec_out = dec_out.permute(0, 2, 1).contiguous()
+
+        dec_out = self.normalize_layers(dec_out, 'denorm')
+        return dec_out
+
+    def imputation(self,x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast, mask):
+        x_enc = x_enc * mask
+        x_enc = self.normalize_layers(x_enc, 'norm')
+
+        B, T, N = x_enc.size()
+        x_enc = x_enc.permute(0, 2, 1).contiguous().reshape(B * N, T, 1)
+
+        min_values = torch.min(x_enc, dim=1)[0]
+        max_values = torch.max(x_enc, dim=1)[0]
+        medians = torch.median(x_enc, dim=1).values
+        lags = self.calcute_lags(x_enc)
+        trends = x_enc.diff(dim=1).sum(dim=1)
+        if self.use_prompt:
+            prompt = []
+            for b in range(x_enc.shape[0]):
+                min_values_str = str(min_values[b].tolist()[0])
+                max_values_str = str(max_values[b].tolist()[0])
+                median_values_str = str(medians[b].tolist()[0])
+                lags_values_str = str(lags[b].tolist())
+                prompt_ = (
+                    f"<|start_prompt|>Dataset description: {self.description}"
+                    f"Task description: imputation the {str(self.seq_len)} steps; "
+                    "Input statistics: "
+                    f"min value {min_values_str}, "
+                    f"max value {max_values_str}, "
+                    f"median value {median_values_str}, "
+                    f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
+                    f"top {self.top_k} lags are : {lags_values_str}<|end_prompt|>"
+                )
                 prompt.append(prompt_)
         # x_enc [B * N, T, 1]
         x_enc = x_enc.reshape(B, N, T).permute(0, 2, 1).contiguous()  # [B, T, N]

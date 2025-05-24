@@ -100,7 +100,7 @@ parser.add_argument('--scale', action='store_true', help='scale', default=True)
 
 # RNN
 parser.add_argument('--rnn_model', type=str, default='LSTM', help='RNN model')  # GRU, LSTM, seq2seq
-parser.add_argument('--rnn_dim', type=int, default=512, help='LLM model dimension')  # LLama7b:4096; GPT2-small:768; BERT-base:768
+parser.add_argument('--rnn_dim', type=int, default=256, help='LLM model dimension')  # LLama7b:4096; GPT2-small:768; BERT-base:768
 parser.add_argument('--rnn_layers', type=int, default=2, help='bert_layers=6 llama_layers=32')
 
 # optimization
@@ -109,10 +109,9 @@ parser.add_argument('--accelerate', type=bool, default=False, help='accelerator'
 parser.add_argument('--val', type=bool, default=True, help='validation')
 
 parser.add_argument('--itr', type=int, default=1, help='experiments times')
-parser.add_argument('--train_epochs', type=int, default=50, help='train epochs')
+parser.add_argument('--train_epochs', type=int, default=20, help='train epochs')
 parser.add_argument('--batch_size', type=int, default=24, help='batch size of train input data')
-parser.add_argument('--eval_batch_size', type=int, default=8, help='batch size of model evaluation')
-parser.add_argument('--patience', type=int, default=8, help='early stopping patience')
+parser.add_argument('--patience', type=int, default=6, help='early stopping patience')
 parser.add_argument('--learning_rate', type=float, default=0.001, help='optimizer learning rate 0.0001 for other models  0.01 for LLM')
 parser.add_argument('--des', type=str, default='test', help='exp description')
 parser.add_argument('--loss', type=str, default='MSE', help='loss function')

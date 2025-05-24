@@ -83,40 +83,31 @@ if __name__ == '__main__':
     from configs.electricity_configs import args as default_args
     from copy import deepcopy
 
+    all_results = []
+
     # for model in ['RNN', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'TimeLLM', 'TimeLLMformer']:
-    # for model in ['RNN','DLinear', 'iTransformer', 'TimeLLMformer']:
-    for model in ['TimeLLMformer',]:
+    for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST']:
+        args = deepcopy(default_args)
+        # args.model_id = 'zero-shot-{}'.format(data)
+        args.model_id = 'texas'
 
-        all_results = []
-        # for pred_len in [1, 24, 72, 168, 336, 720]:
-        # for data in ['kyushu']:
-        for data in ['tokyo_2016_']:
+        args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
+        args.is_training = 1
+        args.accelerate = False
+        args.use_prompt = True
 
-            args = deepcopy(default_args)
-            # args.model_id = 'zero-shot-{}'.format(data)
-            args.model_id = 'memory2'
+        # args.feature_cols = ['Electricity','Renewable_energy', 'Nuclear', 'Coal', 'Hydro', 'Geothermal', 'Biomass','Solar', 'Solar_curtailment', 'Wind', 'Wind_ccurtailment','Water_pumping',
+        #                      'Interconnection', 'Temperature', 'Relative_humidity', 'Precipitation', 'Dew_point', 'Vapor_pressure', 'Wind_speed', 'Sunshine_duration',
+        #                       'Global_horizontal_irradiance']
+        # args.feature_cols = ['Electricity', 'Renewable_energy','Coal','Temperature', 'Relative_humidity', 'Wind_speed', 'Sunshine_duration',
+        #                     'Global_horizontal_irradiance' ]
+        # args.target = ['Electricity', 'Renewable_energy', 'Coal']
 
-            args.data_path = '{}.csv'.format(data)
-            args.source_data_path = '{}.csv'.format(data)
-            args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
-            args.is_training = 1
-            args.accelerate = False
-            args.use_prompt = True
-
-            args.feature_cols = ['Electricity','Renewable_energy', 'Nuclear', 'Coal', 'Hydro', 'Geothermal', 'Biomass','Solar', 'Solar_curtailment', 'Wind', 'Wind_ccurtailment','Water_pumping',
-                                 'Interconnection', 'Temperature', 'Relative_humidity', 'Precipitation', 'Dew_point', 'Vapor_pressure', 'Wind_speed', 'Sunshine_duration',
-                                  'Global_horizontal_irradiance']
-            # args.feature_cols = ['Electricity', 'Renewable_energy','Coal','Temperature', 'Relative_humidity', 'Wind_speed', 'Sunshine_duration',
-            #                     'Global_horizontal_irradiance' ]
-            args.target = ['Electricity', 'Renewable_energy', 'Coal']
-            # args.target = ['Renewable_energy']
-
-            args = model_hyparameter_setup(args)
-            args.patience = 3
-            _, res_metrics_df = main(args)
-            res_metrics_df.insert(0, 'model', model)
-            all_results.append(res_metrics_df)
-            final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
-            final_metrics_df.to_csv('./results/ele_5year_all_models_comparison.csv')
+        args = model_hyparameter_setup(args)
+        _, res_metrics_df = main(args)
+        res_metrics_df.insert(0, 'model', model)
+        all_results.append(res_metrics_df)
+        final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
+        final_metrics_df.to_csv('./results/ele_texas_all_models_comparison.csv')
 
 

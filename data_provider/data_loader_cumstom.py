@@ -82,10 +82,8 @@ class Dataset_cumstom(Dataset):
             return seq_x, seq_y, seq_x_mark, seq_y_mark, x_forecast
 
     def __len__(self):
-        if 'forecast' in self.task_name:
-            return len(self.data_x) - self.seq_len - self.pred_len + 1
-        else:
-            return len(self.data_x) - self.seq_len + 1
+        return len(self.data_x) - self.seq_len - self.pred_len + 1
+
 
     def inverse_transform(self, data):
         return self.target_scaler.inverse_transform(data)
@@ -110,9 +108,12 @@ class Dataset_cumstom(Dataset):
         if 'date' in cols:
             cols.remove('date')
 
-        for s in self.target:
-            if s in cols:
-                cols.remove(s)
+        if self.features == 'M' and self.target is None:
+            self.target = self.feature_cols
+        if self.target is not None:
+            for s in self.target:
+                if s in cols:
+                    cols.remove(s)
         df_raw = df_raw[['date'] + cols + self.target]
         df_source_domain = df_source_domain[['date'] + cols + self.target]
 

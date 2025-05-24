@@ -91,18 +91,20 @@ if __name__ == '__main__':
         args = deepcopy(default_args)
         args.mask_rate = mask_rate
         all_results = []
-        # for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'PatchTST', 'TimesNet', 'TimeLLMformer']:
-        for model in ['Transformer']:
+        for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'PatchTST', 'TimesNet', 'TimeLLM']:
+        # for model in ['TimesNet']:
 
-            args.model_id = 'test2'
+            args.model_id = 'test'
             args.model = model
-            args.loss_method = "fix"  # missing fix adaptive
+            args.loss_method = "adaptive"  # missing fix adaptive
             # args.data_path = '{}.csv'.format(args.model_id)
             # args.source_data_path = '{}.csv'.format(args.model_id)
-
+            args.task_name = 'imputation'  # imputation_forecast  imputation
+            args.mask_target_only = False
+            args.pred_len = 0
+            args.label_len = 0
             args = model_hyparameter_setup(args)
-            args.task_name = 'imputation_forecast'  # imputation_forecast  imputation
-            args.patience = 2
+            # args.patience = 2
 
             res_df, metrics_df, imputation_metrics_df = main(args)
             imputation_metrics_df.insert(0, 'model', model)

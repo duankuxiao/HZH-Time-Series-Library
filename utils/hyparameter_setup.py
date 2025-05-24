@@ -5,19 +5,22 @@ import torch
 
 def model_hyparameter_setup(args):
     # default
-    args.learning_rate = 0.0001
-    # args.d_model = 512
-    # args.d_ff = 2048
-    args.d_model = 64
-    args.d_ff = 256
+    if args.task_name == 'imputation':
+        args.learning_rate = 0.001
+    else:
+        args.learning_rate = 0.0001
+    args.d_model = 512
+    args.d_ff = 2048
     args.e_layers = 4
     args.d_layers = 1
     args.factor = 3
-    args.moving_avg = 13
+    args.moving_avg = 25
 
     if args.model == 'TimeLLMformer' or args.model == 'AttLLM':
-        args.learning_rate = 0.01  # 0.001 for imputation 0.0001 for forecast(0.01 for LLM model)  for electricity
-        # args.learning_rate = 0.001  # 0.001 for imputation 0.0001 for forecast(0.01 for LLM model)
+        if args.task_name == 'imputation':
+            args.learning_rate = 0.01  # 0.001 for imputation 0.0001 for forecast(0.01 for LLM model)  for electricity
+        else:
+            args.learning_rate = 0.01
 
         args.patience = 6
         args.lradj = 'PEMS'
@@ -48,11 +51,10 @@ def model_hyparameter_setup(args):
     if args.model == 'Autoformer':
         pass
 
-    if args.model == 'iTransformer':
-        args.e_layers = 3  # default
+    if args.model == 'iTransformer': # default
+        args.e_layers = 3
         args.d_model = 512
         args.d_ff = 512
-
 
     if args.model == 'TimeLLM':  # default
         args.patience = 3
@@ -72,13 +74,22 @@ def model_hyparameter_setup(args):
         args.d_model = 128  # for small dataset 16
         args.d_ff = 256  # for small dataset 128
         args.e_layers = 3
-        args.n_heads = 16  # for small dataset 4  large dataset 16
+        args.n_heads = 4  # for small dataset 4  large dataset 16
 
     if args.model == 'TimesNet':
-        args.learning_rate = 0.001  # 0.0001 for forecast   0.001 for imputation
+        if args.task_name == 'imputation':
+            args.learning_rate = 0.001  # 0.0001 for forecast   0.001 for imputation
+        else:
+            args.learning_rate = 0.0001  # 0.0001 for forecast   0.001 for imputation
         args.d_model = 32  # min{max[2**log(seq_dim),32],512} for forecast   min{max[2**log(seq_dim),64],128} for imputation
         args.d_ff = 32
-        args.top_k = 5  # 5 for forecast   3 for imputation, classification, anomaly detection
+        if args.task_name == 'imputation':
+            args.d_model = 64  # min{max[2**log(seq_dim),32],512} for forecast   min{max[2**log(seq_dim),64],128} for imputation
+            args.d_ff = 64
+        if args.task_name == 'imputation':
+            args.top_k = 3  # 5 for forecast   3 for imputation, classification, anomaly detection
+        else:
+            args.top_k = 5  # 5 for forecast   3 for imputation, classification, anomaly detection
 
     if args.model == 'SAITS':
         args.learning_rate = 0.001
