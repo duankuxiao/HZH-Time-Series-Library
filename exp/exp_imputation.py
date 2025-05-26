@@ -71,28 +71,19 @@ class Exp_Imputation(Exp_Basic):
         return scheduler
 
     def _loss_function(self, imputation, true, mask):
-        if self.args.loss_method == "fix":
-            ori_loss = self.loss_func(imputation, true, mask)
+        if self.args.model == 'TimeLLMformer':
+            missing_loss = 0
+            for i, tensor in enumerate(imputation):
+                missing_loss += self.loss_func(tensor, true, mask ^ 1)
+            missing_loss = self.args.missing_weight * missing_loss / len(imputation)
+        else:
             missing_loss = self.loss_func(imputation, true, mask ^ 1)
-            loss = self.args.ori_weight * ori_loss + self.args.missing_weight * missing_loss
-        elif self.args.loss_method == "missing":
-            missing_loss = self.loss_func(imputation, true, mask ^ 1)
+
+        if self.args.loss_method == "missing":
             loss = self.args.missing_weight * missing_loss
-
-        elif self.args.loss_method == "adaptive":
-            if self.args.model == 'TimeLLMformer':
-                missing_loss = 0
-                for i, tensor in enumerate(imputation):
-                    missing_loss += self.loss_func(tensor, true, mask)
-                    if i == len(imputation) - 1:  # 仅在最后一个 tensor 时计算 MIT_loss
-                        ori_loss = self.args.ori_weight * self.loss_func(tensor, true, mask ^ 1)
-                missing_loss = self.args.missing_weight * missing_loss / len(imputation)
-            else:
-                ori_loss = self.loss_func(imputation, true, mask)
-                missing_loss = self.loss_func(imputation, true, mask ^ 1)
-
-            loss = 0.5 * (torch.exp(-self.log_ori_loss.to(true.device)) * ori_loss + torch.exp(-self.log_missing_loss.to(true.device)) * missing_loss +
-                              self.log_ori_loss.to(true.device) + self.log_missing_loss.to(true.device))
+        # if self.args.loss_method == "adaptive":
+        #     loss = 0.5 * (torch.exp(-self.log_ori_loss.to(true.device)) * ori_loss + torch.exp(-self.log_missing_loss.to(true.device)) * missing_loss +
+        #                       self.log_ori_loss.to(true.device) + self.log_missing_loss.to(true.device))
 
         return loss
 
@@ -120,15 +111,19 @@ class Exp_Imputation(Exp_Basic):
 
                 if self.args.accelerate:
                     outputs, batch_x = self.accelerator.gather_for_metrics((outputs, batch_x))
-                outputs = outputs[:, :self.args.seq_len, -self.f_dim:]
+                if isinstance(outputs, tuple):
+                    outputs = tuple(
+                        o[:, :self.args.seq_len, -self.f_dim:].detach().cpu()
+                        for o in outputs
+                    )
+                else:
+                    outputs = outputs[:, :self.args.seq_len, -self.f_dim:]
+                    outputs = outputs.detach().cpu()
+
                 batch_x = batch_x[:, :self.args.seq_len, -self.f_dim:]
                 mask = mask[:, :self.args.seq_len, -self.f_dim:]
 
-                outputs = outputs.detach().cpu()
                 mask = mask.detach().cpu()
-                if self.args.model == 'TimeLLMformer':
-                    outputs = tuple(tensor.detach().cpu() for tensor in outputs)
-
                 loss = self._loss_function(outputs, batch_x, mask)
 
                 total_loss.append(loss.item())
@@ -201,7 +196,13 @@ class Exp_Imputation(Exp_Basic):
                     else:
                         outputs = self.model(inp, batch_x_mark, None, None, None, mask=mask)
 
-                    outputs = outputs[:, :self.args.seq_len:, -self.f_dim:]
+                    if isinstance(outputs, tuple):
+                        outputs = tuple(
+                            o[:, :self.args.seq_len, -self.f_dim:]
+                            for o in outputs
+                        )
+                    else:
+                        outputs = outputs[:, :self.args.seq_len, -self.f_dim:]
                     batch_x = batch_x[:, :self.args.seq_len, -self.f_dim:]
                     mask = mask[:, :self.args.seq_len, -self.f_dim:]
                     loss = self._loss_function(outputs, batch_x, mask)
@@ -346,7 +347,10 @@ class Exp_Imputation(Exp_Basic):
                     output = self.accelerator.gather_for_metrics(output)
 
                 mask = mask[:,:self.args.seq_len, -self.f_dim:]
-                output = output[:, :self.args.seq_len, -self.f_dim:]
+                if isinstance(output, tuple):
+                    output = output[-1][:, :self.args.seq_len, -self.f_dim:]
+                else:
+                    output = output[:, :self.args.seq_len, -self.f_dim:]
                 true = batch_x[:, :self.args.seq_len, -self.f_dim:]
 
                 imputation = output.detach().cpu().numpy()

@@ -196,6 +196,7 @@ class Model(nn.Module):
         return dec_out, mu, sigma
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
+        x_ori = x_enc
         # Normalization from Non-stationary Transformer
         means = torch.sum(x_enc, dim=1) / torch.sum(mask == 1, dim=1)
         means = means.unsqueeze(1).detach()
@@ -225,6 +226,8 @@ class Model(nn.Module):
         # De-Normalization from Non-stationary Transformer
         dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.seq_len, 1))
         dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.seq_len, 1))
+        dec_out = mask[:, :, -self.c_out:] * x_ori[:, :, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out
+
         return dec_out
 
     def imputation_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):

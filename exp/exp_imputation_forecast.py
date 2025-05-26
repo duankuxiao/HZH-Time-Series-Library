@@ -129,14 +129,16 @@ class Exp_Imputation_Forecast(Exp_Basic):
 
                 if self.args.accelerate:
                     outputs, batch_y = self.accelerator.gather_for_metrics((outputs, batch_y))
-                outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
-                true = torch.cat([batch_x[:, :self.args.seq_len, -self.f_dim:], batch_y[:, -self.args.pred_len:, -self.f_dim:]], dim=1).detach().cpu()
-                outputs = outputs.detach().cpu()
-                mask = mask.detach().cpu()
-                if self.args.model != 'TimeLLMformer':
-                    outputs = outputs.detach().cpu()
+                if isinstance(outputs, tuple):
+                    outputs = tuple(
+                        o[:, :self.args.seq_len + self.args.pred_len, -self.f_dim:].detach().cpu()
+                        for o in outputs
+                    )
                 else:
-                    outputs = tuple(tensor.detach().cpu() for tensor in outputs)
+                    outputs = outputs[:, :self.args.seq_len+  self.args.pred_len, -self.f_dim:]
+                    outputs = outputs.detach().cpu()
+                true = torch.cat([batch_x[:, :self.args.seq_len, -self.f_dim:], batch_y[:, -self.args.pred_len:, -self.f_dim:]], dim=1).detach().cpu()
+                mask = mask.detach().cpu()
 
                 loss = self._loss_function(outputs, true, mask[:, :self.args.seq_len, -self.f_dim:])
 
@@ -219,7 +221,13 @@ class Exp_Imputation_Forecast(Exp_Basic):
                 else:
                     outputs = self.model(inp, batch_x_mark, dec_inp, batch_y_mark, x_forecast, mask=mask)
 
-                outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
+                if isinstance(outputs, tuple):
+                    outputs = tuple(
+                        o[:, :self.args.seq_len + self.args.pred_len, -self.f_dim:]
+                        for o in outputs
+                    )
+                else:
+                    outputs = outputs[:, :self.args.seq_len + self.args.pred_len, -self.f_dim:]
                 if self.args.accelerate:
                     batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:]
                 else:
@@ -374,7 +382,10 @@ class Exp_Imputation_Forecast(Exp_Basic):
                     self.accelerator.wait_for_everyone()
                     outputs = self.accelerator.gather_for_metrics(outputs)
 
-                outputs = outputs[:, :, -self.f_dim:]
+                if isinstance(output, tuple):
+                    output = output[-1][:, :self.args.seq_len + self.args.pred_len, -self.f_dim:]
+                else:
+                    output = output[:, :self.args.seq_len + self.args.pred_len, -self.f_dim:]
                 mask = mask[:, :, -self.f_dim:]
                 true = torch.cat([batch_x[:, :self.args.seq_len, -self.f_dim:], batch_y[:, -self.args.pred_len:, -self.f_dim:]], dim=1)
                 outputs = outputs.detach().cpu().numpy()
