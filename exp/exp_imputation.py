@@ -26,7 +26,6 @@ class Exp_Imputation(Exp_Basic):
     def __init__(self, args):
         super(Exp_Imputation, self).__init__(args)
         if self.args.loss_method == "adaptive":
-            self.log_ori_loss = nn.Parameter(torch.zeros(1))
             self.log_missing_loss = nn.Parameter(torch.zeros(1))
         if self.args.loss == 'MSE':
             self.loss_func = calc_mse
@@ -78,13 +77,7 @@ class Exp_Imputation(Exp_Basic):
             missing_loss = self.args.missing_weight * missing_loss / len(imputation)
         else:
             missing_loss = self.loss_func(imputation, true, mask ^ 1)
-
-        if self.args.loss_method == "missing":
-            loss = self.args.missing_weight * missing_loss
-        # if self.args.loss_method == "adaptive":
-        #     loss = 0.5 * (torch.exp(-self.log_ori_loss.to(true.device)) * ori_loss + torch.exp(-self.log_missing_loss.to(true.device)) * missing_loss +
-        #                       self.log_ori_loss.to(true.device) + self.log_missing_loss.to(true.device))
-
+        loss = self.args.missing_weight * missing_loss
         return loss
 
     def vali(self, vali_data, vali_loader):

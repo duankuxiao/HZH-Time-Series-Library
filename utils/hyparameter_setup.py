@@ -18,7 +18,7 @@ def model_hyparameter_setup(args):
 
     if args.model == 'TimeLLMformer' or args.model == 'AttLLM':
         if args.task_name == 'imputation':
-            args.learning_rate = 0.01  # 0.001 for imputation 0.0001 for forecast(0.01 for LLM model)  for electricity
+            args.learning_rate = 0.001  # 0.001 for imputation 0.0001 for forecast(0.01 for LLM model)  for electricity
         else:
             args.learning_rate = 0.01
 
@@ -57,6 +57,8 @@ def model_hyparameter_setup(args):
         args.d_ff = 512
 
     if args.model == 'TimeLLM':  # default
+        args.llm_model = 'BERT'  # defalut GPT2
+
         args.patience = 3
         args.batch_size = 12
         args.learning_rate = 0.01

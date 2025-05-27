@@ -52,35 +52,7 @@ class Model(nn.Module):
             norm_layer=my_Layernorm(configs.d_model)
         )
         # Decoder
-        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
-            self.dec_embedding = DataEmbedding_wo_pos(configs.dec_in, configs.d_model, configs.embed, configs.freq,
-                                                      configs.dropout)
-            self.decoder = Decoder(
-                [
-                    DecoderLayer(
-                        AutoCorrelationLayer(
-                            AutoCorrelation(True, configs.factor, attention_dropout=configs.dropout,
-                                            output_attention=False),
-                            configs.d_model, configs.n_heads),
-                        AutoCorrelationLayer(
-                            AutoCorrelation(False, configs.factor, attention_dropout=configs.dropout,
-                                            output_attention=False),
-                            configs.d_model, configs.n_heads),
-                        configs.d_model,
-                        configs.dec_in,
-                        configs.d_ff,
-                        moving_avg=configs.moving_avg,
-                        dropout=configs.dropout,
-                        activation=configs.activation,
-                    )
-                    for l in range(configs.d_layers)
-                ],
-                norm_layer=my_Layernorm(configs.d_model),
-                projection=nn.Linear(configs.d_model, configs.dec_in, bias=True)
-            )
-            # self.output_projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
-
-        if self.task_name == 'interval_forecast':
+        if 'forecast' in self.task_name:
             self.dec_embedding = DataEmbedding_wo_pos(configs.dec_in, configs.d_model, configs.embed, configs.freq,
                                                       configs.dropout)
             self.decoder = Decoder(
@@ -227,6 +199,8 @@ class Model(nn.Module):
             return dec_out[:, -self.pred_len:, :]  # [B, L, D]
         if self.task_name == 'imputation_forecast':
             dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec)
+            dec_out[:, :self.seq_len, -self.c_out:] = mask[:, :, -self.c_out:] * x_enc[:, :self.seq_len, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out[:, :self.seq_len, -self.c_out:]
+
             return dec_out # [B, L, D]
         if self.task_name == 'imputation':
             dec_out = self.imputation(x_enc, x_mark_enc, x_dec, x_mark_dec, mask)

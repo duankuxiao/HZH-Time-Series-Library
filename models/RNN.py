@@ -31,7 +31,8 @@ class Model(nn.Module):
             self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len)
             if self.use_forecast:
                 self.linear_predict = nn.Linear(configs.seq_len + configs.pred_len, configs.pred_len)
-        self.output_projection = nn.Linear(configs.rnn_dim, configs.c_out)
+        if self.task_name == 'imputation_forecast':
+            self.linear_predict = nn.Linear(configs.seq_len, configs.seq_len + configs.pred_len)
 
         if self.task_name == 'interval_forecast':
             if configs.likelihood == "g":
@@ -41,6 +42,7 @@ class Model(nn.Module):
             else:
                 self.likelihood_layer = Gaussian(configs.rnn_dim, configs.c_out)
 
+        self.output_projection = nn.Linear(configs.rnn_dim, configs.c_out)
         if self.task_name == 'classification' or self.task_name == 'anomaly_detection' or self.task_name == 'imputation':
             self.pred_len = configs.seq_len
         else:
@@ -74,8 +76,8 @@ class Model(nn.Module):
         dec_out = self.output_projection(x)
         if self.use_norm:
             # De-Normalization from Non-stationary Transformer
-            dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
-            dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+            dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.seq_len + self.pred_len, 1))
+            dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.seq_len + self.pred_len, 1))
         return dec_out
 
     def forecast(self, x_enc,x_forecast=None):
@@ -127,6 +129,7 @@ class Model(nn.Module):
             return dec_out[:, -self.pred_len:, :]  # [B, L, D]
         if self.task_name == 'imputation_forecast':
             dec_out = self.forecast(x_enc,x_forecast)
+            dec_out[:, :self.seq_len, -self.c_out:] = mask[:, :, -self.c_out:] * x_enc[:, :self.seq_len, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out[:, :self.seq_len, -self.c_out:]
             return dec_out  # [B, L, D]
         if self.task_name == 'imputation':
             dec_out = self.imputation(x_enc)

@@ -305,7 +305,7 @@ class LLMBlock(nn.Module):
         self.patch_nums = int((configs.seq_len - self.patch_len) / self.stride + 2)
         self.head_nf = self.d_ff * self.patch_nums
 
-        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast' or self.task_name == 'interval_forecast':
+        if 'forecast' in self.task_name:
             self.output_projection = FlattenHead(configs.enc_in, self.head_nf, self.pred_len + configs.label_len, head_dropout=configs.dropout)
             self.output_projection.to(device=self.device)
         if self.task_name == 'imputation':
@@ -331,6 +331,9 @@ class LLMBlock(nn.Module):
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None, mask=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)
+            return dec_out
+        if self.task_name == 'imputation_forecast':
+            dec_out = self.imputation_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)
             return dec_out
         if self.task_name == 'imputation':
             dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)
@@ -410,6 +413,64 @@ class LLMBlock(nn.Module):
         dec_out = self.normalize_layers(dec_out, 'denorm')
         return dec_out
 
+    def imputation_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
+        x_enc = self.normalize_layers(x_enc, 'norm')
+
+        B, T, N = x_enc.size()
+        x_enc = x_enc.permute(0, 2, 1).contiguous().reshape(B * N, T, 1)
+
+        min_values = torch.min(x_enc, dim=1)[0]
+        max_values = torch.max(x_enc, dim=1)[0]
+        medians = torch.median(x_enc, dim=1).values
+        lags = self.calcute_lags(x_enc)
+        trends = x_enc.diff(dim=1).sum(dim=1)
+
+        prompt = []
+        for b in range(x_enc.shape[0]):
+            min_values_str = str(min_values[b].tolist()[0])
+            max_values_str = str(max_values[b].tolist()[0])
+            median_values_str = str(medians[b].tolist()[0])
+            lags_values_str = str(lags[b].tolist())
+            prompt_ = (
+                f"<|start_prompt|>Dataset description: {self.description}"
+                f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information with missing values; "
+                "Input statistics: "
+                f"min value {min_values_str}, "
+                f"max value {max_values_str}, "
+                f"median value {median_values_str}, "
+                f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
+                f"top {self.top_k} lags are : {lags_values_str}<|end_prompt|>"
+            )
+
+            prompt.append(prompt_)
+        # x_enc [B * N, T, 1]
+        x_enc = x_enc.reshape(B, N, T) # [B, T, N]
+
+        prompt = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
+        prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)
+
+        source_embeddings = self.mapping_layer(self.word_embeddings.permute(1, 0)).permute(1, 0)
+
+        enc_out, n_vars = self.patch_embedding(x_enc.to(torch.bfloat16))
+        enc_out = self.reprogramming_layer(enc_out, source_embeddings, source_embeddings)
+
+        if self.use_prompt:
+            llama_enc_out = torch.cat([prompt_embeddings, enc_out], dim=1)
+        else:
+            llama_enc_out = enc_out
+
+        dec_out = self.llm_model(inputs_embeds=llama_enc_out).last_hidden_state
+        dec_out = dec_out[:, :, :self.d_ff]
+
+        dec_out = torch.reshape(
+            dec_out, (-1, n_vars, dec_out.shape[-2], dec_out.shape[-1]))
+        dec_out = dec_out.permute(0, 1, 3, 2).contiguous()
+
+        dec_out = self.output_projection(dec_out[:, :, :, -self.patch_nums:])
+        dec_out = dec_out.permute(0, 2, 1).contiguous()
+
+        dec_out = self.normalize_layers(dec_out, 'denorm')
+        return dec_out
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
         x_enc = self.normalize_layers(x_enc, 'norm')
 
@@ -596,15 +657,12 @@ class Model(nn.Module):
         transformer_enc_layers = configs.e_layers  # configs.e_layers
         if self.encoder_other_model == 'Linear':
             self.encoder_other = nn.Linear(configs.enc_in, transformer_d_model)
-            # self.encoder_linear_projection = nn.Linear(configs.seq_len, configs.pred_len)
 
         elif self.encoder_other_model == 'LSTM':
             self.encoder_other = nn.LSTM(configs.enc_in, configs.rnn_dim, num_layers=configs.rnn_layers, batch_first=True)
-            # self.encoder_linear_projection = nn.Linear(configs.seq_len, configs.pred_len)
 
         elif self.encoder_other_model == 'Transformer':
             self.enc_embedding = DataEmbedding(configs.enc_in, transformer_d_model, configs.embed, configs.freq, configs.dropout)
-            # self.encoder_linear_projection = nn.Linear(configs.seq_len, configs.pred_len)
 
             self.encoder_other = Encoder(
                 [
@@ -621,9 +679,12 @@ class Model(nn.Module):
                 norm_layer=torch.nn.LayerNorm(transformer_d_model)
             )
         self.LLM_encoder = LLMBlock(configs)
+        if 'forecast' in self.task_name:
+            self.encoder_linear_projection = nn.Linear(configs.seq_len, configs.pred_len)
+
 
         # Decoder
-        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast' or self.task_name == 'interval_forecast' or self.task_name == 'imputation':
+        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast' or self.task_name == 'interval_forecast' or self.task_name == 'imputation' or self.task_name == 'imputation_forecast':
             # transformer_d_model = transformer_d_model
             self.dec_embedding = DataEmbedding(configs.c_out, transformer_d_model, configs.embed, configs.freq, configs.dropout)
 
@@ -687,7 +748,7 @@ class Model(nn.Module):
 
         x_enc_target = x_enc[:,:,-self.c_out:]
 
-        enc_out_target = self.LLM_encoder(x_enc_target, x_mark_enc, x_dec, x_mark_dec, x_forecast)
+        enc_out_target = self.LLM_encoder(x_enc_target, None, None, None, x_forecast)
         if self.encoder_other_model == 'Transformer':
             enc_in = self.enc_embedding(x_enc, x_mark_enc)
             enc_out, attns = self.encoder_other(enc_in)
@@ -799,6 +860,37 @@ class Model(nn.Module):
         dec_out = mask[:, :, -self.c_out:] * x_enc_target + (1 - mask[:, :, -self.c_out:]) * dec_out
         return enc_out_target, dec_out
 
+    def imputation_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
+        # Normalization from Non-stationary Transformer
+        means = torch.sum(x_enc, dim=1) / torch.sum(mask == 1, dim=1)
+        means = means.unsqueeze(1).detach()
+        x_enc = x_enc - means
+        stdev = torch.sqrt(torch.sum(x_enc * x_enc, dim=1) / torch.sum(mask == 1, dim=1) + 1e-5)
+        stdev = stdev.unsqueeze(1).detach()
+        x_enc /= stdev
+
+        x_enc_target = x_enc[:, :, -self.c_out:]
+        enc_out_target = self.LLM_encoder(x_enc_target, x_mark_enc, None, None, None)
+
+        if self.encoder_other_model == 'Transformer':
+            enc_in = self.enc_embedding(x_enc, x_mark_enc)
+            enc_out, attns = self.encoder_other(enc_in, attn_mask=mask)
+        elif self.encoder_other_model == 'LSTM':
+            enc_out, (_) = self.encoder_other(x_enc)
+        elif self.encoder_other_model == 'Linear':
+            enc_out = self.encoder_other(x_enc)
+        enc_out = self.encoder_linear_projection(enc_out.permute(0, 2, 1)).permute(0, 2, 1)
+
+        enc_out_target[:,:self.seq_len,:] = mask[:, :, -self.c_out:] * x_enc_target[:,:self.seq_len,:] + (1 - mask[:, :, -self.c_out:]) * enc_out_target[:,:self.seq_len,:]
+        dec_in = self.dec_embedding(enc_out_target, x_mark_dec)
+
+        dec_out = self.decoder(dec_in, enc_out, x_mask=None, cross_mask=mask)
+        dec_out = self.projection(dec_out)
+
+        # De-Normalization from Non-stationary Transformer
+        dec_out = dec_out * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
+        dec_out = dec_out + (means[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
+        return enc_out_target[:,:self.seq_len,:], dec_out
     def anomaly_detection(self, x_enc):
         # Embedding
         enc_out = self.enc_embedding(x_enc, None)
@@ -828,6 +920,10 @@ class Model(nn.Module):
             dec_out1,dec_out2 = self.imputation(x_enc, x_mark_enc, x_dec, x_mark_dec, mask)
             dec_out2 = mask[:, :, -self.c_out:] * x_enc[:, :, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out2
             return dec_out1, dec_out2   # [B, L, D]
+        if self.task_name == 'imputation_forecast':
+            enc_out_target, dec_out = self.imputation_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, mask)
+            dec_out[:, :self.seq_len, -self.c_out:] = mask[:, :, -self.c_out:] * x_enc[:, :self.seq_len, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out[:, :self.seq_len, -self.c_out:]
+            return enc_out_target, dec_out   # [B, L, D]
         if self.task_name == 'anomaly_detection':
             dec_out = self.anomaly_detection(x_enc)
             return dec_out  # [B, L, D]

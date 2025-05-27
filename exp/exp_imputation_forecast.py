@@ -27,7 +27,6 @@ class Exp_Imputation_Forecast(Exp_Basic):
     def __init__(self, args):
         super(Exp_Imputation_Forecast, self).__init__(args)
         if self.args.loss_method == "adaptive":
-            self.log_ori_loss = nn.Parameter(torch.zeros(1))
             self.log_missing_loss = nn.Parameter(torch.zeros(1))
             self.log_pred_loss = nn.Parameter(torch.zeros(1))
         if self.args.loss == 'MSE':
@@ -39,7 +38,6 @@ class Exp_Imputation_Forecast(Exp_Basic):
 
     def _build_model(self):
         model = self.model_dict[self.args.model].Model(self.args).float()
-
         if self.args.use_multi_gpu and self.args.use_gpu:
             model = nn.DataParallel(model, device_ids=self.args.device_ids)
         return model
@@ -69,30 +67,34 @@ class Exp_Imputation_Forecast(Exp_Basic):
         return scheduler
 
     def _loss_function(self, outputs, true, mask):
-        pred = outputs[:, -self.args.pred_len:, :]
-        imputation = outputs[:, :self.args.seq_len, :]
+        if isinstance(outputs, tuple):
+            pred = outputs[-1][:, -self.args.pred_len:, :]
+        else:
+            pred = outputs[:, -self.args.pred_len:, :]
+        if isinstance(outputs, tuple):
+            imputation = tuple(
+                o[:, :self.args.seq_len, -self.f_dim:]
+                for o in outputs
+            )
+        else:
+            imputation = outputs[:, :self.args.seq_len, :]
         pred_true = true[:, -self.args.pred_len:, :]
         imputation_true = true[:, :self.args.seq_len, :]
         pred_loss = self.loss_func(pred, pred_true)
 
-        if self.args.loss_method == "fix":
-            ori_loss = self.loss_func(imputation, imputation_true, mask)
+        if self.args.model == 'TimeLLMformer':
+            missing_loss = 0
+            for i, tensor in enumerate(imputation):
+                missing_loss += self.loss_func(tensor, imputation_true, mask ^ 1)
+            missing_loss = self.args.missing_weight * missing_loss / len(imputation)
+        else:
             missing_loss = self.loss_func(imputation, imputation_true, mask ^ 1)
-            loss = self.args.ori_weight * ori_loss + self.args.missing_weight * missing_loss + self.args.pred_weight * pred_loss
+
+        if self.args.loss_method == "fix":
+            loss = self.args.missing_weight * missing_loss + self.args.pred_weight * pred_loss
 
         elif self.args.loss_method == "adaptive":
-            if self.args.model == 'TimeLLMformer':
-                missing_loss = 0
-                for i, tensor in enumerate(imputation):
-                    missing_loss += self.loss_func(tensor, imputation_true, mask)
-                    if i == len(imputation) - 1:  # 仅在最后一个 tensor 时计算 MIT_loss
-                        ori_loss = self.args.ori_weight * self.loss_func(tensor, imputation_true, mask ^ 1)
-                missing_loss = self.args.missing_weight * missing_loss / len(imputation)
-            else:
-                ori_loss = self.loss_func(imputation, imputation_true, mask)
-                missing_loss = self.loss_func(imputation, imputation_true, mask ^ 1)
-
-            loss = 0.5 * (torch.exp(-self.log_ori_loss.to(true.device)) * ori_loss + torch.exp(-self.log_missing_loss.to(true.device)) * missing_loss + torch.exp(
+            loss = 0.5 * (torch.exp(-self.log_missing_loss.to(true.device)) * missing_loss + torch.exp(
                 -self.log_pred_loss.to(true.device)) * pred_loss +
                           self.log_ori_loss.to(true.device) + self.log_missing_loss.to(true.device) + self.log_pred_loss.to(true.device))
 
@@ -135,7 +137,7 @@ class Exp_Imputation_Forecast(Exp_Basic):
                         for o in outputs
                     )
                 else:
-                    outputs = outputs[:, :self.args.seq_len+  self.args.pred_len, -self.f_dim:]
+                    outputs = outputs[:, :self.args.seq_len + self.args.pred_len, -self.f_dim:]
                     outputs = outputs.detach().cpu()
                 true = torch.cat([batch_x[:, :self.args.seq_len, -self.f_dim:], batch_y[:, -self.args.pred_len:, -self.f_dim:]], dim=1).detach().cpu()
                 mask = mask.detach().cpu()
@@ -175,7 +177,7 @@ class Exp_Imputation_Forecast(Exp_Basic):
         # Initialize a dictionary to store loss values
         loss_records = {"epoch": [], "time": [], "train_loss": [], "vali_loss": []}
         if self.args.loss_method == 'adaptive':
-            loss_records = {"epoch": [], "train_loss": [], "vali_loss": [], "ori_weight": [], "missing_weight": [], "pred_weight": []}
+            loss_records = {"epoch": [],  "time": [],"train_loss": [], "vali_loss": [], "ori_weight": [], "missing_weight": [], "pred_weight": []}
 
         for epoch in range(self.args.train_epochs):
             iter_count = 0
@@ -382,10 +384,10 @@ class Exp_Imputation_Forecast(Exp_Basic):
                     self.accelerator.wait_for_everyone()
                     outputs = self.accelerator.gather_for_metrics(outputs)
 
-                if isinstance(output, tuple):
-                    output = output[-1][:, :self.args.seq_len + self.args.pred_len, -self.f_dim:]
+                if isinstance(outputs, tuple):
+                    outputs = outputs[-1][:, :self.args.seq_len + self.args.pred_len, -self.f_dim:]
                 else:
-                    output = output[:, :self.args.seq_len + self.args.pred_len, -self.f_dim:]
+                    outputs = outputs[:, :self.args.seq_len + self.args.pred_len, -self.f_dim:]
                 mask = mask[:, :, -self.f_dim:]
                 true = torch.cat([batch_x[:, :self.args.seq_len, -self.f_dim:], batch_y[:, -self.args.pred_len:, -self.f_dim:]], dim=1)
                 outputs = outputs.detach().cpu().numpy()
@@ -512,7 +514,7 @@ class Exp_Imputation_Forecast(Exp_Basic):
         metrics_df.loc["mean"] = metrics_df.mean()
         imputation_metrics_df.loc["mean"] = imputation_metrics_df.mean()
         print(imputation_metrics_df.loc["mean"])
-
+        print(metrics_df.loc["mean"])
         # Save DataFrames
         res_df.to_csv(os.path.join(path, f"pred_res_{self.args.data_path[:-4]}.csv"))
         metrics_df.to_csv(os.path.join(path, f"metrics_df_{self.args.data_path[:-4]}.csv"))
