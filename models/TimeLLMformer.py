@@ -895,6 +895,7 @@ class Model(nn.Module):
             dec_out = dec_out * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
             dec_out = dec_out + (means[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
         return enc_out_target[:,:self.seq_len,:], dec_out
+
     def anomaly_detection(self, x_enc):
         # Embedding
         enc_out = self.enc_embedding(x_enc, None)
