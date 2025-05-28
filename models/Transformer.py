@@ -19,8 +19,10 @@ class Model(nn.Module):
         super(Model, self).__init__()
         self.task_name = configs.task_name
         self.pred_len = configs.pred_len
+        self.seq_len = configs.seq_len
         self.likelihood = configs.likelihood
         self.c_out = configs.c_out
+        self.use_norm = configs.use_norm
 
         # Embedding
         self.enc_embedding = DataEmbedding(configs.enc_in, configs.d_model, configs.embed, configs.freq,
@@ -95,6 +97,17 @@ class Model(nn.Module):
             self.projection = nn.Linear(configs.d_model * configs.seq_len, configs.num_class)
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None,mask=None):
+        if mask is None:
+            mask = torch.ones_like(x_enc)
+        if self.use_norm:
+            # Normalization from Non-stationary Transformer
+            means = torch.sum(x_enc, dim=1) / torch.sum(mask == 1, dim=1)
+            means = means.unsqueeze(1).detach()
+            x_enc = x_enc - means
+            # x_enc = x_enc.masked_fill(mask == 0, 0)
+            stdev = torch.sqrt(torch.sum(x_enc * x_enc, dim=1) / torch.sum(mask == 1, dim=1) + 1e-5)
+            stdev = stdev.unsqueeze(1).detach()
+            x_enc /= stdev
         # if self.use_forecast:
         #     x_forecast_ = self.forecast_projection(x_forecast)
         #     x_enc = torch.cat((x_enc, x_forecast_), dim=1)
@@ -108,6 +121,10 @@ class Model(nn.Module):
         dec_out = self.output_projection(dec_out)
         # dec_out = self.decoder(enc_out)
         # dec_out = self.linear_projection(dec_out.permute(0, 2, 1)).permute(0, 2, 1)
+        if self.use_norm:
+            # De-Normalization from Non-stationary Transformer
+            dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
+            dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
         return dec_out
 
     def interval_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None):

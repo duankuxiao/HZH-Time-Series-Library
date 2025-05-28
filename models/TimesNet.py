@@ -184,14 +184,15 @@ class Model(nn.Module):
         return dec_out, mu, sigma
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
-        # Normalization from Non-stationary Transformer
-        means = torch.sum(x_enc, dim=1) / torch.sum(mask == 1, dim=1)
-        means = means.unsqueeze(1).detach()
-        x_enc = x_enc - means
-        x_enc = x_enc.masked_fill(mask == 0, 0)
-        stdev = torch.sqrt(torch.sum(x_enc * x_enc, dim=1) / torch.sum(mask == 1, dim=1) + 1e-5)
-        stdev = stdev.unsqueeze(1).detach()
-        x_enc /= stdev
+        if self.use_norm:
+            # Normalization from Non-stationary Transformer
+            means = torch.sum(x_enc, dim=1) / torch.sum(mask == 1, dim=1)
+            means = means.unsqueeze(1).detach()
+            x_enc = x_enc - means
+            x_enc = x_enc.masked_fill(mask == 0, 0)
+            stdev = torch.sqrt(torch.sum(x_enc * x_enc, dim=1) / torch.sum(mask == 1, dim=1) + 1e-5)
+            stdev = stdev.unsqueeze(1).detach()
+            x_enc /= stdev
 
         # embedding
         enc_out = self.enc_embedding(x_enc, x_mark_enc)  # [B,T,C]
@@ -200,21 +201,22 @@ class Model(nn.Module):
             enc_out = self.layer_norm(self.model[i](enc_out))
         # porject back
         dec_out = self.projection(enc_out)
-
-        # De-Normalization from Non-stationary Transformer
-        dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.seq_len, 1))
-        dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.seq_len, 1))
+        if self.use_norm:
+            # De-Normalization from Non-stationary Transformer
+            dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.seq_len, 1))
+            dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.seq_len, 1))
         return dec_out
 
     def imputation_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None,mask=None):
-        # Normalization from Non-stationary Transformer
-        means = torch.sum(x_enc, dim=1) / torch.sum(mask == 1, dim=1)
-        means = means.unsqueeze(1).detach()
-        x_enc = x_enc - means
-        # x_enc = x_enc.masked_fill(mask == 0, 0)
-        stdev = torch.sqrt(torch.sum(x_enc * x_enc, dim=1) / torch.sum(mask == 1, dim=1) + 1e-5)
-        stdev = stdev.unsqueeze(1).detach()
-        x_enc /= stdev
+        if self.use_norm:
+            # Normalization from Non-stationary Transformer
+            means = torch.sum(x_enc, dim=1) / torch.sum(mask == 1, dim=1)
+            means = means.unsqueeze(1).detach()
+            x_enc = x_enc - means
+            # x_enc = x_enc.masked_fill(mask == 0, 0)
+            stdev = torch.sqrt(torch.sum(x_enc * x_enc, dim=1) / torch.sum(mask == 1, dim=1) + 1e-5)
+            stdev = stdev.unsqueeze(1).detach()
+            x_enc /= stdev
 
         # embedding
         enc_out = self.enc_embedding(x_enc, x_mark_enc)  # [B,T,C]
@@ -225,10 +227,10 @@ class Model(nn.Module):
             enc_out = self.layer_norm(self.model[i](enc_out))
         # porject back
         dec_out = self.projection(enc_out)
-
-        # De-Normalization from Non-stationary Transformer
-        dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
-        dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
+        if self.use_norm:
+            # De-Normalization from Non-stationary Transformer
+            dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
+            dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
         return dec_out
     def anomaly_detection(self, x_enc):
         # Normalization from Non-stationary Transformer

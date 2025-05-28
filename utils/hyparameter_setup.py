@@ -27,9 +27,9 @@ def model_hyparameter_setup(args):
         args.llm_model = 'GPT2'  # defalut GPT2
         args.d_model = 32
         args.d_ff = 64
-        args.e_layers = 8  # 2
+        args.e_layers = 1  # 2
         args.d_layers = 3  # 2
-        args.llm_layers = 16
+        args.llm_layers = 10
 
     if 'RNN' in args.model:
         args.rnn_dim = 256

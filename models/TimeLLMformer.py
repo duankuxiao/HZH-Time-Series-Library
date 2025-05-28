@@ -649,6 +649,7 @@ class Model(nn.Module):
         self.c_out = configs.c_out
         self.output_attention = configs.output_attention
         self.likelihood = configs.likelihood
+        self.use_norm = configs.use_norm
 
         # Encoder
         self.encoder_other_model = encoder_other_model
@@ -824,13 +825,14 @@ class Model(nn.Module):
         return dec_out, mu, sigma
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
-        # Normalization from Non-stationary Transformer
-        means = torch.sum(x_enc, dim=1) / torch.sum(mask == 1, dim=1)
-        means = means.unsqueeze(1).detach()
-        x_enc = x_enc - means
-        stdev = torch.sqrt(torch.sum(x_enc * x_enc, dim=1) / torch.sum(mask == 1, dim=1) + 1e-5)
-        stdev = stdev.unsqueeze(1).detach()
-        x_enc /= stdev
+        if self.use_norm:
+            # Normalization from Non-stationary Transformer
+            means = torch.sum(x_enc, dim=1) / torch.sum(mask == 1, dim=1)
+            means = means.unsqueeze(1).detach()
+            x_enc = x_enc - means
+            stdev = torch.sqrt(torch.sum(x_enc * x_enc, dim=1) / torch.sum(mask == 1, dim=1) + 1e-5)
+            stdev = stdev.unsqueeze(1).detach()
+            x_enc /= stdev
 
         x_enc_target = x_enc[:, :, -self.c_out:]
         enc_out_target = self.LLM_encoder(x_enc_target, x_mark_enc, None, None, None)
@@ -851,23 +853,25 @@ class Model(nn.Module):
 
         dec_out = self.decoder(dec_in, enc_out, x_mask=None, cross_mask=mask)
         dec_out = self.projection(dec_out)
-
-        # De-Normalization from Non-stationary Transformer
-        enc_out_target = enc_out_target * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
-        enc_out_target = enc_out_target + (means[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
-        dec_out = dec_out * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
-        dec_out = dec_out + (means[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
+        if self.use_norm:
+            # De-Normalization from Non-stationary Transformer
+            enc_out_target = enc_out_target * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
+            enc_out_target = enc_out_target + (means[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
+            dec_out = dec_out * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
+            dec_out = dec_out + (means[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
         dec_out = mask[:, :, -self.c_out:] * x_enc_target + (1 - mask[:, :, -self.c_out:]) * dec_out
         return enc_out_target, dec_out
 
     def imputation_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
-        # Normalization from Non-stationary Transformer
-        means = torch.sum(x_enc, dim=1) / torch.sum(mask == 1, dim=1)
-        means = means.unsqueeze(1).detach()
-        x_enc = x_enc - means
-        stdev = torch.sqrt(torch.sum(x_enc * x_enc, dim=1) / torch.sum(mask == 1, dim=1) + 1e-5)
-        stdev = stdev.unsqueeze(1).detach()
-        x_enc /= stdev
+        if self.use_norm:
+
+            # Normalization from Non-stationary Transformer
+            means = torch.sum(x_enc, dim=1) / torch.sum(mask == 1, dim=1)
+            means = means.unsqueeze(1).detach()
+            x_enc = x_enc - means
+            stdev = torch.sqrt(torch.sum(x_enc * x_enc, dim=1) / torch.sum(mask == 1, dim=1) + 1e-5)
+            stdev = stdev.unsqueeze(1).detach()
+            x_enc /= stdev
 
         x_enc_target = x_enc[:, :, -self.c_out:]
         enc_out_target = self.LLM_encoder(x_enc_target, x_mark_enc, None, None, None)
@@ -886,10 +890,10 @@ class Model(nn.Module):
 
         dec_out = self.decoder(dec_in, enc_out, x_mask=None, cross_mask=mask)
         dec_out = self.projection(dec_out)
-
-        # De-Normalization from Non-stationary Transformer
-        dec_out = dec_out * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
-        dec_out = dec_out + (means[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
+        if self.use_norm:
+            # De-Normalization from Non-stationary Transformer
+            dec_out = dec_out * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
+            dec_out = dec_out + (means[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
         return enc_out_target[:,:self.seq_len,:], dec_out
     def anomaly_detection(self, x_enc):
         # Embedding

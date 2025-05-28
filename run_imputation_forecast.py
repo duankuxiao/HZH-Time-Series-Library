@@ -51,10 +51,7 @@ def get_setting(args, ii):
     return setting
 
 def main(args):
-    if args.task_name == 'imputation':
-        Exp = Exp_Imputation
-    elif args.task_name == 'imputation_forecast':
-        Exp = Exp_Imputation_Forecast
+    Exp = Exp_Imputation_Forecast
 
     if args.is_training:
         for ii in range(args.itr):
@@ -66,7 +63,7 @@ def main(args):
             exp.train(setting)
 
             print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-            res_df, metrics_df, imputation_metrics_df  = exp.test(setting)
+            res_df, metrics_df, imputation_metrics_df = exp.test(setting)
             torch.cuda.empty_cache()
     else:
         ii = 0
@@ -90,24 +87,29 @@ if __name__ == '__main__':
 
         args = deepcopy(default_args)
         args.mask_rate = mask_rate
-        all_results = []
+        imputation_results = []
+        forecast_results = []
         for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'PatchTST', 'TimesNet', 'TimeLLM','TimeLLMformer']:
         # for model in ['TimeLLMformer']:
 
-            args.model_id = 'test'
+            args.model_id = '1'
             args.model = model
             args.loss_method = "fix"  # missing fix adaptive
             # args.data_path = '{}.csv'.format(args.model_id)
             # args.source_data_path = '{}.csv'.format(args.model_id)
-            args.task_name = 'imputation'
+            args.task_name = 'imputation_forecast'  # imputation_forecast  imputation
             args.mask_target_only = False
-            args.pred_len = 0
-            args.label_len = 0
             args = model_hyparameter_setup(args)
+            args.use_norm = True
             # args.patience = 3
 
             res_df, metrics_df, imputation_metrics_df = main(args)
             imputation_metrics_df.insert(0, 'model', model)
-            all_results.append(imputation_metrics_df)
-            final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
-            final_metrics_df.to_csv('./results/{}_all_models_comparison_mr{}.csv'.format(args.model_id, mask_rate))
+            imputation_results.append(imputation_metrics_df)
+            imputation_final_metrics_df = pd.concat(imputation_results, axis=0, ignore_index=False)
+            imputation_final_metrics_df.to_csv('./results/{}_imputation_results_mr{}.csv'.format(args.model_id, mask_rate))
+
+            metrics_df.insert(0, 'model', model)
+            forecast_results.append(metrics_df)
+            forecast_final_metrics_df = pd.concat(forecast_results, axis=0, ignore_index=False)
+            forecast_final_metrics_df.to_csv('./results/{}_forecast_results_mr{}.csv'.format(args.model_id, mask_rate))

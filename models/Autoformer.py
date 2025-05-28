@@ -101,7 +101,18 @@ class Model(nn.Module):
             else:
                 self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
 
-    def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec):
+    def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec,mask=None):
+        if mask is None:
+            mask = torch.ones_like(x_enc)
+        if self.use_norm:
+            # Normalization from Non-stationary Transformer
+            means = torch.sum(x_enc, dim=1) / torch.sum(mask == 1, dim=1)
+            means = means.unsqueeze(1).detach()
+            x_enc = x_enc - means
+            x_enc = x_enc.masked_fill(mask == 0, 0)
+            stdev = torch.sqrt(torch.sum(x_enc * x_enc, dim=1) / torch.sum(mask == 1, dim=1) + 1e-5)
+            stdev = stdev.unsqueeze(1).detach()
+            x_enc /= stdev
         # decomp init
         mean = torch.mean(x_enc, dim=1).unsqueeze(1).repeat(1, self.pred_len, 1)
         zeros = torch.zeros([x_enc.shape[0], self.pred_len, x_enc.shape[2]], device=x_enc.device)
@@ -118,6 +129,10 @@ class Model(nn.Module):
         # final
         dec_out = trend_part + seasonal_part
         # dec_out = self.output_projection(dec_out)
+        if self.use_norm:
+            # De-Normalization from Non-stationary Transformer
+            dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.seq_len, 1))
+            dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.seq_len, 1))
         return dec_out
 
     def interval_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast):
@@ -162,11 +177,24 @@ class Model(nn.Module):
         return dec_out, mu, sigma
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
+        if self.use_norm:
+            # Normalization from Non-stationary Transformer
+            means = torch.sum(x_enc, dim=1) / torch.sum(mask == 1, dim=1)
+            means = means.unsqueeze(1).detach()
+            x_enc = x_enc - means
+            x_enc = x_enc.masked_fill(mask == 0, 0)
+            stdev = torch.sqrt(torch.sum(x_enc * x_enc, dim=1) / torch.sum(mask == 1, dim=1) + 1e-5)
+            stdev = stdev.unsqueeze(1).detach()
+            x_enc /= stdev
         # enc
         enc_out = self.enc_embedding(x_enc, x_mark_enc)
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
         # final
         dec_out = self.projection(enc_out)
+        if self.use_norm:
+            # De-Normalization from Non-stationary Transformer
+            dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.seq_len, 1))
+            dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.seq_len, 1))
         return dec_out
 
     def anomaly_detection(self, x_enc):
@@ -198,7 +226,7 @@ class Model(nn.Module):
             dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec)
             return dec_out[:, -self.pred_len:, :]  # [B, L, D]
         if self.task_name == 'imputation_forecast':
-            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec)
+            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,mask)
             dec_out[:, :self.seq_len, -self.c_out:] = mask[:, :, -self.c_out:] * x_enc[:, :self.seq_len, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out[:, :self.seq_len, -self.c_out:]
 
             return dec_out # [B, L, D]

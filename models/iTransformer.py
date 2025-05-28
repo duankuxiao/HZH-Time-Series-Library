@@ -139,11 +139,12 @@ class Model(nn.Module):
         return dec_out, mu, sigma
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
-        # Normalization from Non-stationary Transformer
-        means = x_enc.mean(1, keepdim=True).detach()
-        x_enc = x_enc - means
-        stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
-        x_enc /= stdev
+        if self.use_norm:
+            # Normalization from Non-stationary Transformer
+            means = x_enc.mean(1, keepdim=True).detach()
+            x_enc = x_enc - means
+            stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
+            x_enc /= stdev
 
         _, L, N = x_enc.shape
 
@@ -152,9 +153,11 @@ class Model(nn.Module):
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
         dec_out = self.projection(enc_out).permute(0, 2, 1)[:, :, :N]
-        # De-Normalization from Non-stationary Transformer
-        dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, L, 1))
-        dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, L, 1))
+        if self.use_norm:
+
+            # De-Normalization from Non-stationary Transformer
+            dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, L, 1))
+            dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, L, 1))
         return dec_out
 
     def imputation_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
