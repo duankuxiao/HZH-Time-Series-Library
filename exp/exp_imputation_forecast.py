@@ -47,7 +47,11 @@ class Exp_Imputation_Forecast(Exp_Basic):
         return data_set, data_loader
 
     def _select_optimizer(self):
-        model_optim = optim.Adam(self.model.parameters(), lr=self.args.learning_rate)
+        params = list(self.model.parameters())
+        if self.args.loss_method == "adaptive":
+            # … plus your two learnable scalars
+            params += [self.log_pred_loss, self.log_missing_loss]
+        model_optim = optim.Adam(params, lr=self.args.learning_rate)
         return model_optim
 
     def _select_criterion(self):
@@ -95,8 +99,7 @@ class Exp_Imputation_Forecast(Exp_Basic):
 
         elif self.args.loss_method == "adaptive":
             loss = 0.5 * (torch.exp(-self.log_missing_loss.to(true.device)) * missing_loss + torch.exp(
-                -self.log_pred_loss.to(true.device)) * pred_loss +
-                          self.log_ori_loss.to(true.device) + self.log_missing_loss.to(true.device) + self.log_pred_loss.to(true.device))
+                -self.log_pred_loss.to(true.device)) * pred_loss + self.log_missing_loss.to(true.device) + self.log_pred_loss.to(true.device))
 
         return loss
 
@@ -144,7 +147,7 @@ class Exp_Imputation_Forecast(Exp_Basic):
 
                 loss = self._loss_function(outputs, true, mask[:, :self.args.seq_len, -self.f_dim:])
 
-                total_loss.append(loss)
+                total_loss.append(loss.item())
         total_loss = np.average(total_loss)
         self.model.train()
         return total_loss
@@ -177,7 +180,7 @@ class Exp_Imputation_Forecast(Exp_Basic):
         # Initialize a dictionary to store loss values
         loss_records = {"epoch": [], "time": [], "train_loss": [], "vali_loss": []}
         if self.args.loss_method == 'adaptive':
-            loss_records = {"epoch": [],  "time": [],"train_loss": [], "vali_loss": [], "ori_weight": [], "missing_weight": [], "pred_weight": []}
+            loss_records = {"epoch": [],  "time": [],"train_loss": [], "vali_loss": [], "missing_weight": [], "pred_weight": []}
 
         for epoch in range(self.args.train_epochs):
             iter_count = 0
@@ -277,7 +280,6 @@ class Exp_Imputation_Forecast(Exp_Basic):
             loss_records["train_loss"].append(train_loss)
             loss_records["vali_loss"].append(vali_loss)
             if self.args.loss_method == 'adaptive':
-                loss_records["ori_weight"].append(self.log_ori_loss.detach().numpy())
                 loss_records["missing_weight"].append(self.log_missing_loss.detach().numpy())
                 loss_records["pred_weight"].append(self.log_pred_loss.detach().numpy())
 

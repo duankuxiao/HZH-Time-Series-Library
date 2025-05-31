@@ -47,9 +47,6 @@ class Exp_Imputation(Exp_Basic):
 
     def _select_optimizer(self):
         params = list(self.model.parameters())
-        if self.args.loss_method == "adaptive":
-            # … plus your two learnable scalars
-            params += [self.log_ori_loss, self.log_missing_loss]
         model_optim = optim.Adam(params, lr=self.args.learning_rate)
         return model_optim
 
@@ -151,8 +148,6 @@ class Exp_Imputation(Exp_Basic):
 
         # Initialize a dictionary to store loss values
         loss_records = {"epoch": [], "time": [], "train_loss": [], "vali_loss": []}
-        if self.args.loss_method == 'adaptive':
-            loss_records = {"epoch": [], "time": [],"train_loss": [], "vali_loss": [], "ori_weight": [], "missing_weight": []}
 
         for epoch in range(self.args.train_epochs):
             iter_count = 0
@@ -239,9 +234,6 @@ class Exp_Imputation(Exp_Basic):
             loss_records["time"].append(round((time.time() - time_start)/60,4))
             loss_records["train_loss"].append(train_loss)
             loss_records["vali_loss"].append(vali_loss)
-            if self.args.loss_method == 'adaptive':
-                loss_records["ori_weight"].append(self.log_ori_loss.detach().numpy())
-                loss_records["missing_weight"].append(self.log_missing_loss.detach().numpy())
 
             # test_loss = self.vali(test_data, test_loader, criterion)
             cost_time = round((time.time() - epoch_time) / 60, 2)

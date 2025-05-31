@@ -92,15 +92,15 @@ if __name__ == '__main__':
         for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'PatchTST', 'TimesNet', 'TimeLLM','TimeLLMformer']:
         # for model in ['TimeLLMformer']:
 
-            args.model_id = '1'
+            args.model_id = '3'
             args.model = model
-            args.loss_method = "fix"  # missing fix adaptive
+            args.loss_method = "adaptive"  # missing fix adaptive
             # args.data_path = '{}.csv'.format(args.model_id)
             # args.source_data_path = '{}.csv'.format(args.model_id)
             args.task_name = 'imputation_forecast'  # imputation_forecast  imputation
             args.mask_target_only = False
             args = model_hyparameter_setup(args)
-            args.use_norm = True
+            args.use_norm = False
             # args.patience = 3
 
             res_df, metrics_df, imputation_metrics_df = main(args)
