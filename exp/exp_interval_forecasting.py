@@ -43,7 +43,7 @@ class Exp_Forecast(Exp_Basic):
 
     def _select_optimizer(self):
         param_list = list(self.model.parameters())
-        if self.loss == "adaptive":
+        if self.loss_method == "adaptive":
             # 将不确定性参数也加入到优化器中
             param_list += [self.log_sigma_mse, self.log_sigma_nll]
         model_optim = optim.Adam(param_list, lr=self.args.learning_rate)
@@ -77,26 +77,13 @@ class Exp_Forecast(Exp_Basic):
         elif self.loss_method == "msemu":
             loss = criterion(mu, true)
         elif self.loss_method == "hybridmu":
-            loss = criterion(mu, true) + gaussian_likelihood_loss(true, mu, sigma) * 0.1
+            loss = criterion(mu, true) + gaussian_likelihood_loss(true, mu, sigma) * 0.4
         elif self.loss_method == "adaptive":
-            if self.args.model == 'AttLLM':
-                mse_loss = 0
-                nll_loss = 0
-                for i in range(len(mu)):
-                    mse_loss += criterion(mu[i], true)
-                    # nll_loss += gaussian_likelihood_loss(true, mu[i], sigma[i])
-                mse_loss /= len(mu)
-                # nll_loss /= len(mu)
-                # mse_loss = criterion(mu[-1], true)
-                nll_loss = gaussian_likelihood_loss(true, mu[-1], sigma[-1])
-                loss = 0.5 * (torch.exp(-self.log_sigma_mse.to(true.device)) * mse_loss + torch.exp(-self.log_sigma_nll.to(true.device)) * nll_loss +
-                              self.log_sigma_mse.to(true.device) + self.log_sigma_nll.to(true.device))
-            else:
-                mse_loss = criterion(mu, true)
-                nll_loss = gaussian_likelihood_loss(true, mu, sigma)
-                # loss = 0.5 * (torch.exp(-self.log_sigma_mse.to(true.device)) * mse_loss + torch.exp(-self.log_sigma_nll.to(true.device)) * nll_loss)
-                loss = 0.5 * (torch.exp(-self.log_sigma_mse.to(true.device)) * mse_loss + torch.exp(-self.log_sigma_nll.to(true.device)) * nll_loss +
-                              self.log_sigma_mse.to(true.device) + self.log_sigma_nll.to(true.device))
+            mse_loss = criterion(mu, true)
+            nll_loss = gaussian_likelihood_loss(true, mu, sigma)
+            # loss = 0.5 * (torch.exp(-self.log_sigma_mse.to(true.device)) * mse_loss + torch.exp(-self.log_sigma_nll.to(true.device)) * nll_loss)
+            loss = 0.5 * (torch.exp(-self.log_sigma_mse.to(true.device)) * mse_loss + torch.exp(-self.log_sigma_nll.to(true.device)) * nll_loss +
+                          self.log_sigma_mse.to(true.device) + self.log_sigma_nll.to(true.device))
 
         else:
             loss = criterion(mu, true) + gaussian_likelihood_loss(true, mu, sigma) * 0.1
@@ -167,9 +154,9 @@ class Exp_Forecast(Exp_Basic):
             self.accelerator.print(f"Process {self.accelerator.process_index} is using device {self.accelerator.device}")
 
         # Initialize a dictionary to store loss values
-        loss_records = {"epoch": [], "train_loss": [], "vali_loss": []}
+        loss_records = {"epoch": [],"time": [], "train_loss": [], "vali_loss": []}
         if self.loss_method == 'adaptive':
-            loss_records = {"epoch": [], "train_loss": [], "vali_loss": [], "mse_weight": [], "nll_weight": []}
+            loss_records = {"epoch": [], "time": [],"train_loss": [], "vali_loss": [], "mse_weight": [], "nll_weight": []}
 
         for epoch in range(self.args.train_epochs):
             iter_count = 0
@@ -512,7 +499,7 @@ class Exp_Forecast(Exp_Basic):
 
     def _show_plot(self,i,y_true,y_pred,mu,sigma,path):
         y_pred = []
-        res_df = pd.DataFrame(columns=['p50','p90','p10'])
+        res_df = pd.DataFrame(columns=['p50','p90','p10','p70','p30'])
         for _ in tqdm(range(self.args.sample_size)):
             if self.likelihood == 'g':
                 y_sample = gaussian_sample(torch.tensor(mu), torch.tensor(sigma))
@@ -531,6 +518,8 @@ class Exp_Forecast(Exp_Basic):
         res_df['p50'] = p50
         res_df['p90'] = p90
         res_df['p10'] = p10
+        res_df['p70'] = p70
+        res_df['p30'] = p30
         res_df.to_csv(os.path.join(path, 'interval_res_{}_{}.csv'.format(self.args.data_path[:-4],i)))
 
         p50_ = p50[-self.args.pred_len*7:]

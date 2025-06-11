@@ -339,8 +339,10 @@ class LLMBlock(nn.Module):
             dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)
             return dec_out
         if self.task_name == 'interval_forecast':
-            mu, sigma = self.interval_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
-            return mu, sigma
+            # mu, sigma = self.interval_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
+            # return mu, sigma
+            enc_out = self.interval_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
+            return enc_out
         else:
             dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
             return dec_out
@@ -471,6 +473,7 @@ class LLMBlock(nn.Module):
 
         dec_out = self.normalize_layers(dec_out, 'denorm')
         return dec_out
+
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
         x_enc = self.normalize_layers(x_enc, 'norm')
 
@@ -531,7 +534,7 @@ class LLMBlock(nn.Module):
         return dec_out
 
     def interval_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
-        # x_enc = self.normalize_layers(x_enc, 'norm')
+        x_enc = self.normalize_layers(x_enc, 'norm')
 
         B, T, N = x_enc.size()
         x_enc = x_enc.permute(0, 2, 1).contiguous().reshape(B * N, T, 1)
@@ -582,11 +585,16 @@ class LLMBlock(nn.Module):
         dec_out = torch.reshape(dec_out, (-1, n_vars, dec_out.shape[-2], dec_out.shape[-1]))
         dec_out = dec_out.permute(0, 1, 3, 2).contiguous()
 
-        mu = self.likelihood_layer_mu(dec_out[:, :, :, -self.patch_nums:])
-        sigma = torch.log(1 + torch.exp(self.likelihood_layer_sigma(dec_out[:, :, :, -self.patch_nums:]))) + 1e-6
+        dec_out = self.output_projection(dec_out[:, :, :, -self.patch_nums:])
+        dec_out = dec_out.permute(0, 2, 1).contiguous()
+
+        dec_out = self.normalize_layers(dec_out, 'denorm')
+
+        # mu = self.likelihood_layer_mu(dec_out[:, :, :, -self.patch_nums:])
+        # sigma = torch.log(1 + torch.exp(self.likelihood_layer_sigma(dec_out[:, :, :, -self.patch_nums:]))) + 1e-6
         # mu = self.normalize_layers(mu.permute(0, 2, 1).contiguous(), 'denorm')
         # sigma = sigma.permute(0, 2, 1).contiguous() * self.normalize_layers.stdev
-        return mu, sigma
+        return dec_out
 
     def calcute_lags(self, x_enc):
         q_fft = torch.fft.rfft(x_enc.permute(0, 2, 1).contiguous(), dim=-1)
@@ -682,7 +690,6 @@ class Model(nn.Module):
         self.LLM_encoder = LLMBlock(configs)
         if 'forecast' in self.task_name:
             self.encoder_linear_projection = nn.Linear(configs.seq_len, configs.pred_len)
-
 
         # Decoder
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast' or self.task_name == 'interval_forecast' or self.task_name == 'imputation' or self.task_name == 'imputation_forecast':
@@ -808,9 +815,10 @@ class Model(nn.Module):
 
         # 2
         # mu, sigma = self.LLM_encoder(x_enc_target, x_mark_enc, x_dec, x_mark_dec, x_forecast)
-        # enc_out = self.encoder(x_enc)
+        # enc_out = self.encoder_other(x_enc)
         # dec_in = self.dec_embedding(x_dec, x_mark_dec)
         # dec_out = self.decoder(dec_in, enc_out, x_mask=None, cross_mask=None)
+        # dec_out = self.projection(dec_out)
         output_len = self.pred_len + self.seq_len
 
         mu = mu * (stdev[:, :1, -self.c_out:].repeat(1, output_len, 1))

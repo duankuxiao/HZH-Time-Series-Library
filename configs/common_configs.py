@@ -114,7 +114,7 @@ parser.add_argument('--batch_size', type=int, default=24, help='batch size of tr
 parser.add_argument('--patience', type=int, default=6, help='early stopping patience')
 parser.add_argument('--learning_rate', type=float, default=0.001, help='optimizer learning rate 0.0001 for other models  0.01 for LLM')
 parser.add_argument('--des', type=str, default='test', help='exp description')
-parser.add_argument('--loss', type=str, default='MSE', help='loss function')
+parser.add_argument('--loss', type=str, default='MSE', help='loss function MSE MAE')
 parser.add_argument('--loss_method', type=str, default='MSE', help='mse msemu (fix missing) adaptive hybird')
 
 parser.add_argument('--lradj', type=str, default='type1', help='adjust learning rate')

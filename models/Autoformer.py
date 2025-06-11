@@ -92,14 +92,14 @@ class Model(nn.Module):
             self.projection = nn.Linear(
                 configs.d_model * configs.seq_len, configs.num_class)
         if self.task_name == 'interval_forecast':
-            self.projection = nn.Linear(configs.dec_in, configs.d_model, bias=True)
+            self.projection = nn.Linear(configs.dec_in, configs.c_out, bias=True)
 
             if configs.likelihood == "g":
-                self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
+                self.likelihood_layer = Gaussian(configs.dec_in, configs.c_out)
             elif configs.likelihood == "nb":
-                self.likelihood_layer = NegativeBinomial(configs.d_model, configs.c_out)
+                self.likelihood_layer = NegativeBinomial(configs.dec_in, configs.c_out)
             else:
-                self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
+                self.likelihood_layer = Gaussian(configs.dec_in, configs.c_out)
 
     def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec,mask=None):
         if mask is None:
@@ -131,12 +131,12 @@ class Model(nn.Module):
         # dec_out = self.output_projection(dec_out)
         if self.use_norm:
             # De-Normalization from Non-stationary Transformer
-            if self.task_name == 'imputation_forecast':
-                dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
-                dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
-            else:
-                dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.seq_len, 1))
-                dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.seq_len, 1))
+            # if self.task_name == 'imputation_forecast':
+            dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
+            dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
+            # else:
+            #     dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.seq_len, 1))
+            #     dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.seq_len, 1))
         return dec_out
 
     def interval_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast):
@@ -168,7 +168,7 @@ class Model(nn.Module):
         seasonal_part, trend_part = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None, trend=trend_init)
 
         # final
-        dec_out = self.projection(trend_part) + seasonal_part
+        dec_out = trend_part + seasonal_part
         mu, sigma = self.likelihood_layer(dec_out)
         mu = mu * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
         mu = mu + (means[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))

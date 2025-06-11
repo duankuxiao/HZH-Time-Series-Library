@@ -76,8 +76,12 @@ class Model(nn.Module):
         dec_out = self.output_projection(x)
         if self.use_norm:
             # De-Normalization from Non-stationary Transformer
-            dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.seq_len + self.pred_len, 1))
-            dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.seq_len + self.pred_len, 1))
+            if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
+                dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+                dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+            else:
+                dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.seq_len + self.pred_len, 1))
+                dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.seq_len + self.pred_len, 1))
         return dec_out
 
     def forecast(self, x_enc,x_forecast=None):

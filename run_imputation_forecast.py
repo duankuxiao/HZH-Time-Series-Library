@@ -94,6 +94,7 @@ if __name__ == '__main__':
 
             args.model_id = '3'
             args.model = model
+            args.loss = 'MAE'
             args.loss_method = "adaptive"  # missing fix adaptive
             # args.data_path = '{}.csv'.format(args.model_id)
             # args.source_data_path = '{}.csv'.format(args.model_id)

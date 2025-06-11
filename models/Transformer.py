@@ -119,10 +119,13 @@ class Model(nn.Module):
         dec_out = self.dec_embedding(x_forecast, x_mark_dec) if self.use_forecast else self.dec_embedding(x_dec, x_mark_dec)
         dec_out = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None)
         dec_out = self.output_projection(dec_out)
-        # dec_out = self.decoder(enc_out)
-        # dec_out = self.linear_projection(dec_out.permute(0, 2, 1)).permute(0, 2, 1)
         if self.use_norm:
             # De-Normalization from Non-stationary Transformer
+            # if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
+            #     # dec_out = self.linear_projection(dec_out.permute(0, 2, 1)).permute(0, 2, 1)
+            #     dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+            #     dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+            # else:
             dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
             dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
         return dec_out

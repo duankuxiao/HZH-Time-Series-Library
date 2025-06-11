@@ -12,8 +12,8 @@ args.target = ['Global_horizontal_irradiance']
 
 args.num_train = 2 * 8760+24
 args.num_test = 8760
-args.seq_len = 1440
-args.pred_len = 720
+args.seq_len = 168
+args.pred_len = 24
 args.label_len = args.seq_len
 args.forecast_dim = 2
 args.feature_cols = None

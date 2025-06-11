@@ -22,7 +22,7 @@ def model_hyparameter_setup(args):
         else:
             args.learning_rate = 0.01
 
-        args.patience = 4
+        args.patience = 3
         args.lradj = 'PEMS'
         args.llm_model = 'GPT2'  # defalut GPT2
         args.d_model = 32

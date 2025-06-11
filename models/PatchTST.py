@@ -109,6 +109,7 @@ class Model(nn.Module):
             self.head = FlattenHead(configs.enc_in, self.head_nf, configs.seq_len + configs.pred_len, head_dropout=configs.dropout)
 
         if self.task_name == 'interval_forecast':
+            self.head = FlattenHead(configs.enc_in, self.head_nf, configs.pred_len, head_dropout=configs.dropout)
             if configs.likelihood == "g":
                 self.likelihood_layer = Gaussian(configs.enc_in, configs.c_out)
             elif configs.likelihood == "nb":

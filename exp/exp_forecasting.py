@@ -295,6 +295,8 @@ class Exp_Forecast(Exp_Basic):
         trues = []
 
         self.model.eval()
+        time_now = time.time()
+        cost_time = []
 
         with torch.no_grad():
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark, x_forecast) in enumerate(test_loader):
@@ -320,6 +322,8 @@ class Exp_Forecast(Exp_Basic):
 
                     else:
                         outputs = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
+                speed = round((time.time() - time_now), 4)
+                time_now = time.time()
 
                 if self.args.accelerate:
                     self.accelerator.wait_for_everyone()
@@ -357,6 +361,8 @@ class Exp_Forecast(Exp_Basic):
                             os.makedirs(res_path)
                         visual(gt, pd, os.path.join(res_path, str(i) + '.pdf'))
 
+        cost_time.append(speed)
+        print("Cost time: {} s/iter".format(round(np.mean(cost_time),4)))
         preds = np.concatenate(preds, axis=0)
         trues = np.concatenate(trues, axis=0)
         print('test shape:', preds.shape, trues.shape)

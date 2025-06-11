@@ -73,15 +73,14 @@ class Exp_Imputation_Forecast(Exp_Basic):
     def _loss_function(self, outputs, true, mask):
         if isinstance(outputs, tuple):
             pred = outputs[-1][:, -self.args.pred_len:, :]
-        else:
-            pred = outputs[:, -self.args.pred_len:, :]
-        if isinstance(outputs, tuple):
             imputation = tuple(
                 o[:, :self.args.seq_len, -self.f_dim:]
                 for o in outputs
             )
         else:
+            pred = outputs[:, -self.args.pred_len:, :]
             imputation = outputs[:, :self.args.seq_len, :]
+
         pred_true = true[:, -self.args.pred_len:, :]
         imputation_true = true[:, :self.args.seq_len, :]
         pred_loss = self.loss_func(pred, pred_true)

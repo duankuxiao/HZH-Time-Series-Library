@@ -83,25 +83,27 @@ def main(args):
 
 
 if __name__ == '__main__':
-    # from configs.solar_radiation_configs import args as default_args
-    from configs.operational_configs import args as default_args
+    from configs.solar_radiation_configs import args as default_args
+    # from configs.operational_configs import args as default_args
     from copy import deepcopy
     from utils.hyparameter_setup import model_hyparameter_setup
 
     all_results = []
     # for model in ['RNN', 'Transformer','DLinear','Informer','Autoformer', 'iTransformer', 'TimesNet','PatchTST','TimeLLM', 'TimeLLMformer']:
-    for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST']:
+    # for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST']:
+    for model in ['RNN', 'iTransformer', 'TimesNet', 'PatchTST']:
+
     # for model in ['TimesNet']:
 
         args = deepcopy(default_args)
 
         args.is_training = 1
 
-        args.model_id = 'test2'
+        args.model_id = 'dx'
         args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
         args = model_hyparameter_setup(args)
 
-        # args.patience = 6
+        args.patience = 2
         # args.learning_rate = 0.001
         # args.train_epochs = 10
 
