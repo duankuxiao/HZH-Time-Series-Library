@@ -103,7 +103,7 @@ if __name__ == '__main__':
                 args.label_len = args.seq_len
                 args.is_training = 1
                 args.use_prompt = True
-                args.model_id = 'g'
+                args.model_id = 'torchglstm2'
 
                 # args.model_id = '{}'.format(data)
                 args.loss_method = loss_method  # 'g' 'nb' 'mse' 'msemu' 'hybridmu'
@@ -115,4 +115,4 @@ if __name__ == '__main__':
                 res_metrics_df.insert(0, 'model', model)
                 all_results.append(res_metrics_df)
                 final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
-                final_metrics_df.to_csv('./results/pf_{}_all_models_comparison.csv'.format(data))
+                final_metrics_df.to_csv('./results/pf_{}_all_models_comparison.csv'.format(args.model_id))

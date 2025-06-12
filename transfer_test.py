@@ -50,7 +50,7 @@ def transfer_test(args, path):
 
     exp = Exp_Forecast(args)  # set experiments
     print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-    pred_res,metrics_df = exp.test(setting, test=1, path=path)
+    pred_res, metrics_df = exp.test(setting, test=1, path=path)
     torch.cuda.empty_cache()
     return pred_res,metrics_df
 

@@ -1,5 +1,6 @@
 import numpy as np
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, mean_absolute_percentage_error
+from utils.interval_forecasting_tools import gaussian_nll, crps_score, picp, piw
 
 
 def empirical_correlation_coefficient(y_true, y_pred):
@@ -39,6 +40,19 @@ def results_evaluation(y_test_seq, y_pred_seq):
     r2 = r2_score(y_true=y_test_seq, y_pred=y_pred_seq,multioutput='uniform_average')  # multioutput='variance_weighted' 'uniform_average'
     corr = empirical_correlation_coefficient(y_true=y_test_seq,y_pred=y_pred_seq)
     return [mse, rmse,nrmse, mae,mape,rae, r2,corr]
+
+
+def results_probability_forecast_evaluation(y_true, mu, sigma):
+    nll = gaussian_nll(y_true, mu, sigma)
+    crps = crps_score(y_true, mu, sigma)
+    picp90 = picp(y_true, mu, sigma, alpha=0.9)
+    picp80 = picp(y_true, mu, sigma, alpha=0.8)
+    picp70 = picp(y_true, mu, sigma, alpha=0.7)
+    piw90 = piw(mu, sigma, alpha=0.9)
+    piw80 = piw(mu, sigma, alpha=0.8)
+    piw70 = piw(mu, sigma, alpha=0.7)
+    return [nll, crps, picp90, picp80, picp70, piw90, piw80, piw70]
+
 
 def NRMSE(y_true, y_pred,rmse):
     # 标准化 RMSE (可以选择用真实值的范围或平均值)

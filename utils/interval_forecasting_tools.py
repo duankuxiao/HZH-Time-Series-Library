@@ -2,6 +2,8 @@ import math
 
 import numpy as np
 import torch
+from properscoring import crps_gaussian
+from scipy.stats import norm
 
 
 def gaussian_sample(mu, sigma):
@@ -63,7 +65,9 @@ def gaussian_likelihood_loss(target, mu, sigma,eps=1e-6):
 
     # negative_likelihood = torch.log(sigma + 1) + (target - mu) ** 2 / (2 * sigma ** 2) + 6  # deepar
     # negative_likelihood = 0.5 * (torch.log(sigma+1) + (mu - target)**2 / sigma) + 0.5 * math.log(2 * torch.pi)  # sigma1
-    negative_likelihood = 0.5 * (torch.log(sigma) + (mu - target)**2 / sigma) + 0.5 * math.log(2 * torch.pi)  # g  torch.nn.GaussianNLLLoss
+    # negative_likelihood = 0.5 * (torch.log(sigma) + (mu - target)**2 / sigma) + 0.5 * math.log(2 * torch.pi)  # g  torch.nn.GaussianNLLLoss
+    negative_likelihood = torch.log(sigma) + 0.5 * (mu - target)**2 / sigma ** 2 + math.log(2 * torch.pi)  # g  torch.nn.GaussianNLLLoss
+
     return negative_likelihood.mean()
 
 
@@ -88,7 +92,27 @@ def negative_binomial_loss(ytrue, mu, alpha):
         + ytrue * torch.log(alpha * mu / (1 + alpha * mu))
     return - likelihood.mean()
 
+
 def MAPE(ytrue, ypred):
     ytrue = np.array(ytrue).ravel() + 1e-4
     ypred = np.array(ypred).ravel()
     return np.mean(np.abs((ytrue - ypred) / ytrue))
+
+def gaussian_nll(y_true, mu, sigma):
+    return np.mean(0.5 * np.log(2 * np.pi * sigma**2) + ((y_true - mu)**2) / (2 * sigma**2))
+
+def crps_score(y_true, mu, sigma):
+    return np.mean(crps_gaussian(y_true, mu, sigma))
+
+
+def picp(y_true, mu, sigma, alpha=0.9):
+    z = norm.ppf(1 - (1 - alpha) / 2)
+    lower = mu - z * sigma
+    upper = mu + z * sigma
+    coverage = np.mean((y_true >= lower) & (y_true <= upper))
+    return coverage
+
+def piw(mu, sigma, alpha=0.9):
+    z = norm.ppf(1 - (1 - alpha) / 2)
+    width = 2 * z * sigma
+    return np.mean(width)

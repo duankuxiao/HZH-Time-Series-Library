@@ -6,7 +6,7 @@ from data_provider.data_factory import data_provider
 from exp.exp_basic import Exp_Basic
 from utils.interval_forecasting_tools import gaussian_likelihood_loss, negative_binomial_loss, MAPE, gaussian_sample, negative_binomial_sample
 from utils.tools import EarlyStopping, adjust_learning_rate, visual
-from utils.metrics import metric
+from utils.metrics import metric, results_probability_forecast_evaluation
 import torch
 import torch.nn as nn
 from torch import optim
@@ -52,6 +52,8 @@ class Exp_Forecast(Exp_Basic):
     def _select_criterion(self):
         if self.args.loss == 'MSE':
             criterion = nn.MSELoss()
+        if self.args.loss_method == 'g':
+            criterion = nn.GaussianNLLLoss(reduction='mean')
         return criterion
 
     def _select_scheduler(self, model_optim, train_loader):
@@ -69,6 +71,7 @@ class Exp_Forecast(Exp_Basic):
     def _loss_function(self, criterion, pred, true, mu, sigma):
         if self.loss_method == "g":
             loss = gaussian_likelihood_loss(true, mu, sigma)
+            # loss = criterion(mu, true, sigma)
             # loss = criterion(pred,true,sigma)
         elif self.loss_method == "nb":
             loss = negative_binomial_loss(true, mu, sigma)
@@ -453,23 +456,35 @@ class Exp_Forecast(Exp_Basic):
         columns_list = []
         for i in self.args.target:
             columns_list.append('{}_true'.format(i))
-            columns_list.append('{}_pred'.format(i))
+            columns_list.append('{}_mean'.format(i))
+            columns_list.append('{}_90'.format(i))
+            columns_list.append('{}_10'.format(i))
+            columns_list.append('{}_70'.format(i))
+            columns_list.append('{}_30'.format(i))
+
         res_df = pd.DataFrame(columns=columns_list)
+        nll_list, crps_list, picp90_list, picp70_list, piw90_list, piw70_list = [], [], [], [], [],[]
         mse_list, rmse_list, mae_list, r2_list, corr_list,mape_list = [], [], [], [], [], []
         nrmse_list,rae_list = [],[]
         for i in self.args.target:
-            p50 = self._show_plot(i,true[:, self.args.target.index(i)],pred[:, self.args.target.index(i)],mus[:,self.args.target.index(i)],sigmas[:,self.args.target.index(i)],path)
+            y_true,y_pred,mu,sigma,p50,p90,p10,p70,p30 = self._show_plot(i,true[:, self.args.target.index(i)],pred[:, self.args.target.index(i)],mus[:,self.args.target.index(i)],sigmas[:,self.args.target.index(i)],path)
 
-            # [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(true[:, self.args.target.index(i)], pred[:, self.args.target.index(i)])
-            # res_df['{}_pred'.format(i)] = pred[:, self.args.target.index(i)]
-            # res_df['{}_true'.format(i)] = true[:, self.args.target.index(i)]
             [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(true[:, self.args.target.index(i)], p50)
-            res_df['{}_pred'.format(i)] = p50
             res_df['{}_true'.format(i)] = true[:, self.args.target.index(i)]
+            res_df['{}_mean'.format(i)] = p50
+            res_df['{}_90'.format(i)] = p90
+            res_df['{}_10'.format(i)] = p10
+            res_df['{}_70'.format(i)] = p70
+            res_df['{}_30'.format(i)] = p30
+            nll, crps, picp90, picp80, picp70, piw90, piw80, piw70 = results_probability_forecast_evaluation(y_true, mu, sigma)
+            print('{} nll:{}, crps:{}, mse:{}, rmse:{} mae:{} mape:{} r2:{} corr:{}'.format(i,nll, crps, mse, rmse, mae,mape, r2, corr))
 
-            print('{} mse:{}, rmse:{} mae:{} mape:{} r2:{} corr:{}'.format(i, mse, rmse, mae,mape, r2, corr))
-            np.save(os.path.join(path, 'metrics_{}.npy'.format(i)), np.array([mse, rmse, mae, r2, corr]))
-
+            nll_list.append(nll)
+            crps_list.append(crps)
+            picp90_list.append(picp90)
+            picp70_list.append(picp70)
+            piw90_list.append(piw90)
+            piw70_list.append(piw70)
             mse_list.append(mse)
             rmse_list.append(rmse)
             nrmse_list.append(nrmse)
@@ -479,9 +494,15 @@ class Exp_Forecast(Exp_Basic):
             r2_list.append(r2)
             corr_list.append(corr)
 
-        res_metrics_df = pd.DataFrame(columns=['trainable_params','mse', 'rmse','nrmse', 'mae','mape','rae', 'r2','corr'],
+        res_metrics_df = pd.DataFrame(columns=['trainable_params','nll','crps','picp90','picp70','piw90','piw70','mse', 'rmse','nrmse', 'mae','mape','rae', 'r2','corr'],
                                       index=[i for i in self.args.target])
         res_metrics_df['trainable_params'] = trainable_params
+        res_metrics_df['nll'] = nll_list
+        res_metrics_df['crps'] = crps_list
+        res_metrics_df['picp90'] = picp90_list
+        res_metrics_df['picp70'] = picp70_list
+        res_metrics_df['piw90'] = piw90_list
+        res_metrics_df['piw70'] = piw70_list
         res_metrics_df['mse'] = mse_list
         res_metrics_df['rmse'] = rmse_list
         res_metrics_df['nrmse'] = nrmse_list
@@ -499,7 +520,7 @@ class Exp_Forecast(Exp_Basic):
 
     def _show_plot(self,i,y_true,y_pred,mu,sigma,path):
         y_pred = []
-        res_df = pd.DataFrame(columns=['p50','p90','p10','p70','p30'])
+        res_df = pd.DataFrame(columns=['true','p50','p90','p10','p70','p30'])
         for _ in tqdm(range(self.args.sample_size)):
             if self.likelihood == 'g':
                 y_sample = gaussian_sample(torch.tensor(mu), torch.tensor(sigma))
@@ -515,6 +536,7 @@ class Exp_Forecast(Exp_Basic):
         p70 = np.quantile(y_pred, 0.7, axis=1)
         p30 = np.quantile(y_pred, 0.3, axis=1)
         p10 = np.quantile(y_pred, 0.1, axis=1)
+        res_df['true'] = y_true
         res_df['p50'] = p50
         res_df['p90'] = p90
         res_df['p10'] = p10
@@ -544,5 +566,5 @@ class Exp_Forecast(Exp_Basic):
         plt.ylabel("Y")
         plt.savefig(os.path.join(path,'{}.png'.format(i)))
         plt.close()
-        return p50
+        return y_true,y_pred,mu,sigma,p50,p90,p10,p70,p30
 
