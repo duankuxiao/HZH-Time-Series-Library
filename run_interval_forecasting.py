@@ -38,6 +38,8 @@ def get_setting(args,ii):
             setting += '_prompt'
     if 'RNN' in args.model:
         setting += '_{}_rnnd{}_rnnf{}'.format(args.rnn_model, args.rnn_dim, args.rnn_layers, )
+    if args.use_norm:
+        setting += '_norm'
 
     if args.use_forecast:
         setting += '_forecast'
@@ -85,34 +87,43 @@ if __name__ == '__main__':
     # from configs.solar_radiation_configs import args as default_args
     from copy import deepcopy
 
-    # for pred_len in [72]:
-    # for data in ['tokyo','hokkaido', 'kyushu', 'tohoku']:  # 'Sapporo','Sendai','Fukuoka','Tokyo'   'hokkaido', 'kyushu', 'tohoku'
+    # model_list = ['RNN', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLMformer']
+    model_list = ['PatchTST']
+    # for data in ['kansai','hokkaido', 'kyushu', 'tohoku']:  # 'Sapporo','Sendai','Fukuoka','Tokyo'   'hokkaido', 'kyushu', 'tohoku'
     for data in ['tokyo']:  # 'Sapporo','Sendai','Fukuoka','Tokyo'   'hokkaido', 'kyushu', 'tohoku'
+        for loss_method in ['adaptive']:  # 'g' 'mse' 'msemu' 'hybridmu'   'adaptive'
+            all_results = []
 
-        all_results = []
-        for loss_method in ['g']:  # 'g' 'mse' 'msemu' 'hybridmu'   'adaptive'
-            for model in ['RNN', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLMformer']:
-            # for model in ['TimeLLMformer']:  # 'AttLLM'
-                args = deepcopy(default_args)
-                args.data_path = '{}.csv'.format(data)
-                args.source_data_path = '{}.csv'.format(data)
-                args.task_name = 'interval_forecast'  # 'interval_forecast'  'long_term_forecast'
+            for model in model_list:
+                for pred_len in [24, 48, 72, 120, 168, 336, 720]:
 
-                args.seq_len = 72
-                args.pred_len = 24
-                args.label_len = args.seq_len
-                args.is_training = 1
-                args.use_prompt = True
-                args.model_id = 'torchglstm2'
+                    # for model in ['TimeLLMformer']:  # 'AttLLM'
 
-                # args.model_id = '{}'.format(data)
-                args.loss_method = loss_method  # 'g' 'nb' 'mse' 'msemu' 'hybridmu'
+                    args = deepcopy(default_args)
+                    args.data_path = '{}.csv'.format(data)
+                    args.source_data_path = '{}.csv'.format(data)
+                    args.task_name = 'interval_forecast'  # 'interval_forecast'  'long_term_forecast'
 
-                args.model = model  # [Autoformer, TimeLLM, TimeLLMformer, TimesNet, D Linear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
-                args = model_hyparameter_setup(args)
-                # args.learning_rate = 0.00015
-                _, res_metrics_df = main(args)
-                res_metrics_df.insert(0, 'model', model)
-                all_results.append(res_metrics_df)
-                final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
-                final_metrics_df.to_csv('./results/pf_{}_all_models_comparison.csv'.format(args.model_id))
+                    args.seq_len = 72
+                    args.pred_len = pred_len
+                    args.label_len = args.seq_len
+                    args.is_training = 1
+                    args.use_prompt = False
+                    args.use_norm = True
+                    # args.model_id = loss_method
+                    args.model_id = '5'
+                    # args.model_id = '{}{}'.format(model_list.index(model)+1,data)
+                    args.loss_method = loss_method  # 'g' 'nb' 'mse' 'msemu' 'hybridmu'
+
+                    args.model = model   #  [Autoformer, TimeLLM, TimeLLMformer, TimesNet, D Linear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
+                    args = model_hyparameter_setup(args)
+                    # args.learning_rate = 0.00015
+                    _, res_metrics_df = main(args)
+                    res_metrics_df.insert(0, 'model', model)
+
+                    # pred_len
+                    res_metrics_df.insert(1, 'pred_len', pred_len)
+
+                    all_results.append(res_metrics_df)
+                    final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
+                    final_metrics_df.to_csv('./results/pf_{}_all_models_comparison.csv'.format(args.model_id))

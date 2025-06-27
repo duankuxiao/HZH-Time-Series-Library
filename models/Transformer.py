@@ -131,6 +131,12 @@ class Model(nn.Module):
         return dec_out
 
     def interval_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None):
+        if self.use_norm:
+            # Normalization from Non-stationary Transformer
+            means = x_enc.mean(1, keepdim=True).detach()
+            x_enc = x_enc - means
+            stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
+            x_enc /= stdev
         # if self.use_forecast:
         #     x_forecast_ = self.forecast_projection(x_forecast)
         #     x_enc = torch.cat((x_enc, x_forecast_), dim=1)
@@ -142,11 +148,14 @@ class Model(nn.Module):
         dec_out = self.dec_embedding(x_forecast, x_mark_dec) if self.use_forecast else self.dec_embedding(x_dec, x_mark_dec)
         dec_out = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None)
 
-        mu, sigma = self.likelihood_layer(dec_out)
+        dec_out, mu, sigma = self.likelihood_layer(dec_out)
 
-        dec_out = self.output_projection(dec_out)
-        # dec_out = self.decoder(enc_out)
-        # dec_out = self.linear_projection(dec_out.permute(0, 2, 1)).permute(0, 2, 1)
+        if self.use_norm:
+            mu = mu * (stdev[:, :1, -self.c_out:].repeat(1, self.seq_len + self.pred_len, 1))
+            mu = mu + (means[:, :1, -self.c_out:].repeat(1, self.seq_len + self.pred_len, 1))
+            sigma = sigma * (stdev[:, :1, -self.c_out:].repeat(1, self.seq_len + self.pred_len, 1))
+            dec_out = dec_out * (stdev[:, :1, -self.c_out:].repeat(1, self.seq_len + self.pred_len, 1))
+            dec_out = dec_out + (means[:, :1, -self.c_out:].repeat(1, self.seq_len + self.pred_len, 1))
         return dec_out, mu, sigma
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):

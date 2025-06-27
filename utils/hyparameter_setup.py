@@ -20,7 +20,7 @@ def model_hyparameter_setup(args):
         if args.task_name == 'imputation':
             args.learning_rate = 0.001  # 0.001 for imputation 0.0001 for forecast(0.01 for LLM model)  for electricity
         else:
-            args.learning_rate = 0.01
+            args.learning_rate = 0.0001
 
         args.patience = 3
         args.lradj = 'PEMS'
@@ -36,22 +36,21 @@ def model_hyparameter_setup(args):
         args.rnn_layers = 2
 
     if args.model == 'Transformer':
-        pass
+        args.d_model = 64
+        args.d_ff = 256
+        args.e_layers = 2
 
     if args.model == 'DLinear':
         pass
 
-    if args.model == 'Informer':  # default
+    if args.model == 'Informer':
         args.factor = 5
-        args.d_model = 512
-        args.d_ff = 2048
-        args.e_layers = 4
-        args.d_layers = 2
+        args.d_layers = 1  # default 2
 
     if args.model == 'Autoformer':
         pass
 
-    if args.model == 'iTransformer': # default
+    if args.model == 'iTransformer':  # default
         args.e_layers = 3
         args.d_model = 512
         args.d_ff = 512
@@ -73,10 +72,10 @@ def model_hyparameter_setup(args):
     if args.model == 'PatchTST':  # default
         args.dropout = 0.2
         args.head_dropout = 0
-        args.d_model = 128  # for small dataset 16
-        args.d_ff = 256  # for small dataset 128
-        args.e_layers = 3
-        args.n_heads = 4  # for small dataset 4  large dataset 16
+        args.d_model = 128  # 128 for small dataset 16
+        args.d_ff = 256  # 256 for small dataset 128
+        args.e_layers = 2
+        args.n_heads = 16  # for small dataset 4  large dataset 16
 
     if args.model == 'TimesNet':
         if args.task_name == 'imputation':

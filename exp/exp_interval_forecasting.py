@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 from data_provider.data_factory import data_provider
 from exp.exp_basic import Exp_Basic
-from utils.interval_forecasting_tools import gaussian_likelihood_loss, negative_binomial_loss, MAPE, gaussian_sample, negative_binomial_sample
+from utils.interval_forecasting_tools import negative_binomial_loss, MAPE, gaussian_sample, negative_binomial_sample, GaussianLikelihoodLoss
 from utils.tools import EarlyStopping, adjust_learning_rate, visual
 from utils.metrics import metric, results_probability_forecast_evaluation
 import torch
@@ -50,11 +50,17 @@ class Exp_Forecast(Exp_Basic):
         return model_optim
 
     def _select_criterion(self):
-        if self.args.loss == 'MSE':
+        if self.loss_method == 'MSE':
             criterion = nn.MSELoss()
-        if self.args.loss_method == 'g':
-            criterion = nn.GaussianNLLLoss(reduction='mean')
-        return criterion
+            return criterion
+        if self.loss_method == 'g':
+            # criterion = nn.GaussianNLLLoss(reduction='mean')
+            criterion = GaussianLikelihoodLoss(full=True,reduction='mean')
+            return criterion
+        if self.loss_method == "adaptive" or self.loss_method == "hybridmu":
+            MSEcriterion = nn.MSELoss()
+            NLLcriterion = GaussianLikelihoodLoss(full=True,reduction='mean')
+            return [MSEcriterion, NLLcriterion]
 
     def _select_scheduler(self, model_optim, train_loader):
         train_steps = len(train_loader)
@@ -70,26 +76,21 @@ class Exp_Forecast(Exp_Basic):
 
     def _loss_function(self, criterion, pred, true, mu, sigma):
         if self.loss_method == "g":
-            loss = gaussian_likelihood_loss(true, mu, sigma)
-            # loss = criterion(mu, true, sigma)
-            # loss = criterion(pred,true,sigma)
+            loss = criterion(mu,true,sigma)
         elif self.loss_method == "nb":
-            loss = negative_binomial_loss(true, mu, sigma)
+            loss = negative_binomial_loss(mu, true, sigma)
         elif self.loss_method == "mse":
             loss = criterion(pred, true)
         elif self.loss_method == "msemu":
             loss = criterion(mu, true)
         elif self.loss_method == "hybridmu":
-            loss = criterion(mu, true) + gaussian_likelihood_loss(true, mu, sigma) * 0.4
+            loss = criterion[0](pred, true) + criterion[1](mu, true, sigma) * 0.3
         elif self.loss_method == "adaptive":
-            mse_loss = criterion(mu, true)
-            nll_loss = gaussian_likelihood_loss(true, mu, sigma)
+            mse_loss = criterion[0](pred, true)
+            nll_loss = criterion[1](mu, true, sigma)
             # loss = 0.5 * (torch.exp(-self.log_sigma_mse.to(true.device)) * mse_loss + torch.exp(-self.log_sigma_nll.to(true.device)) * nll_loss)
             loss = 0.5 * (torch.exp(-self.log_sigma_mse.to(true.device)) * mse_loss + torch.exp(-self.log_sigma_nll.to(true.device)) * nll_loss +
                           self.log_sigma_mse.to(true.device) + self.log_sigma_nll.to(true.device))
-
-        else:
-            loss = criterion(mu, true) + gaussian_likelihood_loss(true, mu, sigma) * 0.1
         return loss
 
     def vali(self, vali_data, vali_loader, criterion):
@@ -120,11 +121,8 @@ class Exp_Forecast(Exp_Basic):
 
                 pred = outputs.detach().cpu()
                 true = batch_y.detach().cpu()
-                if self.args.model != 'AttLLM1':
-                    mu, sigma = mu.detach().cpu(), sigma.detach().cpu()
-                else:
-                    mu = tuple(tensor.detach().cpu() for tensor in mu)
-                    sigma = tuple(tensor.detach().cpu() for tensor in sigma)
+                mu, sigma = mu.detach().cpu(), sigma.detach().cpu()
+
                 loss = self._loss_function(criterion, pred, true, mu, sigma)
                 total_loss.append(np.array(loss))
         total_loss = np.average(total_loss)
@@ -315,10 +313,10 @@ class Exp_Forecast(Exp_Basic):
             print('mse weight: {}, nll weight: {}'.format(self.log_sigma_mse,self.log_sigma_nll))
         return self.model
 
-    def test(self, setting, test=0, path=None):
+    def test(self, setting, test_only=0, path=None):
         test_data, test_loader = self._get_data(flag='test')
 
-        if test:
+        if test_only:
             print('loading model')
             if path is None:
                 model_path = os.path.join(self.args.checkpoints, setting, 'checkpoints')
@@ -354,12 +352,10 @@ class Exp_Forecast(Exp_Basic):
                 if self.args.use_amp:
                     with torch.amp.autocast():
                         outputs, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
-                        if self.args.model == 'AttLLM':
-                            outputs, mu, sigma = outputs, mu[-1], sigma[-1]
+
                 else:
                     outputs, mu, sigma = self.model(batch_x, batch_x_mark, dec_inp, batch_y_mark, x_forecast)
-                    if self.args.model == 'AttLLM':
-                        outputs, mu, sigma = outputs, mu[-1], sigma[-1]
+
 
                 outputs = outputs[:, -self.args.pred_len:, -self.f_dim:]
                 batch_y = batch_y[:, -self.args.pred_len:, -self.f_dim:]  # .to(self.device)
@@ -457,25 +453,29 @@ class Exp_Forecast(Exp_Basic):
         for i in self.args.target:
             columns_list.append('{}_true'.format(i))
             columns_list.append('{}_mean'.format(i))
-            columns_list.append('{}_90'.format(i))
-            columns_list.append('{}_10'.format(i))
-            columns_list.append('{}_70'.format(i))
-            columns_list.append('{}_30'.format(i))
+            columns_list.append('{}_95'.format(i))
+            columns_list.append('{}_5'.format(i))
+            columns_list.append('{}_85'.format(i))
+            columns_list.append('{}_15'.format(i))
 
         res_df = pd.DataFrame(columns=columns_list)
         nll_list, crps_list, picp90_list, picp70_list, piw90_list, piw70_list = [], [], [], [], [],[]
         mse_list, rmse_list, mae_list, r2_list, corr_list,mape_list = [], [], [], [], [], []
         nrmse_list,rae_list = [],[]
         for i in self.args.target:
-            y_true,y_pred,mu,sigma,p50,p90,p10,p70,p30 = self._show_plot(i,true[:, self.args.target.index(i)],pred[:, self.args.target.index(i)],mus[:,self.args.target.index(i)],sigmas[:,self.args.target.index(i)],path)
+            y_true,y_pred,mu,sigma,p50,p95,p5,p85,p15,p70,p30 = self._show_plot(i,true[:, self.args.target.index(i)],pred[:, self.args.target.index(i)],mus[:,self.args.target.index(i)],sigmas[:,self.args.target.index(i)],path)
 
-            [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(true[:, self.args.target.index(i)], p50)
             res_df['{}_true'.format(i)] = true[:, self.args.target.index(i)]
             res_df['{}_mean'.format(i)] = p50
-            res_df['{}_90'.format(i)] = p90
-            res_df['{}_10'.format(i)] = p10
-            res_df['{}_70'.format(i)] = p70
-            res_df['{}_30'.format(i)] = p30
+            res_df['{}_95'.format(i)] = p95
+            res_df['{}_5'.format(i)] = p5
+            res_df['{}_85'.format(i)] = p85
+            res_df['{}_15'.format(i)] = p15
+            if self.loss_method == 'adaptive' or self.loss_method == 'hybridmu':
+                [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(y_true, y_pred)
+            else:
+                [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(y_true, p50)
+
             nll, crps, picp90, picp80, picp70, piw90, piw80, piw70 = results_probability_forecast_evaluation(y_true, mu, sigma)
             print('{} nll:{}, crps:{}, mse:{}, rmse:{} mae:{} mape:{} r2:{} corr:{}'.format(i,nll, crps, mse, rmse, mae,mape, r2, corr))
 
@@ -519,41 +519,45 @@ class Exp_Forecast(Exp_Basic):
         return res_df,res_metrics_df
 
     def _show_plot(self,i,y_true,y_pred,mu,sigma,path):
-        y_pred = []
-        res_df = pd.DataFrame(columns=['true','p50','p90','p10','p70','p30'])
+        y_sample = []
+        res_df = pd.DataFrame(columns=['true','p50','p95','p5','p85','p15','p70','p30'])
         for _ in tqdm(range(self.args.sample_size)):
             if self.likelihood == 'g':
-                y_sample = gaussian_sample(torch.tensor(mu), torch.tensor(sigma))
+                y_ = gaussian_sample(torch.tensor(mu), torch.tensor(sigma))
             elif self.likelihood == 'nb':
-                y_sample = negative_binomial_sample(torch.tensor(mu), torch.tensor(sigma))
+                y_= negative_binomial_sample(torch.tensor(mu), torch.tensor(sigma))
             else:
-                y_sample = gaussian_sample(torch.tensor(mu), torch.tensor(sigma))
+                y_ = gaussian_sample(torch.tensor(mu), torch.tensor(sigma))
 
-            y_pred.append(y_sample.reshape(-1,1))
-        y_pred = np.concatenate(y_pred, axis=1)
-        p50 = np.quantile(y_pred, 0.5, axis=1)
-        p90 = np.quantile(y_pred, 0.9, axis=1)
-        p70 = np.quantile(y_pred, 0.7, axis=1)
-        p30 = np.quantile(y_pred, 0.3, axis=1)
-        p10 = np.quantile(y_pred, 0.1, axis=1)
+            y_sample.append(y_.reshape(-1,1))
+        y_sample = np.concatenate(y_sample, axis=1)
+        p50 = np.quantile(y_sample, 0.5, axis=1)
+        p95 = np.quantile(y_sample, 0.95, axis=1)
+        p85 = np.quantile(y_sample, 0.85, axis=1)
+        p15 = np.quantile(y_sample, 0.15, axis=1)
+        p5 = np.quantile(y_sample, 0.05, axis=1)
+        p30 = np.quantile(y_sample, 0.3, axis=1)
+        p70 = np.quantile(y_sample, 0.7, axis=1)
         res_df['true'] = y_true
         res_df['p50'] = p50
-        res_df['p90'] = p90
-        res_df['p10'] = p10
+        res_df['p95'] = p95
+        res_df['p5'] = p5
+        res_df['p85'] = p85
+        res_df['p15'] = p15
         res_df['p70'] = p70
         res_df['p30'] = p30
         res_df.to_csv(os.path.join(path, 'interval_res_{}_{}.csv'.format(self.args.data_path[:-4],i)))
 
         p50_ = p50[-self.args.pred_len*7:]
-        p90_ = p90[-self.args.pred_len*7:]
-        p70_ = p70[-self.args.pred_len*7:]
-        p30_ = p30[-self.args.pred_len*7:]
-        p10_ = p10[-self.args.pred_len*7:]
+        p95_ = p95[-self.args.pred_len*7:]
+        p85_ = p85[-self.args.pred_len*7:]
+        p15_ = p15[-self.args.pred_len*7:]
+        p5_ = p5[-self.args.pred_len*7:]
         x_range = np.arange(self.args.num_train -self.args.pred_len*7, self.args.num_train)
         plt.figure(self.args.target.index(i)+1, figsize=(20, 5))
         plt.plot(x_range, p50_, "r-", label="P50 forecast")
-        plt.fill_between(x_range, p10_, p90_, alpha=0.5, color="orange", label="P10-P90 quantile")
-        plt.fill_between(x_range, p30_, p70_, alpha=0.5, color="green", label="P30-P70 quantile")
+        plt.fill_between(x_range, p5_, p95_, alpha=0.5, color="orange", label="P5-P95 quantile")
+        plt.fill_between(x_range, p15_, p85_, alpha=0.5, color="green", label="P15-P85 quantile")
 
         yplot = y_true[-self.args.pred_len*7:]
         plt.plot(x_range, yplot, "k-", label="True values")
@@ -566,5 +570,4 @@ class Exp_Forecast(Exp_Basic):
         plt.ylabel("Y")
         plt.savefig(os.path.join(path,'{}.png'.format(i)))
         plt.close()
-        return y_true,y_pred,mu,sigma,p50,p90,p10,p70,p30
-
+        return y_true,y_pred,mu,sigma,p50,p95,p5,p85,p15,p70,p30

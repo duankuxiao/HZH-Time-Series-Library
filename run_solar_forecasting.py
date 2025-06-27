@@ -40,6 +40,8 @@ def get_setting(args,ii):
             setting += '_prompt'
     if 'RNN' in args.model:
         setting += '_{}_rnnd{}_rnnf{}'.format(args.rnn_model, args.rnn_dim, args.rnn_layers, )
+    if args.use_norm:
+        setting += '_norm'
 
     if args.use_forecast:
         setting += '_forecast'
@@ -83,15 +85,15 @@ def main(args):
 
 
 if __name__ == '__main__':
-    from configs.solar_radiation_configs import args as default_args
-    # from configs.operational_configs import args as default_args
+    # from configs.solar_radiation_configs import args as default_args
+    from configs.operational_configs import args as default_args
     from copy import deepcopy
     from utils.hyparameter_setup import model_hyparameter_setup
 
     all_results = []
     # for model in ['RNN', 'Transformer','DLinear','Informer','Autoformer', 'iTransformer', 'TimesNet','PatchTST','TimeLLM', 'TimeLLMformer']:
-    # for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST']:
-    for model in ['RNN', 'iTransformer', 'TimesNet', 'PatchTST']:
+    for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST']:
+    # for model in ['RNN', 'iTransformer', 'TimesNet', 'PatchTST']:
 
     # for model in ['TimesNet']:
 
@@ -99,13 +101,13 @@ if __name__ == '__main__':
 
         args.is_training = 1
 
-        args.model_id = 'dx'
+        args.model_id = '5min7test'
         args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
         args = model_hyparameter_setup(args)
 
-        args.patience = 2
+        # args.patience = 2
         # args.learning_rate = 0.001
-        # args.train_epochs = 10
+        args.train_epochs = 10
 
         _, res_metrics_df = main(args)
         res_metrics_df.insert(0, 'model', model)

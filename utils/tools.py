@@ -178,8 +178,9 @@ def visual(true, preds=None, name='./pic/test.pdf'):
 def heatmap(data,output_file):
     data_coor = data.corr()
     mask = np.zeros_like(data_coor, dtype=bool)
-    mask[np.triu_indices_from(mask)] = True
+    mask[np.triu_indices_from(mask)] = False
     print(data_coor)
+    data_coor.to_csv(output_file+'.csv')
     plt.rcParams.update({'font.size': 8})
     plt.subplots(figsize=(18, 22), dpi=1080, facecolor='w')
     fig = sns.heatmap(data_coor, annot=True, mask=mask, vmin=-1, vmax=1, square=True, cmap="viridis", fmt='.2f', annot_kws={"size": 8},

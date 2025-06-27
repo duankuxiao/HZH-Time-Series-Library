@@ -50,7 +50,7 @@ def transfer_test(args, path):
 
     exp = Exp_Forecast(args)  # set experiments
     print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-    pred_res,metrics_df = exp.test(setting, test=1, path=path)
+    pred_res,metrics_df = exp.test(setting, test_only=1, path=path)
     torch.cuda.empty_cache()
     return pred_res,metrics_df
 
@@ -74,13 +74,29 @@ def get_direct_subfolders(root_folder):
 
 
 if __name__ == '__main__':
-
-
-    root_path = r"D:\Time-LLM-main\results\test"  # 替换为实际路径
+    import pandas as pd
+    # root_path = r"D:\results\probabilistic_forecast\zero-shot\tokyo"  # 替换为实际路径
+    root_path = r'D:\results\probabilistic_forecast\adaptive\5'
     subfolders = get_direct_subfolders(root_path)
+    all_results = []
 
     for path in subfolders:
-        args = load_config(os.path.join(path,'checkpoints','configs.pkl'))
-        print(args)
-        args.loss_method = 'adaptive'
-        pred_res, metrics_df = transfer_test(args, path)
+        renamed_dfs = []
+        # for city in ['tokyo','hokkaido','tohoku','kyushu','kansai']:
+        for city in ['tokyo']:
+
+            args = load_config(os.path.join(path,'checkpoints','configs.pkl'))
+            args.data_path = '{}.csv'.format(city)
+            args.source_data_path = args.data_path
+            print(args)
+            args.loss_method = 'adaptive'
+            pred_res, metrics_df = transfer_test(args, path)
+            metrics_df.insert(0, 'model', args.model)
+            all_results.append(metrics_df)
+            final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
+            final_metrics_df.to_csv(os.path.join(root_path,'pf_{}_all_models_comparison.csv'.format(args.model_id)))
+            
+            metrics_df.index = metrics_df.index + '_' + city
+            renamed_dfs.append(metrics_df)
+            combined_df = pd.concat(renamed_dfs, axis=0)
+            combined_df.to_csv(os.path.join(path,'zero-shot_res_metrics.csv'))

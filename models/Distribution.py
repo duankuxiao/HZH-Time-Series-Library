@@ -15,6 +15,7 @@ class Gaussian(nn.Module):
         if network == 'Linear':
             self.mu_layer = nn.Linear(hidden_size, output_size)
             self.sigma_layer = nn.Linear(hidden_size, output_size)
+            # self.pred_layer = nn.Linear(hidden_size, output_size)
         elif network == 'LSTM':
             self.mu_rnn = nn.LSTM(hidden_size, 64,num_layers=3,batch_first=True)
             self.sigma_rnn = nn.LSTM(hidden_size, 64,num_layers=3,batch_first=True)
@@ -28,15 +29,16 @@ class Gaussian(nn.Module):
     def forward(self, dec_out):
         if self.network == 'Linear':
             sigma_t = torch.log(1 + torch.exp(self.sigma_layer(dec_out))) + 1e-6
+            # sigma_t = torch.exp(self.sigma_layer(dec_out))
             mu_t = self.mu_layer(dec_out)
+            # dec_out = self.pred_layer(dec_out)
         elif self.network == 'LSTM':
-
             mu, (_) = self.mu_rnn(dec_out)
             sigma, (_) = self.sigma_rnn(dec_out)
             mu_t = self.mu_layer(mu)
             sigma_t = torch.log(1 + torch.exp(self.sigma_layer(sigma))) + 1e-6
-
-        return mu_t, sigma_t
+            dec_out = self.pred_layer(dec_out)
+        return mu_t, mu_t, sigma_t
 
 
 class NegativeBinomial(nn.Module):

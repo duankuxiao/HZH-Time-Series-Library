@@ -2,10 +2,11 @@ from utils.tools import heatmap
 import pandas as pd
 import os
 
-folder = r'D:\Time-LLM-main\dataset\aircon'
-data_file = 'aircon.csv'
+folder = r'G:\我的云端硬盘\☆_論文\sci\19_\新建文件夹'
+data_file = 'interpolated_damper_data_5min.csv'
 data = pd.read_csv(os.path.join(folder, data_file),index_col=0,encoding='SHIFT-JIS')
-data = data[['ac3_fanspeed', 'ac4_fanspeed','ac3_temp', 'ac4_temp','Temperature', 'Relative_humidity','ac3_rh_ra', 'ac4_rh_ra',
-       'ac3_rh_sa', 'ac4_rh_sa', '2F', '1F_room1', '1F_room2', 'ac3_ra', 'ac4_ra', 'ac3_sa', 'ac4_sa',  'ac3_power', 'ac4_power','PV',  'Wind_speed_mean','Wind_speed_max',  'Sunshine_duration']]
-output_file = 'aicron'
+data = data[['Ti_A', 'Ti_B', 'Temperature_air', 'Solar_east', 'Solar_south',
+       'Solar_west', 'WindVelocity', 'Setpoint_A', 'Damper_A', 'Damper_B',
+       'Window_A', 'Window_B', 'CO2_A', 'CO2_B', 'InletFlow_A', 'InletFlow_B']]
+output_file = 'interpolated_damper_data_5min'
 heatmap(data,output_file)

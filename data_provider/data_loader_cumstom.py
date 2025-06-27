@@ -125,7 +125,6 @@ class Dataset_cumstom(Dataset):
             border1s = [0, self.num_train, len(df_raw) - self.num_test]
             border2s = [self.num_train, self.num_train + num_vali, len(df_raw)]
 
-
         if self.data_path == 'tokyo_2016_.csv':
             self.num_train = 8760*4 - 8760 - 8760  # 67944
             num_vali = 8760

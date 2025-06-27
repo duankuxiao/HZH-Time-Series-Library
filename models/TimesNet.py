@@ -149,12 +149,13 @@ class Model(nn.Module):
         return dec_out
 
     def interval_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None):
-        # Normalization from Non-stationary Transformer
-        means = x_enc.mean(1, keepdim=True).detach()
-        x_enc = x_enc - means
-        stdev = torch.sqrt(
-            torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
-        x_enc /= stdev
+        if self.use_norm:
+            # Normalization from Non-stationary Transformer
+            means = x_enc.mean(1, keepdim=True).detach()
+            x_enc = x_enc - means
+            stdev = torch.sqrt(
+                torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
+            x_enc /= stdev
         if self.use_forecast:
             means_forecast = x_forecast.mean(1, keepdim=True).detach()
             x_enc_forecast = x_forecast - means_forecast
@@ -171,16 +172,13 @@ class Model(nn.Module):
         for i in range(self.layer):
             enc_out = self.layer_norm(self.model[i](enc_out))
 
-        mu, sigma = self.likelihood_layer(enc_out)
-        mu = mu * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
-        mu = mu + (means[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
-        sigma = sigma * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
-        # porject back
-        dec_out = self.projection(enc_out)
-
-        # De-Normalization from Non-stationary Transformer
-        dec_out = dec_out * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
-        dec_out = dec_out + (means[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
+        dec_out, mu, sigma = self.likelihood_layer(enc_out)
+        if self.use_norm:
+            mu = mu * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
+            mu = mu + (means[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
+            sigma = sigma * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
+            dec_out = dec_out * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
+            dec_out = dec_out + (means[:, :1, -self.c_out:].repeat(1, self.pred_len + self.seq_len, 1))
         return dec_out, mu, sigma
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):

@@ -478,37 +478,38 @@ class LLMBlock(nn.Module):
         x_enc = self.normalize_layers(x_enc, 'norm')
 
         B, T, N = x_enc.size()
-        x_enc = x_enc.permute(0, 2, 1).contiguous().reshape(B * N, T, 1)
+        if self.use_prompt:
+            x_enc = x_enc.permute(0, 2, 1).contiguous().reshape(B * N, T, 1)
 
-        min_values = torch.min(x_enc, dim=1)[0]
-        max_values = torch.max(x_enc, dim=1)[0]
-        medians = torch.median(x_enc, dim=1).values
-        lags = self.calcute_lags(x_enc)
-        trends = x_enc.diff(dim=1).sum(dim=1)
+            min_values = torch.min(x_enc, dim=1)[0]
+            max_values = torch.max(x_enc, dim=1)[0]
+            medians = torch.median(x_enc, dim=1).values
+            lags = self.calcute_lags(x_enc)
+            trends = x_enc.diff(dim=1).sum(dim=1)
 
-        prompt = []
-        for b in range(x_enc.shape[0]):
-            min_values_str = str(min_values[b].tolist()[0])
-            max_values_str = str(max_values[b].tolist()[0])
-            median_values_str = str(medians[b].tolist()[0])
-            lags_values_str = str(lags[b].tolist())
-            prompt_ = (
-                f"<|start_prompt|>Dataset description: {self.description}"
-                f"Task description: imputation the {str(self.seq_len)} steps; "
-                "Input statistics: "
-                f"min value {min_values_str}, "
-                f"max value {max_values_str}, "
-                f"median value {median_values_str}, "
-                f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
-                f"top {self.top_k} lags are : {lags_values_str}<|end_prompt|>"
-            )
+            prompt = []
+            for b in range(x_enc.shape[0]):
+                min_values_str = str(min_values[b].tolist()[0])
+                max_values_str = str(max_values[b].tolist()[0])
+                median_values_str = str(medians[b].tolist()[0])
+                lags_values_str = str(lags[b].tolist())
+                prompt_ = (
+                    f"<|start_prompt|>Dataset description: {self.description}"
+                    f"Task description: imputation the {str(self.seq_len)} steps; "
+                    "Input statistics: "
+                    f"min value {min_values_str}, "
+                    f"max value {max_values_str}, "
+                    f"median value {median_values_str}, "
+                    f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
+                    f"top {self.top_k} lags are : {lags_values_str}<|end_prompt|>"
+                )
 
-            prompt.append(prompt_)
-        # x_enc [B * N, T, 1]
-        x_enc = x_enc.reshape(B, N, T) # [B, T, N]
+                prompt.append(prompt_)
+            # x_enc [B * N, T, 1]
+            x_enc = x_enc.reshape(B, N, T) # [B, T, N]
 
-        prompt = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
-        prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)
+            prompt = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
+            prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)
 
         source_embeddings = self.mapping_layer(self.word_embeddings.permute(1, 0)).permute(1, 0)
 
@@ -537,36 +538,43 @@ class LLMBlock(nn.Module):
         x_enc = self.normalize_layers(x_enc, 'norm')
 
         B, T, N = x_enc.size()
-        x_enc = x_enc.permute(0, 2, 1).contiguous().reshape(B * N, T, 1)
+        if self.use_prompt:
+            x_enc = x_enc.permute(0, 2, 1).contiguous().reshape(B * N, T, 1)
 
-        min_values = torch.min(x_enc, dim=1)[0]
-        max_values = torch.max(x_enc, dim=1)[0]
-        medians = torch.median(x_enc, dim=1).values
-        lags = self.calcute_lags(x_enc)
-        trends = x_enc.diff(dim=1).sum(dim=1)
+            min_values = torch.min(x_enc, dim=1)[0]
+            max_values = torch.max(x_enc, dim=1)[0]
+            medians = torch.median(x_enc, dim=1).values
+            mean = torch.mean(x_enc, dim=1)  # shape: [64, 10]
+            std = torch.std(x_enc, dim=1)
+            lags = self.calcute_lags(x_enc)
+            trends = x_enc.diff(dim=1).sum(dim=1)
 
-        prompt = []
-        for b in range(x_enc.shape[0]):
-            min_values_str = str(min_values[b].tolist()[0])
-            max_values_str = str(max_values[b].tolist()[0])
-            median_values_str = str(medians[b].tolist()[0])
-            lags_values_str = str(lags[b].tolist())
-            prompt_ = (
-                f"<|start_prompt|>Dataset description: {self.description}"
-                f"Task description: forecast the next {str(self.pred_len)} steps given the previous {str(self.seq_len)} steps information; "
-                "Input statistics: "
-                f"min value {min_values_str}, "
-                f"max value {max_values_str}, "
-                f"median value {median_values_str}, "
-                f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
-                f"top {self.top_k} lags are : {lags_values_str}<|end_prompt|>"
-            )
-            prompt.append(prompt_)
-        # x_enc [B * N, T, 1]
-        x_enc = x_enc.reshape(B, N, T).permute(0, 2, 1).contiguous()  # [B, T, N]
+            prompt = []
+            for b in range(x_enc.shape[0]):
+                mean_values_str = str(mean[b].tolist()[0])
+                std_values_str = str(std[b].tolist()[0])
+                min_values_str = str(min_values[b].tolist()[0])
+                max_values_str = str(max_values[b].tolist()[0])
+                median_values_str = str(medians[b].tolist()[0])
+                lags_values_str = str(lags[b].tolist())
+                prompt_ = (
+                    f"<|start_prompt|>Dataset description: {self.description}"
+                    f"Task description: probabilistic forecast the next {str(self.pred_len)} steps mu and sigma given the previous {str(self.seq_len)} steps information; "
+                    "Input statistics: "
+                    f"mean value {mean_values_str}, "
+                    f"standard deviation value {std_values_str}, "
+                    f"min value {min_values_str}, "
+                    f"max value {max_values_str}, "
+                    f"median value {median_values_str}, "
+                    f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
+                    f"top {self.top_k} lags are : {lags_values_str}<|end_prompt|>"
+                )
+                prompt.append(prompt_)
+            # x_enc [B * N, T, 1]
+            x_enc = x_enc.reshape(B, N, T).permute(0, 2, 1).contiguous()  # [B, T, N]
 
-        prompt = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
-        prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)
+            prompt = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
+            prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)
 
         source_embeddings = self.mapping_layer(self.word_embeddings.permute(1, 0)).permute(1, 0)
 
@@ -721,6 +729,7 @@ class Model(nn.Module):
             # self.projection = nn.Linear(configs.d_model, configs.pred_len, bias=True)
             # self.linear_predict = nn.Linear(configs.seq_len, configs.pred_len+configs.label_len)
         if self.task_name == 'interval_forecast':
+            self.projection = nn.Linear(transformer_d_model, configs.c_out)
             if configs.likelihood == "g":
                 self.likelihood_layer = Gaussian(transformer_d_model, configs.c_out)
             elif configs.likelihood == "nb":
@@ -781,11 +790,12 @@ class Model(nn.Module):
         return dec_out
 
     def interval_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
-        # Normalization from Non-stationary Transformer
-        means = x_enc.mean(1, keepdim=True).detach()
-        x_enc = x_enc - means
-        stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
-        x_enc /= stdev
+        if self.use_norm:
+            # Normalization from Non-stationary Transformer
+            means = x_enc.mean(1, keepdim=True).detach()
+            x_enc = x_enc - means
+            stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
+            x_enc /= stdev
         if self.use_forecast:
             means_forecast = x_forecast.mean(1, keepdim=True).detach()
             x_enc_forecast = x_forecast - means_forecast
@@ -811,7 +821,7 @@ class Model(nn.Module):
         dec_in = enc_out_target
         dec_in = self.dec_embedding(dec_in, x_mark_dec)
         dec_out = self.decoder(dec_in, enc_out, x_mask=None, cross_mask=None)
-        mu, sigma = self.likelihood_layer(dec_out)
+        dec_out, mu, sigma = self.likelihood_layer(dec_out)
 
         # 2
         # mu, sigma = self.LLM_encoder(x_enc_target, x_mark_enc, x_dec, x_mark_dec, x_forecast)
@@ -820,15 +830,14 @@ class Model(nn.Module):
         # dec_out = self.decoder(dec_in, enc_out, x_mask=None, cross_mask=None)
         # dec_out = self.projection(dec_out)
         output_len = self.pred_len + self.seq_len
+        if self.use_norm:
+            # De-Normalization from Non-stationary Transformer
 
-        mu = mu * (stdev[:, :1, -self.c_out:].repeat(1, output_len, 1))
-        mu = mu + (means[:, :1, -self.c_out:].repeat(1, output_len, 1))
-        sigma = sigma * (stdev[:, :1, -self.c_out:].repeat(1, output_len, 1))
-
-        # dec_out = self.projection(dec_out)
-        # De-Normalization from Non-stationary Transformer
-        # dec_out = dec_out * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len+self.seq_len, 1))
-        # dec_out = dec_out + (means[:, :1, -self.c_out:].repeat(1, self.pred_len+self.seq_len, 1))
+            mu = mu * (stdev[:, :1, -self.c_out:].repeat(1, output_len, 1))
+            mu = mu + (means[:, :1, -self.c_out:].repeat(1, output_len, 1))
+            sigma = sigma * (stdev[:, :1, -self.c_out:].repeat(1, output_len, 1))
+            dec_out = dec_out * (stdev[:, :1, -self.c_out:].repeat(1, self.pred_len+self.seq_len, 1))
+            dec_out = dec_out + (means[:, :1, -self.c_out:].repeat(1, self.pred_len+self.seq_len, 1))
 
         return dec_out, mu, sigma
 
