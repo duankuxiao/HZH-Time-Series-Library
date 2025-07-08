@@ -85,7 +85,7 @@ def main(args):
 
 
 if __name__ == '__main__':
-    # from configs.solar_radiation_configs import args as default_args
+    # from configs.solar_radiation_confi gs import args as default_args
     from configs.operational_configs import args as default_args
     from copy import deepcopy
     from utils.hyparameter_setup import model_hyparameter_setup

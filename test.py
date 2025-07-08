@@ -72,20 +72,15 @@ def get_direct_subfolders(root_folder):
     ]
     return subfolders
 
-
-if __name__ == '__main__':
-    import pandas as pd
-    # root_path = r"D:\results\probabilistic_forecast\zero-shot\tokyo"  # 替换为实际路径
-    root_path = r'D:\results\probabilistic_forecast\adaptive\5'
+def regions_test(root_path):
     subfolders = get_direct_subfolders(root_path)
     all_results = []
 
     for path in subfolders:
         renamed_dfs = []
-        # for city in ['tokyo','hokkaido','tohoku','kyushu','kansai']:
-        for city in ['tokyo']:
-
-            args = load_config(os.path.join(path,'checkpoints','configs.pkl'))
+        for city in ['tokyo','hokkaido','tohoku','kyushu','kansai']:
+        # for city in ['tokyo']:
+            args = load_config(os.path.join(path, 'checkpoints', 'configs.pkl'))
             args.data_path = '{}.csv'.format(city)
             args.source_data_path = args.data_path
             print(args)
@@ -94,9 +89,39 @@ if __name__ == '__main__':
             metrics_df.insert(0, 'model', args.model)
             all_results.append(metrics_df)
             final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
-            final_metrics_df.to_csv(os.path.join(root_path,'pf_{}_all_models_comparison.csv'.format(args.model_id)))
-            
+            final_metrics_df.to_csv(os.path.join(root_path, 'pf_{}_all_models_comparison.csv'.format(args.model_id)))
+
             metrics_df.index = metrics_df.index + '_' + city
             renamed_dfs.append(metrics_df)
             combined_df = pd.concat(renamed_dfs, axis=0)
-            combined_df.to_csv(os.path.join(path,'zero-shot_res_metrics.csv'))
+            combined_df.to_csv(os.path.join(path, 'zero-shot_res_metrics.csv'))
+
+
+def extreme_weather_test(root_path):
+    subfolders = get_direct_subfolders(root_path)
+    all_results = []
+
+    for path in subfolders:
+        args = load_config(os.path.join(path, 'checkpoints', 'configs.pkl'))
+        args.data_path = 'test_data_pattern_shift.csv'  # test_data_extreme_weather  test_data_extreme_weather_clean  test_data_pattern_shift
+        args.source_data_path = args.data_path
+        print(args)
+
+        args.model_id = 'shift'
+        args.loss_method = 'adaptive'
+        pred_res, metrics_df = transfer_test(args, path)
+        metrics_df.insert(0, 'model', args.model)
+        all_results.append(metrics_df)
+        final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
+        final_metrics_df.to_csv(os.path.join(root_path, 'pf_{}_all_models_comparison.csv'.format(args.model_id)))
+
+
+if __name__ == '__main__':
+    import pandas as pd
+    # root_path = r"D:\results\probabilistic_forecast\zero-shot\tokyo"  # 替换为实际路径
+    # root_path = r'D:\results\probabilistic_forecast\adaptive\5'
+    root_path = r'D:\results\probabilistic_forecast\Robustness\shift'
+    # regions_test(root_path)
+    extreme_weather_test(root_path)
+
+

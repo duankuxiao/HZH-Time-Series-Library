@@ -69,7 +69,7 @@ class Model(nn.Module):
             ],
             norm_layer=torch.nn.LayerNorm(configs.d_model),
         )
-        self.projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
+        # self.projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
 
         if self.task_name == 'imputation':
             self.projection = nn.Linear(configs.d_model, configs.c_out, bias=True)
@@ -104,15 +104,15 @@ class Model(nn.Module):
         enc_out, attns = self.encoder(enc_out, attn_mask=None)
 
         dec_out = self.decoder(dec_out, enc_out, x_mask=None, cross_mask=None)
-        dec_out = self.projection(dec_out)
+
         if self.use_norm:
             # De-Normalization from Non-stationary Transformer
             if self.task_name == 'imputation_forecast':
-                dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
-                dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
+                dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
+                dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
             else:
-                dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
-                dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
+                dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
+                dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
         return dec_out  # [B, L, D]
 
     def interval_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast=None):

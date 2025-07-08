@@ -434,11 +434,11 @@ class Exp_Forecast(Exp_Basic):
         f.write('\n')
         f.write('\n')
         f.close()
-        np.save(os.path.join(folder_path, 'metrics_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), np.array([mae, mse, rmse, r2, corr]))
-        np.save(os.path.join(folder_path, 'pred_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), preds)
-        np.save(os.path.join(folder_path, 'true_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), trues)
-        np.save(os.path.join(folder_path, 'mu_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), mus)
-        np.save(os.path.join(folder_path, 'sigma_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), sigamas)
+        np.save(os.path.join(folder_path, 'metrics_{}_{}.npy'.format(self.args.data,self.args.model_id)), np.array([mae, mse, rmse, r2, corr]))
+        np.save(os.path.join(folder_path, 'pred_{}_{}.npy'.format(self.args.data,self.args.model_id)), preds)
+        np.save(os.path.join(folder_path, 'true_{}_{}.npy'.format(self.args.data,self.args.model_id)), trues)
+        np.save(os.path.join(folder_path, 'mu_{}_{}.npy'.format(self.args.data,self.args.model_id)), mus)
+        np.save(os.path.join(folder_path, 'sigma_{}_{}.npy'.format(self.args.data,self.args.model_id)), sigamas)
 
         pred_res,metrics_df = self.res_evaluation_multi_target(trues, preds,mus,sigamas,trainable_params, folder_path)
         return pred_res,metrics_df
@@ -546,14 +546,14 @@ class Exp_Forecast(Exp_Basic):
         res_df['p15'] = p15
         res_df['p70'] = p70
         res_df['p30'] = p30
-        res_df.to_csv(os.path.join(path, 'interval_res_{}_{}.csv'.format(self.args.data_path[:-4],i)))
+        res_df.to_csv(os.path.join(path, 'if_res_{}_{}.csv'.format(self.args.model_id,i)))
 
         p50_ = p50[-self.args.pred_len*7:]
         p95_ = p95[-self.args.pred_len*7:]
         p85_ = p85[-self.args.pred_len*7:]
         p15_ = p15[-self.args.pred_len*7:]
         p5_ = p5[-self.args.pred_len*7:]
-        x_range = np.arange(self.args.num_train -self.args.pred_len*7, self.args.num_train)
+        x_range = np.arange(self.args.num_train - self.args.pred_len*7, self.args.num_train)
         plt.figure(self.args.target.index(i)+1, figsize=(20, 5))
         plt.plot(x_range, p50_, "r-", label="P50 forecast")
         plt.fill_between(x_range, p5_, p95_, alpha=0.5, color="orange", label="P5-P95 quantile")

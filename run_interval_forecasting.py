@@ -87,15 +87,16 @@ if __name__ == '__main__':
     # from configs.solar_radiation_configs import args as default_args
     from copy import deepcopy
 
-    # model_list = ['RNN', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLMformer']
-    model_list = ['PatchTST']
+    # model_list = ['RNN', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'LLMformer']
+    model_list = ['LLMformer']
     # for data in ['kansai','hokkaido', 'kyushu', 'tohoku']:  # 'Sapporo','Sendai','Fukuoka','Tokyo'   'hokkaido', 'kyushu', 'tohoku'
     for data in ['tokyo']:  # 'Sapporo','Sendai','Fukuoka','Tokyo'   'hokkaido', 'kyushu', 'tohoku'
         for loss_method in ['adaptive']:  # 'g' 'mse' 'msemu' 'hybridmu'   'adaptive'
             all_results = []
 
             for model in model_list:
-                for pred_len in [24, 48, 72, 120, 168, 336, 720]:
+                # for pred_len in [24, 48, 72, 120, 168, 336, 720]:
+                for pred_len in [24]:
 
                     # for model in ['TimeLLMformer']:  # 'AttLLM'
 
@@ -108,14 +109,12 @@ if __name__ == '__main__':
                     args.pred_len = pred_len
                     args.label_len = args.seq_len
                     args.is_training = 1
-                    args.use_prompt = False
-                    args.use_norm = True
                     # args.model_id = loss_method
-                    args.model_id = '5'
+                    args.model_id = 'LLAMA1b'
                     # args.model_id = '{}{}'.format(model_list.index(model)+1,data)
                     args.loss_method = loss_method  # 'g' 'nb' 'mse' 'msemu' 'hybridmu'
 
-                    args.model = model   #  [Autoformer, TimeLLM, TimeLLMformer, TimesNet, D Linear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
+                    args.model = model   #  [Autoformer, TimeLLM, TimesNet, D Linear, Informer, Transformer, TimeMixer, iTransformer, LLMformer, RNN, PatchTST,]
                     args = model_hyparameter_setup(args)
                     # args.learning_rate = 0.00015
                     _, res_metrics_df = main(args)

@@ -4,6 +4,8 @@ import torch
 
 
 def model_hyparameter_setup(args):
+    args.use_norm = True
+
     # default
     if args.task_name == 'imputation':
         args.learning_rate = 0.001
@@ -16,7 +18,7 @@ def model_hyparameter_setup(args):
     args.factor = 3
     args.moving_avg = 25
 
-    if args.model == 'TimeLLMformer' or args.model == 'AttLLM':
+    if args.model == 'LLMformer':
         if args.task_name == 'imputation':
             args.learning_rate = 0.001  # 0.001 for imputation 0.0001 for forecast(0.01 for LLM model)  for electricity
         else:
@@ -24,7 +26,7 @@ def model_hyparameter_setup(args):
 
         args.patience = 3
         args.lradj = 'PEMS'
-        args.llm_model = 'GPT2'  # defalut GPT2
+        args.llm_model = 'LLAMA1b'  # defalut GPT2  llama1b
         args.d_model = 32
         args.d_ff = 64
         args.e_layers = 1  # 2
@@ -32,23 +34,26 @@ def model_hyparameter_setup(args):
         args.llm_layers = 10
 
     if 'RNN' in args.model:
+        args.use_norm = False
         args.rnn_dim = 256
         args.rnn_layers = 2
 
     if args.model == 'Transformer':
-        args.d_model = 64
-        args.d_ff = 256
+        args.use_norm = False
         args.e_layers = 2
 
     if args.model == 'DLinear':
-        pass
+        args.use_norm = False
+
 
     if args.model == 'Informer':
+        args.use_norm = False
         args.factor = 5
         args.d_layers = 1  # default 2
 
     if args.model == 'Autoformer':
-        pass
+        args.use_norm = False
+
 
     if args.model == 'iTransformer':  # default
         args.e_layers = 3
