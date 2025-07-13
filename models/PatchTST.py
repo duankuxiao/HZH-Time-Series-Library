@@ -4,7 +4,7 @@ from layers.Transformer_EncDec import Encoder, EncoderLayer
 from layers.SelfAttention_Family import FullAttention, AttentionLayer
 from layers.Embed import PositionalEmbedding
 from utils.interval_forecasting_tools import gaussian_sample, negative_binomial_sample
-from .Distribution import Gaussian,NegativeBinomial
+from .Distribution import Gaussian, NegativeBinomial
 
 
 class PatchEmbedding(nn.Module):
@@ -34,13 +34,17 @@ class PatchEmbedding(nn.Module):
         x = self.value_embedding(x) + self.position_embedding(x)
         return self.dropout(x), n_vars
 
+
 class Transpose(nn.Module):
     def __init__(self, *dims, contiguous=False):
         super().__init__()
         self.dims, self.contiguous = dims, contiguous
+
     def forward(self, x):
-        if self.contiguous: return x.transpose(*self.dims).contiguous()
-        else: return x.transpose(*self.dims)
+        if self.contiguous:
+            return x.transpose(*self.dims).contiguous()
+        else:
+            return x.transpose(*self.dims)
 
 
 class FlattenHead(nn.Module):
@@ -94,7 +98,7 @@ class Model(nn.Module):
                     activation=configs.activation
                 ) for l in range(configs.e_layers)
             ],
-            norm_layer=nn.Sequential(Transpose(1,2), nn.BatchNorm1d(configs.d_model), Transpose(1,2))
+            norm_layer=nn.Sequential(Transpose(1, 2), nn.BatchNorm1d(configs.d_model), Transpose(1, 2))
         )
 
         # Prediction Head
@@ -111,11 +115,12 @@ class Model(nn.Module):
         if self.task_name == 'interval_forecast':
             self.head = FlattenHead(configs.enc_in, self.head_nf, configs.pred_len, head_dropout=configs.dropout)
             if configs.likelihood == "g":
-                self.likelihood_layer = Gaussian(configs.enc_in, configs.c_out)
+                # self.likelihood_layer = Gaussian(configs.enc_in, configs.c_out)
+                self.likelihood_layer = Gaussian(self.head_nf, configs.pred_len)
             elif configs.likelihood == "nb":
-                self.likelihood_layer = NegativeBinomial(configs.enc_in, configs.c_out)
+                self.likelihood_layer = NegativeBinomial(self.head_nf, configs.pred_len)
             else:
-                self.likelihood_layer = Gaussian(configs.enc_in, configs.c_out)
+                self.likelihood_layer = Gaussian(self.head_nf, configs.pred_len)
         elif self.task_name == 'imputation' or self.task_name == 'anomaly_detection':
             self.head = FlattenHead(configs.enc_in, self.head_nf, configs.seq_len,
                                     head_dropout=configs.dropout)
@@ -125,7 +130,7 @@ class Model(nn.Module):
             self.projection = nn.Linear(
                 self.head_nf * configs.enc_in, configs.num_class)
 
-    def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast=None):
+    def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None):
         if self.use_norm:
             # Normalization from Non-stationary Transformer
             means = x_enc.mean(1, keepdim=True).detach()
@@ -133,7 +138,7 @@ class Model(nn.Module):
             stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
             x_enc /= stdev
             if self.use_forecast:
-                x_forecast_ = self.forecast_projection(x_forecast[:,-self.pred_len:,:])
+                x_forecast_ = self.forecast_projection(x_forecast[:, -self.pred_len:, :])
                 x_enc = torch.cat((x_enc, x_forecast_), dim=1)
 
         # do patching and embedding
@@ -159,7 +164,7 @@ class Model(nn.Module):
             dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.pred_len, 1))
         return dec_out
 
-    def interval_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast=None):
+    def interval_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None):
         if self.use_norm:
             # Normalization from Non-stationary Transformer
             means = x_enc.mean(1, keepdim=True).detach()
@@ -167,7 +172,7 @@ class Model(nn.Module):
             stdev = torch.sqrt(torch.var(x_enc, dim=1, keepdim=True, unbiased=False) + 1e-5)
             x_enc /= stdev
         if self.use_forecast:
-            x_forecast_ = self.forecast_projection(x_forecast[:,-self.pred_len:,:])
+            x_forecast_ = self.forecast_projection(x_forecast[:, -self.pred_len:, :])
             x_enc = torch.cat((x_enc, x_forecast_), dim=1)
 
         # do patching and embedding
@@ -183,24 +188,21 @@ class Model(nn.Module):
             enc_out, (-1, n_vars, enc_out.shape[-2], enc_out.shape[-1]))
         # z: [bs x nvars x d_model x patch_num]
         enc_out = enc_out.permute(0, 1, 3, 2)
-
+        dec_out = enc_out.flatten(start_dim=-2)
         # Decoder
-        dec_out = self.head(enc_out).permute(0, 2, 1)  # z: [bs x nvars x target_window]
+        # dec_out = self.head(enc_out).permute(0, 2, 1)  # z: [bs x nvars x target_window]
 
         dec_out, mu, sigma = self.likelihood_layer(dec_out)
-
+        dec_out, mu, sigma = dec_out.permute(0, 2, 1), mu.permute(0, 2, 1), sigma.permute(0, 2, 1)
         if self.use_norm:
             # De-Normalization from Non-stationary Transformer
+            mu = mu * (stdev.repeat(1, self.pred_len, 1))
+            mu = mu + (means.repeat(1, self.pred_len, 1))
+            sigma = sigma * (stdev.repeat(1, self.pred_len, 1))
 
-            mu = mu * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
-            mu = mu + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
-            sigma = sigma * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+        return mu, mu, sigma
 
-            dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
-            dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
-        return dec_out, mu, sigma
-
-    def imputation_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast=None,mask=None):
+    def imputation_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None, mask=None):
         if self.use_norm:
             # Normalization from Non-stationary Transformer
             means = torch.sum(x_enc, dim=1) / torch.sum(mask == 1, dim=1)
@@ -236,7 +238,6 @@ class Model(nn.Module):
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
         if self.use_norm:
-
             # Normalization from Non-stationary Transformer
             means = torch.sum(x_enc, dim=1) / torch.sum(mask == 1, dim=1)
             means = means.unsqueeze(1).detach()
@@ -263,7 +264,6 @@ class Model(nn.Module):
         dec_out = self.head(enc_out)  # z: [bs x nvars x target_window]
         dec_out = dec_out.permute(0, 2, 1)
         if self.use_norm:
-
             # De-Normalization from Non-stationary Transformer
             dec_out = dec_out * (stdev[:, 0, :].unsqueeze(1).repeat(1, self.seq_len, 1))
             dec_out = dec_out + (means[:, 0, :].unsqueeze(1).repeat(1, self.seq_len, 1))
@@ -331,13 +331,14 @@ class Model(nn.Module):
         output = self.projection(output)  # (batch_size, num_classes)
         return output
 
-    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None,mask=None):
+    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None, mask=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
-            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)
+            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
             return dec_out[:, -self.pred_len:, :]  # [B, L, D]
         if self.task_name == 'imputation_forecast':
-            dec_out = self.imputation_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast,mask)
-            dec_out[:, :self.seq_len, -self.c_out:] = mask[:, :, -self.c_out:] * x_enc[:, :self.seq_len, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out[:, :self.seq_len, -self.c_out:]
+            dec_out = self.imputation_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast, mask)
+            dec_out[:, :self.seq_len, -self.c_out:] = mask[:, :, -self.c_out:] * x_enc[:, :self.seq_len, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out[:, :self.seq_len,
+                                                                                                                                                          -self.c_out:]
 
             return dec_out
         if self.task_name == 'imputation':
@@ -352,5 +353,5 @@ class Model(nn.Module):
             return dec_out  # [B, N]
         if self.task_name == 'interval_forecast':
             dec_out, mu, sigama = self.interval_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
-            return dec_out[:, -self.pred_len:, :], mu[:, -self.pred_len:, :], sigama[:, -self.pred_len:, :]
+            return dec_out[:, -self.pred_len:, -self.c_out:], mu[:, -self.pred_len:, -self.c_out:], sigama[:, -self.pred_len:, -self.c_out:]
         return None

@@ -234,13 +234,11 @@ class Model(nn.Module):
         if self.task_name == 'imputation_forecast':
             self.output_projection = FlattenHead(configs.enc_in, self.head_nf, self.pred_len+self.seq_len, head_dropout=configs.dropout)
         if self.task_name == 'interval_forecast':
-            self.projection = nn.Linear(configs.enc_in, configs.c_out)
-            if configs.likelihood == "g":
-                self.likelihood_layer = Gaussian(configs.enc_in, configs.c_out)
-            elif configs.likelihood == "nb":
-                self.likelihood_layer = NegativeBinomial(configs.enc_in, configs.c_out)
-            else:
-                self.likelihood_layer = Gaussian(configs.enc_in, configs.c_out)
+            # self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
+            self.output_projection = FlattenHead(configs.enc_in, self.head_nf, self.pred_len, head_dropout=configs.dropout)
+            self.likelihood_layer_sigma = FlattenHead(configs.enc_in, self.head_nf, self.pred_len, head_dropout=configs.dropout)
+            self.likelihood_layer_sigma.to(device=self.device)
+
         else:
             raise NotImplementedError
 
@@ -263,10 +261,10 @@ class Model(nn.Module):
         if self.task_name == 'imputation_forecast':
             dec_out = self.imputation_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)
             dec_out[:, :self.seq_len, -self.c_out:] = mask[:, :, -self.c_out:] * x_enc[:, :self.seq_len, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out[:, :self.seq_len, -self.c_out:]
+            return dec_out
         if self.task_name == 'interval_forecast':
             dec_out, mu, sigma = self.interval_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
             return dec_out[:, -self.pred_len:, :], mu[:, -self.pred_len:, :], sigma[:, -self.pred_len:, :]
-            return dec_out
 
         return None
 
@@ -518,11 +516,11 @@ class Model(nn.Module):
             dec_out, (-1, n_vars, dec_out.shape[-2], dec_out.shape[-1]))
         dec_out = dec_out.permute(0, 1, 3, 2).contiguous()
 
-        dec_out = self.output_projection(dec_out[:, :, :, -self.patch_nums:])
-        dec_out = dec_out.permute(0, 2, 1).contiguous()
-
-        dec_out = self.normalize_layers(dec_out, 'denorm')
-        return dec_out
+        mu = self.output_projection(dec_out[:, :, :, -self.patch_nums:])
+        sigma = torch.log(1 + torch.exp(self.likelihood_layer_sigma(dec_out[:, :, :, -self.patch_nums:]))) + 1e-6
+        mu = self.normalize_layers(mu.permute(0, 2, 1).contiguous(), 'denorm')
+        sigma = sigma.permute(0, 2, 1).contiguous() * self.normalize_layers.stdev
+        return mu,mu, sigma
 
 
 class ReprogrammingLayer(nn.Module):

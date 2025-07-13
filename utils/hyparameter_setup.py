@@ -26,7 +26,7 @@ def model_hyparameter_setup(args):
 
         args.patience = 3
         args.lradj = 'PEMS'
-        args.llm_model = 'LLAMA1b'  # defalut GPT2  llama1b
+        args.llm_model = 'LLAMA1b'  # defalut GPT2  BERT LLAMA1b LLAMA3b
         args.d_model = 32
         args.d_ff = 64
         args.e_layers = 1  # 2
@@ -62,7 +62,6 @@ def model_hyparameter_setup(args):
 
     if args.model == 'TimeLLM':  # default
         args.llm_model = 'BERT'  # defalut GPT2
-
         args.patience = 3
         args.batch_size = 12
         args.learning_rate = 0.01
@@ -71,15 +70,18 @@ def model_hyparameter_setup(args):
         args.feature_cols = args.target
         args.top_k = 5
         args.d_model = 16
-        args.d_ff = 64
-        args.llm_layers = 32
+        args.d_ff = 32
+        args.llm_layers = 16
+
 
     if args.model == 'PatchTST':  # default
+        args.train_epochs = 100
+        args.patience = 10
         args.dropout = 0.2
         args.head_dropout = 0
-        args.d_model = 128  # 128 for small dataset 16
-        args.d_ff = 256  # 256 for small dataset 128
-        args.e_layers = 2
+        args.d_model = 2048  # 128 for large dataset  16
+        args.d_ff = 2048  # 256 for large dataset  128
+        # args.e_layers = 3  # 3
         args.n_heads = 16  # for small dataset 4  large dataset 16
 
     if args.model == 'TimesNet':

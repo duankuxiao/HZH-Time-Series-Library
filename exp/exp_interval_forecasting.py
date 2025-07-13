@@ -76,7 +76,7 @@ class Exp_Forecast(Exp_Basic):
 
     def _loss_function(self, criterion, pred, true, mu, sigma):
         if self.loss_method == "g":
-            loss = criterion(mu,true,sigma)
+            loss = criterion(mu, true, sigma)
         elif self.loss_method == "nb":
             loss = negative_binomial_loss(mu, true, sigma)
         elif self.loss_method == "mse":
@@ -84,7 +84,7 @@ class Exp_Forecast(Exp_Basic):
         elif self.loss_method == "msemu":
             loss = criterion(mu, true)
         elif self.loss_method == "hybridmu":
-            loss = criterion[0](pred, true) + criterion[1](mu, true, sigma) * 0.3
+            loss = criterion[0](pred, true) + criterion[1](mu, true, sigma)
         elif self.loss_method == "adaptive":
             mse_loss = criterion[0](pred, true)
             nll_loss = criterion[1](mu, true, sigma)
@@ -516,7 +516,7 @@ class Exp_Forecast(Exp_Basic):
         plt.show()
         res_df.to_csv(os.path.join(path, 'pred_res_{}.csv'.format(self.args.data_path[:-4])))
         res_metrics_df.to_csv(os.path.join(path, 'res_metrics_df_{}.csv'.format(self.args.data_path[:-4])))
-        return res_df,res_metrics_df
+        return res_df, res_metrics_df
 
     def _show_plot(self,i,y_true,y_pred,mu,sigma,path):
         y_sample = []

@@ -86,28 +86,37 @@ def regions_test(root_path):
             print(args)
             args.loss_method = 'adaptive'
             pred_res, metrics_df = transfer_test(args, path)
-            metrics_df.insert(0, 'model', args.model)
-            all_results.append(metrics_df)
-            final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
-            final_metrics_df.to_csv(os.path.join(root_path, 'pf_{}_all_models_comparison.csv'.format(args.model_id)))
 
             metrics_df.index = metrics_df.index + '_' + city
             renamed_dfs.append(metrics_df)
             combined_df = pd.concat(renamed_dfs, axis=0)
             combined_df.to_csv(os.path.join(path, 'zero-shot_res_metrics.csv'))
 
+            metrics_df.insert(0, 'model', args.model)
+            # all_results.append(metrics_df.iloc[-1:])
+            all_results.append(metrics_df)
+            final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
+            final_metrics_df.to_csv(os.path.join(root_path, 'pf_{}_all_models_comparison.csv'.format(args.model_id)))
 
-def extreme_weather_test(root_path):
+
+def extreme_weather_test(root_path, pattern='shift'):
+    assert pattern in ['shift','extreme','clean']
     subfolders = get_direct_subfolders(root_path)
     all_results = []
 
     for path in subfolders:
         args = load_config(os.path.join(path, 'checkpoints', 'configs.pkl'))
-        args.data_path = 'test_data_pattern_shift.csv'  # test_data_extreme_weather  test_data_extreme_weather_clean  test_data_pattern_shift
+        if pattern == 'shift':
+            args.data_path = 'test_data_pattern_shift.csv'  # test_data_extreme_weather  test_data_extreme_weather_clean  test_data_pattern_shift
+        elif pattern == 'extreme':
+            args.data_path = 'test_data_extreme_weather.csv'
+        elif pattern == 'clean':
+            args.data_path = 'test_data_extreme_weather_clean.csv'
+        args.model_id = pattern
+
         args.source_data_path = args.data_path
         print(args)
 
-        args.model_id = 'shift'
         args.loss_method = 'adaptive'
         pred_res, metrics_df = transfer_test(args, path)
         metrics_df.insert(0, 'model', args.model)
@@ -118,10 +127,11 @@ def extreme_weather_test(root_path):
 
 if __name__ == '__main__':
     import pandas as pd
-    # root_path = r"D:\results\probabilistic_forecast\zero-shot\tokyo"  # 替换为实际路径
+    # root_path = r"D:\results\pf_ver2\zero-shot\tokyo"  # 替换为实际路径
     # root_path = r'D:\results\probabilistic_forecast\adaptive\5'
-    root_path = r'D:\results\probabilistic_forecast\Robustness\shift'
     # regions_test(root_path)
-    extreme_weather_test(root_path)
+
+    root_path = r'D:\results\pf_ver2\Robustness\extreme_clean'
+    extreme_weather_test(root_path,pattern='clean')
 
 

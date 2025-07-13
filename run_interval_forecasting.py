@@ -32,7 +32,7 @@ def get_setting(args,ii):
         args.moving_avg,
         args.factor, args.loss_method)
 
-    if 'TimeLLM' in args.model:
+    if 'LLM' in args.model:
         setting += '_{}_llmd{}_llmf{}_tk{}'.format(args.llm_model, args.llm_dim, args.llm_layers, args.top_k)
         if args.use_prompt:
             setting += '_prompt'
@@ -88,9 +88,9 @@ if __name__ == '__main__':
     from copy import deepcopy
 
     # model_list = ['RNN', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'LLMformer']
-    model_list = ['LLMformer']
-    # for data in ['kansai','hokkaido', 'kyushu', 'tohoku']:  # 'Sapporo','Sendai','Fukuoka','Tokyo'   'hokkaido', 'kyushu', 'tohoku'
-    for data in ['tokyo']:  # 'Sapporo','Sendai','Fukuoka','Tokyo'   'hokkaido', 'kyushu', 'tohoku'
+    model_list = ['PatchTST']
+    for data in ['kansai','hokkaido', 'kyushu', 'tohoku']:  # 'Sapporo','Sendai','Fukuoka','Tokyo'   'hokkaido', 'kyushu', 'tohoku'
+    # for data in ['tokyo']:  # 'Sapporo','Sendai','Fukuoka','Tokyo'   'hokkaido', 'kyushu', 'tohoku'
         for loss_method in ['adaptive']:  # 'g' 'mse' 'msemu' 'hybridmu'   'adaptive'
             all_results = []
 
@@ -110,8 +110,9 @@ if __name__ == '__main__':
                     args.label_len = args.seq_len
                     args.is_training = 1
                     # args.model_id = loss_method
-                    args.model_id = 'LLAMA1b'
-                    # args.model_id = '{}{}'.format(model_list.index(model)+1,data)
+                    args.use_prompt = False
+                    # args.model_id = 'test'
+                    args.model_id = '{}{}'.format(model_list.index(model)+1,data)
                     args.loss_method = loss_method  # 'g' 'nb' 'mse' 'msemu' 'hybridmu'
 
                     args.model = model   #  [Autoformer, TimeLLM, TimesNet, D Linear, Informer, Transformer, TimeMixer, iTransformer, LLMformer, RNN, PatchTST,]
@@ -123,6 +124,6 @@ if __name__ == '__main__':
                     # pred_len
                     res_metrics_df.insert(1, 'pred_len', pred_len)
 
-                    all_results.append(res_metrics_df)
+                    all_results.append(res_metrics_df.iloc[-1:])
                     final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
                     final_metrics_df.to_csv('./results/pf_{}_all_models_comparison.csv'.format(args.model_id))
