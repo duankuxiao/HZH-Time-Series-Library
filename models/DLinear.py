@@ -22,7 +22,7 @@ class Model(nn.Module):
 
         if self.task_name == 'classification' or self.task_name == 'anomaly_detection' or self.task_name == 'imputation':
             self.pred_len = configs.seq_len
-        if self.task_name == 'imputation_forecast':
+        elif self.task_name == 'imputation_forecast':
             self.pred_len = configs.pred_len + configs.seq_len
         else:
             self.pred_len = configs.pred_len
@@ -142,8 +142,8 @@ class Model(nn.Module):
             return dec_out  # [B, L, D]
         if self.task_name == 'imputation':
             dec_out = self.imputation(x_enc)
-            dec_out = mask[:, :, -self.c_out:] * x_enc[:, :, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out
-            return dec_out  # [B, L, D]
+            dec_out = mask * x_enc + (1 - mask) * dec_out
+            return dec_out[:, :self.seq_len, -self.c_out:]  # [B, L, D]
         if self.task_name == 'anomaly_detection':
             dec_out = self.anomaly_detection(x_enc)
             return dec_out  # [B, L, D]

@@ -85,7 +85,7 @@ class Exp_Imputation_Forecast(Exp_Basic):
         imputation_true = true[:, :self.args.seq_len, :]
         pred_loss = self.loss_func(pred, pred_true)
 
-        if self.args.model == 'TimeLLMformer':
+        if self.args.model == 'LLMformer':
             missing_loss = 0
             for i, tensor in enumerate(imputation):
                 missing_loss += self.loss_func(tensor, imputation_true, mask ^ 1)
@@ -153,8 +153,10 @@ class Exp_Imputation_Forecast(Exp_Basic):
 
     def train(self, setting):
         train_data, train_loader = self._get_data(flag='train')
-        vali_data, vali_loader = self._get_data(flag='val')
-        test_data, test_loader = self._get_data(flag='test')
+        if self.args.val:
+            vali_data, vali_loader = self._get_data(flag='val')
+        else:
+            vali_data, vali_loader = self._get_data(flag='test')
 
         path = os.path.join(self.args.checkpoints, setting, 'checkpoints')
         if not os.path.exists(path):

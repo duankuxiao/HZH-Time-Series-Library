@@ -218,8 +218,8 @@ class Model(nn.Module):
 
         if self.task_name == 'imputation':
             dec_out = self.imputation(x_enc, x_mark_enc, x_dec, x_mark_dec, mask)
-            dec_out = mask[:, :, -self.c_out:] * x_enc[:, :, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out
-            return dec_out  # [B, L, D]
+            dec_out = mask * x_enc + (1 - mask) * dec_out
+            return dec_out[:, :, -self.c_out:]  # [B, L, D]
         if self.task_name == 'anomaly_detection':
             dec_out = self.anomaly_detection(x_enc)
             return dec_out  # [B, L, D]

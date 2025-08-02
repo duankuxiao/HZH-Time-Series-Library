@@ -92,12 +92,12 @@ if __name__ == '__main__':
         args = deepcopy(default_args)
         args.mask_rate = mask_rate
         all_results = []
-        for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'PatchTST', 'TimesNet', 'TimeLLM','LLMformer']:
-        # for model in ['TimeLLMformer']:
+        # for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'PatchTST', 'TimesNet','LLMformer']:
+        for model in ['LLMformer']:
 
             args.model_id = 'test'
             args.model = model
-            args.loss_method = "fix"  # missing fix adaptive
+            args.loss_method = "missing"  # missing fix adaptive
             # args.data_path = '{}.csv'.format(args.model_id)
             # args.source_data_path = '{}.csv'.format(args.model_id)
             args.task_name = 'imputation'
