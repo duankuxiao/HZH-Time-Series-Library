@@ -241,6 +241,30 @@ def piw(mu, sigma, alpha=0.9):
     width = 2 * z * sigma
     return np.mean(width)
 
+
+def pinaw(y_true,mu, sigma, alpha=0.9):
+    """
+    mu: predicted mean, shape [N]
+    sigma: predicted std, shape [N]
+    y_true: true values, shape [N]
+    alpha: confidence level (e.g., 0.9 for 90% interval)
+    """
+    # Step 1: z-value for given confidence level
+    z = norm.ppf(1 - (1 - alpha) / 2)  # e.g., 1.645 for 90%
+
+    # Step 2: construct prediction interval
+    lower = mu - z * sigma
+    upper = mu + z * sigma
+    width = upper - lower  # shape [N]
+
+    # Step 3: normalize by range of y_true
+    y_range = np.max(y_true) - np.min(y_true)
+    pinaw_value = np.mean(width) / y_range
+
+    return pinaw_value
+
+
+
 def gaussian_sample(mu, sigma):
     '''
     Gaussian Sample

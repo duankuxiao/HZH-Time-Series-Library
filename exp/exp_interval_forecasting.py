@@ -311,7 +311,7 @@ class Exp_Forecast(Exp_Basic):
         print("Saved CUDA memory summary to cuda_memory_summary.txt")
         if self.loss_method == "adaptive":
             print('mse weight: {}, nll weight: {}'.format(self.log_sigma_mse,self.log_sigma_nll))
-        return self.model
+        return self.model, loss_df
 
     def test(self, setting, test_only=0, path=None):
         test_data, test_loader = self._get_data(flag='test')
@@ -459,7 +459,7 @@ class Exp_Forecast(Exp_Basic):
             columns_list.append('{}_15'.format(i))
 
         res_df = pd.DataFrame(columns=columns_list)
-        nll_list, crps_list, picp90_list, picp70_list, piw90_list, piw70_list = [], [], [], [], [],[]
+        nll_list, crps_list, picp90_list, picp70_list, piw90_list, piw70_list,pinaw90_list,pinaw70_list = [], [], [], [], [],[],[],[]
         mse_list, rmse_list, mae_list, r2_list, corr_list,mape_list = [], [], [], [], [], []
         nrmse_list,rae_list = [],[]
         for i in self.args.target:
@@ -476,7 +476,7 @@ class Exp_Forecast(Exp_Basic):
             else:
                 [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(y_true, p50)
 
-            nll, crps, picp90, picp80, picp70, piw90, piw80, piw70 = results_probability_forecast_evaluation(y_true, mu, sigma)
+            nll, crps, picp90, picp80, picp70, piw90, piw80, piw70, pinaw90, pinaw80, pinaw70 = results_probability_forecast_evaluation(y_true, mu, sigma)
             print('{} nll:{}, crps:{}, mse:{}, rmse:{} mae:{} mape:{} r2:{} corr:{}'.format(i,nll, crps, mse, rmse, mae,mape, r2, corr))
 
             nll_list.append(nll)
@@ -485,6 +485,9 @@ class Exp_Forecast(Exp_Basic):
             picp70_list.append(picp70)
             piw90_list.append(piw90)
             piw70_list.append(piw70)
+            pinaw90_list.append(pinaw90)
+            pinaw70_list.append(pinaw70)
+
             mse_list.append(mse)
             rmse_list.append(rmse)
             nrmse_list.append(nrmse)
@@ -494,13 +497,15 @@ class Exp_Forecast(Exp_Basic):
             r2_list.append(r2)
             corr_list.append(corr)
 
-        res_metrics_df = pd.DataFrame(columns=['trainable_params','nll','crps','picp90','picp70','piw90','piw70','mse', 'rmse','nrmse', 'mae','mape','rae', 'r2','corr'],
+        res_metrics_df = pd.DataFrame(columns=['trainable_params','nll','crps','picp90','pinaw90','piw90','picp70','pinaw70','piw70','mse', 'rmse','nrmse', 'mae','mape','rae', 'r2','corr'],
                                       index=[i for i in self.args.target])
         res_metrics_df['trainable_params'] = trainable_params
         res_metrics_df['nll'] = nll_list
         res_metrics_df['crps'] = crps_list
         res_metrics_df['picp90'] = picp90_list
         res_metrics_df['picp70'] = picp70_list
+        res_metrics_df['pinaw70'] = pinaw70_list
+        res_metrics_df['pinaw90'] = pinaw90_list
         res_metrics_df['piw90'] = piw90_list
         res_metrics_df['piw70'] = piw70_list
         res_metrics_df['mse'] = mse_list

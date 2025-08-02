@@ -3,6 +3,8 @@ import os
 import torch
 import os
 from utils.print_args import print_args
+import pandas as pd
+
 
 def get_setting(args,ii):
     setting = 'if_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_td{}_dm{}_df{}_el{}_dl{}_nh{}_ma{}_factor{}_{}'.format(
@@ -72,6 +74,7 @@ def get_direct_subfolders(root_folder):
     ]
     return subfolders
 
+
 def regions_test(root_path):
     subfolders = get_direct_subfolders(root_path)
     all_results = []
@@ -100,7 +103,7 @@ def regions_test(root_path):
 
 
 def extreme_weather_test(root_path, pattern='shift'):
-    assert pattern in ['shift','extreme','clean']
+    assert pattern in ['shift','extreme','extreme_clean']
     subfolders = get_direct_subfolders(root_path)
     all_results = []
 
@@ -110,8 +113,10 @@ def extreme_weather_test(root_path, pattern='shift'):
             args.data_path = 'test_data_pattern_shift.csv'  # test_data_extreme_weather  test_data_extreme_weather_clean  test_data_pattern_shift
         elif pattern == 'extreme':
             args.data_path = 'test_data_extreme_weather.csv'
-        elif pattern == 'clean':
+            args.num_test = 2208
+        elif pattern == 'extreme_clean':
             args.data_path = 'test_data_extreme_weather_clean.csv'
+            args.num_test = 2208
         args.model_id = pattern
 
         args.source_data_path = args.data_path
@@ -126,12 +131,11 @@ def extreme_weather_test(root_path, pattern='shift'):
 
 
 if __name__ == '__main__':
-    import pandas as pd
-    # root_path = r"D:\results\pf_ver2\zero-shot\tokyo"  # 替换为实际路径
-    # root_path = r'D:\results\probabilistic_forecast\adaptive\5'
+    # root_path = r"D:\results\pf_ver2\zero-shot\kansai"  # 替换为实际路径
+    # root_path = r'D:\results\pf_ver2\patchTST\tohoku'
     # regions_test(root_path)
 
-    root_path = r'D:\results\pf_ver2\Robustness\extreme_clean'
-    extreme_weather_test(root_path,pattern='clean')
+    root_path = r'D:\results\pf_ver2\Robustness\extreme_clean'  # extreme extreme_clean  shift
+    extreme_weather_test(root_path,pattern='extreme_clean')
 
 

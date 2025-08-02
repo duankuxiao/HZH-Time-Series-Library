@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, mean_absolute_percentage_error
-from utils.interval_forecasting_tools import gaussian_nll, crps_score, picp, piw
+from utils.interval_forecasting_tools import gaussian_nll, crps_score, picp, piw, pinaw
 
 
 def empirical_correlation_coefficient(y_true, y_pred):
@@ -42,6 +42,8 @@ def results_evaluation(y_test_seq, y_pred_seq):
     return [mse, rmse,nrmse, mae,mape,rae, r2,corr]
 
 
+
+
 def results_probability_forecast_evaluation(y_true, mu, sigma):
     nll = gaussian_nll(y_true, mu, sigma)
     crps = crps_score(y_true, mu, sigma)
@@ -51,7 +53,10 @@ def results_probability_forecast_evaluation(y_true, mu, sigma):
     piw90 = piw(mu, sigma, alpha=0.9)
     piw80 = piw(mu, sigma, alpha=0.8)
     piw70 = piw(mu, sigma, alpha=0.7)
-    return [nll, crps, picp90, picp80, picp70, piw90, piw80, piw70]
+    pinaw90 = pinaw(y_true, mu, sigma, alpha=0.9)
+    pinaw80 = pinaw(y_true,mu, sigma, alpha=0.8)
+    pinaw70 = pinaw(y_true,mu, sigma, alpha=0.7)
+    return [nll, crps, picp90, picp80, picp70, piw90, piw80, piw70, pinaw90, pinaw80, pinaw70]
 
 
 def NRMSE(y_true, y_pred,rmse):

@@ -24,7 +24,7 @@ def model_hyparameter_setup(args):
         else:
             args.learning_rate = 0.0001
 
-        args.patience = 3
+        args.patience = 6
         args.lradj = 'PEMS'
         args.llm_model = 'LLAMA1b'  # defalut GPT2  BERT LLAMA1b LLAMA3b
         args.d_model = 32
@@ -41,7 +41,8 @@ def model_hyparameter_setup(args):
     if args.model == 'Transformer':
         args.use_norm = False
         args.e_layers = 2
-
+        args.d_model = 256
+        args.d_ff = 512
     if args.model == 'DLinear':
         args.use_norm = False
 
@@ -75,14 +76,12 @@ def model_hyparameter_setup(args):
 
 
     if args.model == 'PatchTST':  # default
-        args.train_epochs = 100
-        args.patience = 10
         args.dropout = 0.2
         args.head_dropout = 0
-        args.d_model = 2048  # 128 for large dataset  16
-        args.d_ff = 2048  # 256 for large dataset  128
-        # args.e_layers = 3  # 3
-        args.n_heads = 16  # for small dataset 4  large dataset 16
+        args.d_model = 256  # 128 for large dataset  16
+        args.d_ff = 256  # 256 for large dataset  128
+        args.e_layers = 2  # 3
+        args.n_heads = 8  # for small dataset 4  large dataset 16
 
     if args.model == 'TimesNet':
         if args.task_name == 'imputation':

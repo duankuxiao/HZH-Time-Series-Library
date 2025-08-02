@@ -7,7 +7,7 @@ import numpy as np
 os.environ['CURL_CA_BUNDLE'] = ''
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:64"
 
-fix_seed = 4213
+fix_seed = 1234567  # 4213
 random.seed(fix_seed)
 torch.manual_seed(fix_seed)
 np.random.seed(fix_seed)
@@ -65,11 +65,13 @@ def main(args):
             setting = get_setting(args,ii)
 
             print('>>>>>>>start training : {}>>>>>>>>>>>>>>>>>>>>>>>>>>'.format(setting))
-            exp.train(setting)
+            _, loss_df = exp.train(setting)
 
             print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
             res_df, res_metrics_df = exp.test(setting)
             torch.cuda.empty_cache()
+        return res_df, res_metrics_df, loss_df
+
     else:
         ii = 0
         setting = get_setting(args,ii)
@@ -78,7 +80,8 @@ def main(args):
         print(' >>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
         res_df, res_metrics_df = exp.test(setting, test=1)
         torch.cuda.empty_cache()
-    return res_df, res_metrics_df
+        return res_df, res_metrics_df
+
 
 
 if __name__ == '__main__':
@@ -87,15 +90,15 @@ if __name__ == '__main__':
     # from configs.solar_radiation_configs import args as default_args
     from copy import deepcopy
 
-    # model_list = ['RNN', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'LLMformer']
-    model_list = ['PatchTST']
-    for data in ['kansai','hokkaido', 'kyushu', 'tohoku']:  # 'Sapporo','Sendai','Fukuoka','Tokyo'   'hokkaido', 'kyushu', 'tohoku'
-    # for data in ['tokyo']:  # 'Sapporo','Sendai','Fukuoka','Tokyo'   'hokkaido', 'kyushu', 'tohoku'
-        for loss_method in ['adaptive']:  # 'g' 'mse' 'msemu' 'hybridmu'   'adaptive'
+    model_list = ['RNN', 'Transformer', 'Informer', 'iTransformer', 'TimesNet', 'PatchTST', 'LLMformer']
+    # model_list = ['PatchTST']
+    # for data in ['kansai','hokkaido', 'kyushu', 'tohoku']:  # 'Sapporo','Sendai','Fukuoka','Tokyo'   'hokkaido', 'kyushu', 'tohoku'
+    for data in ['tokyo']:  # 'Sapporo','Sendai','Fukuoka','Tokyo'   'hokkaido', 'kyushu', 'tohoku'
+        for loss_method in ['hybridmu']:  # 'g' 'mse' 'msemu' 'hybridmu'   'adaptive'
             all_results = []
 
             for model in model_list:
-                # for pred_len in [24, 48, 72, 120, 168, 336, 720]:
+                # for pred_len in [1,24, 48, 72, 96,  120,144, 168,216,240,264,288,312, 336, 720]:
                 for pred_len in [24]:
 
                     # for model in ['TimeLLMformer']:  # 'AttLLM'
@@ -111,14 +114,14 @@ if __name__ == '__main__':
                     args.is_training = 1
                     # args.model_id = loss_method
                     args.use_prompt = False
-                    # args.model_id = 'test'
-                    args.model_id = '{}{}'.format(model_list.index(model)+1,data)
+                    args.model_id = 'seed{}'.format(fix_seed)
+                    # args.model_id = '{}{}'.format(model_list.index(model)+1,data)
                     args.loss_method = loss_method  # 'g' 'nb' 'mse' 'msemu' 'hybridmu'
 
                     args.model = model   #  [Autoformer, TimeLLM, TimesNet, D Linear, Informer, Transformer, TimeMixer, iTransformer, LLMformer, RNN, PatchTST,]
                     args = model_hyparameter_setup(args)
                     # args.learning_rate = 0.00015
-                    _, res_metrics_df = main(args)
+                    _, res_metrics_df, loss_df = main(args)
                     res_metrics_df.insert(0, 'model', model)
 
                     # pred_len

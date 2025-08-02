@@ -82,6 +82,7 @@ def main(args):
 if __name__ == '__main__':
     # from configs.operational_configs import args as default_args
     from configs.electricity_configs import args as default_args
+    from configs.HVAC_configs import args as default_args
     from copy import deepcopy
     from utils.hyparameter_setup import model_hyparameter_setup
 
@@ -91,7 +92,7 @@ if __name__ == '__main__':
         args = deepcopy(default_args)
         args.mask_rate = mask_rate
         all_results = []
-        for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'PatchTST', 'TimesNet', 'TimeLLM','TimeLLMformer']:
+        for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'PatchTST', 'TimesNet', 'TimeLLM','LLMformer']:
         # for model in ['TimeLLMformer']:
 
             args.model_id = 'test'
