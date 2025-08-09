@@ -20,7 +20,7 @@ args.feature_cols = ['Dry_Bulb_Temperature', 'Wet_Bulb_Temperature', 'Relative_H
                      'Process_Chilled_Water_Flowrate', 'Process_Chilled_Water_Supply_Temperature', 'Process_Chilled_Water_Return_Temperature',
                      'Process_Chilled_Water_Supply_Pressure', 'Process_Chilled_Water_Pressure_Difference', 'Process_Chilled_Water_Bypass_Valve_Opening',
                      'AC_Chilled_Water_Flowrate', 'AC_Chilled_Water_Supply_Temperature', 'AC_Chilled_Water_Return_Temperature', 'AC_Chilled_Water_Supply_Pressure',
-                     'AC_Chilled_Water_Pressure_Difference', 'AC_Chilled_Water_Bypass_Valve_Opening',]
+                     'AC_Chilled_Water_Pressure_Difference', 'AC_Chilled_Water_Bypass_Valve_Opening']  # 'Temperature', 'Dewpoint', 'Humidity'
 
 
 '''
@@ -30,12 +30,12 @@ Cumulative_Chiller_Energy_Consumption','Cumulative_Primary_Chilled_Water_Pump_En
 'AC_Chilled_Water_Bypass_Valve_Differential_Pressure_Setpoint', 'System_Chilled_Water_Supply_Temperature_Setpoint', 'CTO_Optimal_Discharge_Temperature_Setpoint',
 'Free_Cooling_Max_Wet_Bulb_Temperature_Limit'
 '''
-
+# args.feature_cols = ['Dry_Bulb_Temperature', 'Wet_Bulb_Temperature', 'Relative_Humidity', 'Total_Cooling_Capacity', 'Total_Power', 'System_COP', 'System_Energy_Efficiency']
 args.target = ['Total_Power', 'System_COP', 'System_Energy_Efficiency']
 
 
 args.num_train = 35136  # 2023/03/06 - 2024/03/05
-args.num_test = 16074
+args.num_test = 16032
 args.seq_len = 4 * 24
 args.pred_len = 4 * 24
 args.label_len = args.seq_len

@@ -76,5 +76,36 @@ def get_daily_weather():
 
 
 if __name__ == '__main__':
-    extreme_weather()
+    input_file = './Qingdao.csv'  # 输入文件路径
+    output_file = './Qingdao_15min.csv'  # 输出文件路径
+    columns_to_round = ['temp', 'dewPt']  # 指定需要保留一位小数的列名
+
+    # === 读取并设置时间为索引 ===
+    df = pd.read_csv(input_file)
+    df.iloc[:, 0] = pd.to_datetime(df.iloc[:, 0], errors='coerce')  # 第一列为时间
+    df = df.dropna(subset=[df.columns[0]])  # 删除无法解析为时间的行
+    df = df.set_index(df.columns[0])
+    df = df.sort_index()
+
+    # === 重新采样为15分钟 ===
+    df_15min = df.resample('15T').asfreq()  # 保留空行，用于补值
+
+    # === 数值型数据：线性插值 ===
+    numeric_cols = df_15min.select_dtypes(include='number').columns
+    df_15min[numeric_cols] = df_15min[numeric_cols].interpolate(method='linear')
+
+    # === 非数值型数据：向前填充 ===
+    non_numeric_cols = df_15min.select_dtypes(exclude='number').columns
+    df_15min[non_numeric_cols] = df_15min[non_numeric_cols].ffill()
+
+    # === 保留一位小数 ===
+    for col in columns_to_round:
+        if col in df_15min.columns:
+            df_15min[col] = df_15min[col].round(1)
+        else:
+            print(f"⚠️ 列 {col} 不存在，跳过保留小数处理。")
+
+    # === 输出结果 ===
+    df_15min.to_csv(output_file, encoding='utf-8-sig')
+    print(f"✅ 已保存插值结果到：{output_file}")
 

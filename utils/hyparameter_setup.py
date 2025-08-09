@@ -20,13 +20,13 @@ def model_hyparameter_setup(args):
 
     if args.model == 'LLMformer':
         if args.task_name == 'imputation':
-            args.learning_rate = 0.001  # 0.001 for imputation 0.0001 for forecast(0.01 for LLM model)  for electricity
+            args.learning_rate = 0.001  # 0.001 for imputation 0.0001 for forecast (0.01 for LLM model)  for electricity
         else:
             args.learning_rate = 0.0001
 
         args.patience = 6
         args.lradj = 'PEMS'
-        args.llm_model = 'LLAMA1b'  # defalut GPT2  BERT LLAMA1b LLAMA3b
+        args.llm_model = 'GPT2'  # defalut GPT2  BERT LLAMA1b LLAMA3b
         args.d_model = 32
         args.d_ff = 64
         args.e_layers = 1  # 2
@@ -43,9 +43,9 @@ def model_hyparameter_setup(args):
         args.e_layers = 2
         args.d_model = 256
         args.d_ff = 512
+
     if args.model == 'DLinear':
         args.use_norm = False
-
 
     if args.model == 'Informer':
         args.use_norm = False
@@ -54,7 +54,6 @@ def model_hyparameter_setup(args):
 
     if args.model == 'Autoformer':
         args.use_norm = False
-
 
     if args.model == 'iTransformer':  # default
         args.e_layers = 3
@@ -73,7 +72,6 @@ def model_hyparameter_setup(args):
         args.d_model = 16
         args.d_ff = 32
         args.llm_layers = 16
-
 
     if args.model == 'PatchTST':  # default
         args.dropout = 0.2

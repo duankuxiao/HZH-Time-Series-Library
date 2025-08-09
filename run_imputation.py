@@ -81,7 +81,7 @@ def main(args):
 
 if __name__ == '__main__':
     # from configs.operational_configs import args as default_args
-    from configs.electricity_configs import args as default_args
+    # from configs.electricity_configs import args as default_args
     from configs.HVAC_configs import args as default_args
     from copy import deepcopy
     from utils.hyparameter_setup import model_hyparameter_setup
@@ -92,12 +92,13 @@ if __name__ == '__main__':
         args = deepcopy(default_args)
         args.mask_rate = mask_rate
         all_results = []
-        # for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'PatchTST', 'TimesNet','LLMformer']:
-        for model in ['LLMformer']:
+        for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'PatchTST', 'TimesNet','LLMformer']:
+        # for model in ['LLMformer']:
 
             args.model_id = 'test'
             args.model = model
-            args.loss_method = "missing"  # missing fix adaptive
+            args.loss_method = "missing"  # missing  fix  adaptive
+            args.loss = 'MAE'
             # args.data_path = '{}.csv'.format(args.model_id)
             # args.source_data_path = '{}.csv'.format(args.model_id)
             args.task_name = 'imputation'
@@ -109,6 +110,9 @@ if __name__ == '__main__':
 
             res_df, metrics_df, imputation_metrics_df = main(args)
             imputation_metrics_df.insert(0, 'model', model)
-            all_results.append(imputation_metrics_df)
+            imputation_metrics_df.insert(1, 'mask_rate', mask_rate)
+
+            all_results.append(imputation_metrics_df.iloc[-1:])
+
             final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
             final_metrics_df.to_csv('./results/{}_all_models_comparison_mr{}.csv'.format(args.model_id, mask_rate))

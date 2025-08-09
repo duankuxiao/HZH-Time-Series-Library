@@ -25,14 +25,12 @@ warnings.filterwarnings('ignore')
 class Exp_Imputation(Exp_Basic):
     def __init__(self, args):
         super(Exp_Imputation, self).__init__(args)
+        self.loss_method = args.loss_method
+        self.loss = args.loss
         if self.args.loss_method == "adaptive":
-            self.log_missing_loss = nn.Parameter(torch.zeros(1))
-        if self.args.loss == 'MSE':
-            self.loss_func = calc_mse
-        elif self.args.loss == 'MAE':
-            self.loss_func = calc_mae
-        else:
-            raise NotImplementedError
+            self.log_sigma_missing = nn.Parameter(torch.zeros(1))
+            self.log_sigma_ori = nn.Parameter(torch.zeros(1))
+
 
     def _build_model(self):
         model = self.model_dict[self.args.model].Model(self.args).float()
@@ -46,12 +44,18 @@ class Exp_Imputation(Exp_Basic):
         return data_set, data_loader
 
     def _select_optimizer(self):
-        params = list(self.model.parameters())
-        model_optim = optim.Adam(params, lr=self.args.learning_rate)
+        param_list = list(self.model.parameters())
+        if self.loss_method == "adaptive":
+            # 将不确定性参数也加入到优化器中
+            param_list += [self.log_sigma_missing, self.log_sigma_ori]
+        model_optim = optim.Adam(param_list, lr=self.args.learning_rate)
         return model_optim
 
     def _select_criterion(self):
-        criterion = nn.MSELoss()
+        if self.loss == 'MSE':
+            criterion = calc_mse
+        elif self.loss == 'MAE':
+            criterion = calc_mae
         return criterion
 
     def _select_scheduler(self, model_optim, train_loader):
@@ -66,18 +70,21 @@ class Exp_Imputation(Exp_Basic):
                                                 max_lr=self.args.learning_rate)
         return scheduler
 
-    def _loss_function(self, imputation, true, mask):
-        if self.args.model == 'LLMformer':
-            missing_loss = 0
-            for i, tensor in enumerate(imputation):
-                missing_loss += self.loss_func(tensor, true, mask ^ 1)
-            missing_loss = self.args.missing_weight * missing_loss / len(imputation)
+    def _loss_function(self, criterion, imputation, true, mask):
+        if self.loss_method == "fix":
+            loss = criterion(imputation, true, mask ^ 1) + criterion(imputation, true, mask)
+        elif self.loss_method == "adaptive":
+            missing_loss = criterion(imputation, true, mask ^ 1)
+            ori_loss = criterion(imputation, true, mask)
+            loss = 0.5 * (torch.exp(-self.log_sigma_missing.to(true.device)) * missing_loss + torch.exp(-self.log_sigma_ori.to(true.device)) * ori_loss +
+                          self.log_sigma_missing.to(true.device) + self.log_sigma_ori.to(true.device))
+        elif self.loss_method == "missing":
+            loss = criterion(imputation, true, mask ^ 1)
         else:
-            missing_loss = self.loss_func(imputation, true, mask ^ 1)
-        loss = self.args.missing_weight * missing_loss
+            raise ValueError('Invalid loss method')
         return loss
 
-    def vali(self, vali_data, vali_loader):
+    def vali(self, vali_data, vali_loader, criterion):
         total_loss = []
         self.model.eval()
         with torch.no_grad():
@@ -114,7 +121,7 @@ class Exp_Imputation(Exp_Basic):
                 mask = mask[:, :self.args.seq_len, -self.f_dim:]
 
                 mask = mask.detach().cpu()
-                loss = self._loss_function(outputs, batch_x, mask)
+                loss = self._loss_function(criterion, outputs, batch_x, mask)
 
                 total_loss.append(loss.item())
         total_loss = np.average(total_loss)
@@ -140,6 +147,7 @@ class Exp_Imputation(Exp_Basic):
         early_stopping = EarlyStopping(patience=self.args.patience, verbose=True,accelerator=self.accelerator)
 
         model_optim = self._select_optimizer()
+        criterion = self._select_criterion()
         scheduler = self._select_scheduler(model_optim, train_loader)
 
         if self.args.use_amp:
@@ -195,7 +203,7 @@ class Exp_Imputation(Exp_Basic):
                         outputs = outputs[:, :self.args.seq_len, -self.f_dim:]
                     batch_x = batch_x[:, :self.args.seq_len, -self.f_dim:]
                     mask = mask[:, :self.args.seq_len, -self.f_dim:]
-                    loss = self._loss_function(outputs, batch_x, mask)
+                    loss = self._loss_function(criterion,outputs, batch_x, mask)
                     train_loss.append(loss.item())
 
                 if self.args.accelerate:
@@ -229,7 +237,7 @@ class Exp_Imputation(Exp_Basic):
                     scheduler.step()
 
             train_loss = np.average(train_loss)
-            vali_loss = self.vali(vali_data, vali_loader)
+            vali_loss = self.vali(vali_data, vali_loader,criterion)
 
             # Record loss values
             loss_records["epoch"].append(epoch + 1)

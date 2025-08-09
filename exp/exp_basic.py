@@ -62,11 +62,11 @@ class Exp_Basic(object):
     def _get_data(self):
         pass
 
-    def vali(self):
+    def vali(self, vali_data, vali_loader, criterion):
         pass
 
-    def train(self):
+    def train(self, setting):
         pass
 
-    def test(self):
+    def test(self, setting, test, path):
         pass
