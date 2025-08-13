@@ -656,7 +656,7 @@ class ReprogrammingLayer(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, configs,encoder_other_model='Linear'):
+    def __init__(self, configs,encoder_other_model='Transformer'):
         super(Model, self).__init__()
         self.task_name = configs.task_name
         self.pred_len = configs.pred_len
@@ -673,13 +673,13 @@ class Model(nn.Module):
         transformer_d_ff = transformer_d_model * 4  # configs.d_ff
         transformer_enc_layers = configs.e_layers  # configs.e_layers
         if self.encoder_other_model == 'Linear':
-            self.encoder_other = nn.Linear(configs.enc_in, transformer_d_model)
+            self.encoder_other = nn.Linear(configs.enc_in - configs.c_out, transformer_d_model)
 
         elif self.encoder_other_model == 'LSTM':
             self.encoder_other = nn.LSTM(configs.enc_in, configs.rnn_dim, num_layers=configs.rnn_layers, batch_first=True)
 
         elif self.encoder_other_model == 'Transformer':
-            self.enc_embedding = DataEmbedding(configs.enc_in, transformer_d_model, configs.embed, configs.freq, configs.dropout)
+            self.enc_embedding = DataEmbedding(configs.enc_in - configs.c_out, transformer_d_model, configs.embed, configs.freq, configs.dropout)
 
             self.encoder_other = Encoder(
                 [
@@ -855,14 +855,14 @@ class Model(nn.Module):
         enc_out_target = self.LLM_encoder(x_enc_target, x_mark_enc, None, None, None)
 
         if self.encoder_other_model == 'Transformer':
-            enc_in = self.enc_embedding(x_enc, x_mark_enc)
+            enc_in = self.enc_embedding(x_enc[:, :, self.c_out:], x_mark_enc)
             enc_out, attns = self.encoder_other(enc_in, attn_mask=mask)
             # enc_out = self.encoder_linear_projection(enc_out.permute(0,2,1)).permute(0,2,1)
         elif self.encoder_other_model == 'LSTM':
             enc_out, (_) = self.encoder_other(x_enc)
             # enc_out = self.encoder_linear_projection(enc_out.permute(0, 2, 1)).permute(0, 2, 1)
         elif self.encoder_other_model == 'Linear':
-            enc_out = self.encoder_other(x_enc)
+            enc_out = self.encoder_other(x_enc[:, :, self.c_out:])
             # enc_out = self.encoder_linear_projection(enc_out.permute(0, 2, 1)).permute(0, 2, 1)
 
         enc_out_target = mask[:, :, -self.c_out:] * x_enc_target + (1 - mask[:, :, -self.c_out:]) * enc_out_target

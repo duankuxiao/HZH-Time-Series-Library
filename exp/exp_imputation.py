@@ -70,18 +70,19 @@ class Exp_Imputation(Exp_Basic):
                                                 max_lr=self.args.learning_rate)
         return scheduler
 
-    def _loss_function(self, criterion, imputation, true, mask):
-        if self.loss_method == "fix":
-            loss = criterion(imputation, true, mask ^ 1) + criterion(imputation, true, mask)
-        elif self.loss_method == "adaptive":
-            missing_loss = criterion(imputation, true, mask ^ 1)
-            ori_loss = criterion(imputation, true, mask)
-            loss = 0.5 * (torch.exp(-self.log_sigma_missing.to(true.device)) * missing_loss + torch.exp(-self.log_sigma_ori.to(true.device)) * ori_loss +
-                          self.log_sigma_missing.to(true.device) + self.log_sigma_ori.to(true.device))
-        elif self.loss_method == "missing":
-            loss = criterion(imputation, true, mask ^ 1)
+    def _loss_function(self, criterion, outputs, true, mask):
+        if isinstance(outputs, tuple):
+            ori = outputs[0]
+            imputation = outputs[1]
+            if self.loss_method == "fix":
+                loss = criterion(imputation, true, mask ^ 1) + criterion(ori, true, mask)
+            elif self.loss_method == "adaptive":
+                missing_loss = criterion(imputation, true, mask ^ 1)
+                ori_loss = criterion(ori, true, mask)
+                loss = 0.5 * (torch.exp(-self.log_sigma_missing.to(true.device)) * missing_loss + torch.exp(-self.log_sigma_ori.to(true.device)) * ori_loss +
+                              self.log_sigma_missing.to(true.device) + self.log_sigma_ori.to(true.device))
         else:
-            raise ValueError('Invalid loss method')
+            loss = criterion(outputs, true, mask ^ 1)
         return loss
 
     def vali(self, vali_data, vali_loader, criterion):
