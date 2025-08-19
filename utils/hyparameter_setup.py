@@ -29,9 +29,9 @@ def model_hyparameter_setup(args):
         args.llm_model = 'GPT2'  # defalut GPT2  BERT LLAMA1b LLAMA3b
         args.d_model = 32
         args.d_ff = 64
-        args.e_layers = 1  # 2
-        args.d_layers = 3  # 2
-        args.llm_layers = 10
+        args.e_layers = 2  # 2
+        args.d_layers = 4  # 2
+        args.llm_layers = 12
 
     if 'RNN' in args.model:
         args.use_norm = False

@@ -35,7 +35,7 @@ def get_setting(args, ii):
         args.factor,
         args.dropout, args.loss,args.loss_method,args.mask_rate)
 
-    if 'TimeLLM' in args.model:
+    if 'LLM' in args.model:
         setting += '_{}_llmd{}_llmf{}_tk{}'.format(args.llm_model, args.llm_dim, args.llm_layers, args.top_k)
         if args.use_prompt:
             setting += '_prompt'
@@ -95,9 +95,9 @@ if __name__ == '__main__':
         # for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'PatchTST', 'TimesNet','LLMformer']:
         for model in ['LLMformer']:
 
-            args.model_id = '3'
+            args.model_id = 'test'
             args.model = model
-            args.loss_method = "adaptive"  # missing  fix  adaptive
+            args.loss_method = "fix"  # missing  fix  adaptive
             args.loss = 'MAE'
             # args.data_path = '{}.csv'.format(args.model_id)
             # args.source_data_path = '{}.csv'.format(args.model_id)

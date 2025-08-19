@@ -71,18 +71,19 @@ class Exp_Imputation(Exp_Basic):
         return scheduler
 
     def _loss_function(self, criterion, outputs, true, mask):
+        mask_ = mask ^ 1
         if isinstance(outputs, tuple):
-            ori = outputs[0]
-            imputation = outputs[1]
+            output1 = outputs[0]
+            output2 = outputs[1]
             if self.loss_method == "fix":
-                loss = criterion(imputation, true, mask ^ 1) + criterion(ori, true, mask)
+                loss = criterion(output2, true, mask_) + criterion(output1, true, mask_)
             elif self.loss_method == "adaptive":
-                missing_loss = criterion(imputation, true, mask ^ 1)
-                ori_loss = criterion(ori, true, mask)
+                missing_loss = criterion(output1, true, mask_)
+                ori_loss = criterion(output2, true, mask_)
                 loss = 0.5 * (torch.exp(-self.log_sigma_missing.to(true.device)) * missing_loss + torch.exp(-self.log_sigma_ori.to(true.device)) * ori_loss +
                               self.log_sigma_missing.to(true.device) + self.log_sigma_ori.to(true.device))
         else:
-            loss = criterion(outputs, true, mask ^ 1)
+            loss = criterion(outputs, true, mask_)
         return loss
 
     def vali(self, vali_data, vali_loader, criterion):

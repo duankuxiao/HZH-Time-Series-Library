@@ -6,8 +6,8 @@ from utils.print_args import print_args
 import pandas as pd
 
 
-def get_setting(args,ii):
-    setting = 'if_{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_td{}_dm{}_df{}_el{}_dl{}_nh{}_ma{}_factor{}_{}'.format(
+def get_setting(args, ii):
+    setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_td{}_dm{}_df{}_nh{}_el{}_dl{}_ma{}_factor{}_dropout{}_loss{}_{}_mr{}'.format(
         args.model_id,
         args.model,
         args.data,
@@ -19,13 +19,14 @@ def get_setting(args,ii):
         args.c_out,
         args.d_model,
         args.d_ff,
+        args.n_heads,
         args.e_layers,
         args.d_layers,
-        args.n_heads,
         args.moving_avg,
-        args.factor, args.loss_method)
+        args.factor,
+        args.dropout, args.loss,args.loss_method,args.mask_rate)
 
-    if 'TimeLLM' in args.model:
+    if 'LLM' in args.model:
         setting += '_{}_llmd{}_llmf{}_tk{}'.format(args.llm_model, args.llm_dim, args.llm_layers, args.top_k)
         if args.use_prompt:
             setting += '_prompt'
