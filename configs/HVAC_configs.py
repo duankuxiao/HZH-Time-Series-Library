@@ -44,12 +44,12 @@ args.target = ['Total_Power', 'System_COP', 'System_Energy_Efficiency']
 
 args.num_train = 35136  # 2023/03/06 - 2024/03/05
 args.num_test = 16032
-args.seq_len = 24
+args.seq_len = 4 * 24
 args.pred_len = 4 * 24
 args.label_len = args.seq_len
 args.forecast_dim = 1
-args.enc_in = 44
-args.dec_in = 44
+args.enc_in = len(args.feature_cols)
+args.dec_in = len(args.feature_cols)
 args.c_out = 3
 args.scale = True
 args.val = False

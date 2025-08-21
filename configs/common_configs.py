@@ -47,6 +47,8 @@ parser.add_argument('--feature_cols', nargs='+', default=None, help="input featu
 
 # imputation task
 parser.add_argument('--mask_rate', type=float, default=0.2, help='mask_rate')
+parser.add_argument('--mask_method', type=str, default='rdo', help='mask_method')
+
 parser.add_argument('--ori_weight', type=float, default=1, help='ori_weight')
 parser.add_argument('--missing_weight', type=float, default=1, help='missing_weight')
 parser.add_argument('--pred_weight', type=float, default=1, help='pred_weight')
@@ -123,6 +125,8 @@ parser.add_argument('--use_amp', action='store_true', help='use automatic mixed 
 parser.add_argument('--percent', type=int, default=100)
 parser.add_argument('--likelihood', type=str, default='g', help='exp description  g or nb')
 parser.add_argument("--sample_size", type=int, default=500)
+parser.add_argument("--fix_seed", type=int, default=4213)
+
 
 # metrics (dtw)
 parser.add_argument('--use_dtw', type=bool, default=False, help='the controller of using dtw metric (dtw is time consuming, not suggested unless necessary)')

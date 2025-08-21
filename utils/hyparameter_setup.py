@@ -31,7 +31,7 @@ def model_hyparameter_setup(args):
         args.d_ff = 64
         args.e_layers = 2  # 2
         args.d_layers = 4  # 2
-        args.llm_layers = 12
+        args.llm_layers = 16
 
     if 'RNN' in args.model:
         args.use_norm = False

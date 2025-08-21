@@ -4,6 +4,7 @@ import numpy as np
 from scipy import optimize
 import math
 
+from utils.mask_method import generate_mar_mask_tail_targets, generate_mcar_mask_3d, generate_rdo_mask_3d
 
 
 class TriangularCausalMask():
@@ -126,6 +127,28 @@ def rdo(
     X: Union[np.ndarray, torch.Tensor],
     p: float,
 ) -> Union[np.ndarray, torch.Tensor]:
+    """Create missingness in the data by randomly drop observations.
+
+    Parameters
+    ----------
+    X :
+        Data vector. If X has any missing values, they should be numpy.nan.
+
+    p :
+        The proportion of the observed values that will be randomly masked as missing.
+        RDO (randomly drop observations) will randomly select values from the observed values to be masked as missing.
+        The number of selected observations is determined by `p` and the total number of observed values in X,
+        e.g. if `p`=0.1, and there are 1000 observed values in X, then 0.1*1000=100 values will be randomly selected
+        to be masked as missing. If the result is not an integer, the number of selected values will be rounded to
+        the nearest.
+
+    Returns
+    -------
+    corrupted_X :
+        Original X with artificial missing values.
+        Both originally-missing and artificially-missing values are left as NaN.
+
+    """
     assert 0 < p < 1, f"p must be in range (0, 1), but got {p}"
 
     if isinstance(X, list):
@@ -141,6 +164,7 @@ def rdo(
         )
 
     return corrupted_X
+
 
 def _mar_logistic_torch(
     X: Union[np.ndarray, torch.Tensor],
@@ -805,20 +829,24 @@ def block_missing(
 
     return corrupted_X
 
-def mask_custom(X_ori,mask_rate=0.1,method='mcar',cycle=20,pos=10,scale=3,seq_len=5,block_width=3, block_len=3):
+
+def mask_custom(X_ori,mask_rate=0.1,method='mcar',f_dim=3,cycle=20,pos=10,scale=3,seq_len=5,block_width=3, block_len=3,seed=4213,targets_only=False):
     # grind the dataset with MCAR pattern, 10% missing probability, and using 0 to fill missing values
     if method == 'mcar':
-        X_with_mask_data = mcar(X_ori, p=mask_rate)
+        # X_with_mask_data = mcar(X_ori, p=mask_rate)
+        X_with_mask_data = generate_mcar_mask_3d(X_ori, missing_rate=mask_rate,f_dim=f_dim,seed=seed,tail_targets_only=targets_only)
     elif method == 'mar':
         # grind the dataset with MAR pattern
-        X_with_mask_data = mar_logistic(X_ori[:, 0, :], obs_rate=mask_rate, missing_rate=mask_rate)
+        # X_with_mask_data = mar_logistic(X_ori[:, 0, :], obs_rate=mask_rate, missing_rate=mask_rate)
+        X_with_mask_data = generate_mar_mask_tail_targets(X_ori,obs_rate=0.5,missing_rate=mask_rate,f_dim=f_dim,seed=seed,tail_targets_only=targets_only)
+    elif method == 'rdo':
+        # grind the dataset with randomly drop observations pattern
+        # X_with_mask_data = rdo(X_ori, p=mask_rate)
+        X_with_mask_data = generate_rdo_mask_3d(X_ori, missing_rate=mask_rate, f_dim=f_dim, seed=seed, tail_targets_only=targets_only)
     elif method == 'mnar':
         # grind the dataset with MNAR pattern
         X_with_mask_data = mnar_x(X_ori, offset=mask_rate)
         X_with_mnar_t_data = mnar_t(X_ori, cycle=cycle, pos=pos, scale=scale)
-    elif method == 'rdo':
-        # grind the dataset with randomly drop observations pattern
-        X_with_mask_data = rdo(X_ori, p=mask_rate)
     elif method == 'seq':
         # grind the dataset with Sequence-Missing pattern
         X_with_mask_data = seq_missing(X_ori, p=mask_rate, seq_len=seq_len)
@@ -827,4 +855,6 @@ def mask_custom(X_ori,mask_rate=0.1,method='mcar',cycle=20,pos=10,scale=3,seq_le
         X_with_mask_data = block_missing(X_ori, factor=mask_rate, block_width=block_width, block_len=block_len)
     else:
         raise ValueError('method must be mcar or mar or rdo or seq or block_missing')
-    return X_with_mask_data
+    mask = (np.isnan(X_with_mask_data) ^ np.isnan(X_ori)) ^ 1
+    inp = X_ori.masked_fill(mask == 0, 0)
+    return X_with_mask_data, mask, inp

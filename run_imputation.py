@@ -9,14 +9,8 @@ import numpy as np
 os.environ['CURL_CA_BUNDLE'] = ''
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:64"
 
-fix_seed = 4213
-random.seed(fix_seed)
-torch.manual_seed(fix_seed)
-np.random.seed(fix_seed)
-
-
 def get_setting(args, ii):
-    setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_td{}_dm{}_df{}_nh{}_el{}_dl{}_ma{}_factor{}_dropout{}_loss{}_{}_mr{}'.format(
+    setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_td{}_dm{}_df{}_nh{}_el{}_dl{}_ma{}_factor{}_dropout{}_loss{}_{}_{}{}'.format(
         args.model_id,
         args.model,
         args.data,
@@ -33,7 +27,7 @@ def get_setting(args, ii):
         args.d_layers,
         args.moving_avg,
         args.factor,
-        args.dropout, args.loss,args.loss_method,args.mask_rate)
+        args.dropout, args.loss,args.loss_method,args.mask_method,args.mask_rate)
 
     if 'LLM' in args.model:
         setting += '_{}_llmd{}_llmf{}_tk{}'.format(args.llm_model, args.llm_dim, args.llm_layers, args.top_k)
@@ -51,6 +45,7 @@ def get_setting(args, ii):
     return setting
 
 def main(args):
+    torch.cuda.empty_cache()
     if args.task_name == 'imputation':
         Exp = Exp_Imputation
     elif args.task_name == 'imputation_forecast':
@@ -75,7 +70,7 @@ def main(args):
         exp = Exp(args)  # set experiments
         print(' >>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
         res_df, metrics_df, imputation_metrics_df = exp.test(setting, test=1)
-        torch.cuda.empty_cache()
+    torch.cuda.empty_cache()
     return res_df, metrics_df, imputation_metrics_df
 
 
@@ -86,14 +81,21 @@ if __name__ == '__main__':
     from copy import deepcopy
     from utils.hyparameter_setup import model_hyparameter_setup
 
-    # for mask_rate in [0.1, 0.2, 0.3, 0.4, 0.5]:-
+    # for mask_rate in [0.1, 0.2, 0.3, 0.4, 0.5,0.6,0.7,0.8,0.9]:
     for mask_rate in [0.3]:
 
         args = deepcopy(default_args)
+
+        fix_seed = args.fix_seed
+        random.seed(fix_seed)
+        torch.manual_seed(fix_seed)
+        np.random.seed(fix_seed)
+
         args.mask_rate = mask_rate
+        args.mask_method = 'mcar'
         all_results = []
-        # for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'PatchTST', 'TimesNet','LLMformer']:
-        for model in ['LLMformer']:
+        for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'PatchTST', 'TimesNet','LLMformer']:
+        # for model in ['LLMformer']:
 
             args.model_id = 'test'
             args.model = model

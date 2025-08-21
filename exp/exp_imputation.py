@@ -91,12 +91,9 @@ class Exp_Imputation(Exp_Basic):
         self.model.eval()
         with torch.no_grad():
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark, x_forecast) in enumerate(vali_loader):
-                if self.args.mask_target_only:
-                    inp = mask_custom(batch_x[:, :, -self.f_dim:], mask_rate=self.args.mask_rate, method='rdo')
-                else:
-                    inp = mask_custom(batch_x, mask_rate=self.args.mask_rate, method='rdo')
-                mask = (np.isnan(inp) ^ np.isnan(batch_x)) ^ 1
-                inp = batch_x.masked_fill(mask == 0, 0)
+                f_dim = self.f_dim if self.args.mask_target_only else self.args.enc_in
+                _, mask, inp = mask_custom(batch_x[:, :, -self.f_dim:], mask_rate=self.args.mask_rate, method=self.args.mask_method,f_dim=f_dim,seed=self.args.fix_seed,targets_only=self.args.mask_target_only)
+
                 inp = inp.float().to(self.device)
                 batch_x_mark = batch_x_mark.float().to(self.device)
                 mask = mask.to(self.device)
@@ -174,12 +171,8 @@ class Exp_Imputation(Exp_Basic):
                 batch_x_mark = batch_x_mark.float()
 
                 # imputation input
-                if self.args.mask_target_only:
-                    inp = mask_custom(batch_x[:, :, -self.f_dim:], mask_rate=self.args.mask_rate, method='rdo')
-                else:
-                    inp = mask_custom(batch_x, mask_rate=self.args.mask_rate, method='rdo')
-                mask = (np.isnan(inp) ^ np.isnan(batch_x)) ^ 1
-                inp = batch_x.masked_fill(mask == 0, 0)
+                f_dim = self.f_dim if self.args.mask_target_only else self.args.enc_in
+                _, mask, inp = mask_custom(batch_x[:, :, -self.f_dim:], mask_rate=self.args.mask_rate, method=self.args.mask_method, f_dim=f_dim, seed=self.args.fix_seed,targets_only=self.args.mask_target_only)
 
                 if self.args.accelerate:
                     pass
@@ -322,12 +315,8 @@ class Exp_Imputation(Exp_Basic):
         with torch.no_grad():
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark, x_forecast) in enumerate(test_loader):
 
-                if self.args.mask_target_only:
-                    x_withnan = mask_custom(batch_x[:, :, -self.f_dim:], mask_rate=self.args.mask_rate, method='rdo')
-                else:
-                    x_withnan = mask_custom(batch_x, mask_rate=self.args.mask_rate, method='rdo')
-                mask = (np.isnan(x_withnan) ^ np.isnan(batch_x)) ^ 1
-                inp = batch_x.masked_fill(mask == 0, 0)
+                f_dim = self.f_dim if self.args.mask_target_only else self.args.enc_in
+                _, mask, inp = mask_custom(batch_x[:, :, -self.f_dim:], mask_rate=self.args.mask_rate, method=self.args.mask_method, f_dim=f_dim, seed=self.args.fix_seed,targets_only=self.args.mask_target_only)
 
                 batch_x_mark = batch_x_mark.float().to(self.device)
                 inp = inp.float().to(self.device)

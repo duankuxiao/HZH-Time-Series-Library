@@ -45,6 +45,8 @@ def get_setting(args, ii):
 def transfer_test(args, path):
     if args.task_name == 'interval_forecast':
         from exp.exp_interval_forecasting import Exp_Forecast
+    elif args.task_name == 'imputation':
+        from exp.exp_imputation import Exp_Imputation as Exp_Forecast
     else:
         from exp.exp_forecasting import Exp_Forecast
 
@@ -53,7 +55,10 @@ def transfer_test(args, path):
 
     exp = Exp_Forecast(args)  # set experiments
     print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-    pred_res,metrics_df = exp.test(setting, test_only=1, path=path)
+    if args.task_name == 'imputation':
+        pred_res,_, metrics_df = exp.test(setting, test=1, path=path)
+    else:
+        pred_res, metrics_df = exp.test(setting, test=1, path=path)
     torch.cuda.empty_cache()
     return pred_res,metrics_df
 
@@ -136,7 +141,10 @@ if __name__ == '__main__':
     # root_path = r'D:\results\pf_ver2\patchTST\tohoku'
     # regions_test(root_path)
 
-    root_path = r'D:\results\pf_ver2\Robustness\extreme_clean'  # extreme extreme_clean  shift
-    extreme_weather_test(root_path,pattern='extreme_clean')
+    # root_path = r'D:\results\pf_ver2\Robustness\extreme_clean'  # extreme extreme_clean  shift
+    # extreme_weather_test(root_path,pattern='extreme_clean')
+    path = r'D:\Time-LLM-main\results\test_LLMformer_hvac_ftM_sl24_ll0_pl0_sd29_td3_dm32_df64_nh8_el2_dl4_ma25_factor3_dropout0.1_lossMAE_fix_mr0.3_GPT2_llmd768_llmf12_tk5_prompt_scale'
+    args = load_config(os.path.join(path, 'checkpoints', 'configs.pkl'))
+    transfer_test(args, path)
 
 

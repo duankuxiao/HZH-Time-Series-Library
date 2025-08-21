@@ -313,10 +313,10 @@ class Exp_Forecast(Exp_Basic):
             print('mse weight: {}, nll weight: {}'.format(self.log_sigma_mse,self.log_sigma_nll))
         return self.model, loss_df
 
-    def test(self, setting, test_only=0, path=None):
+    def test(self, setting, test=0, path=None):
         test_data, test_loader = self._get_data(flag='test')
 
-        if test_only:
+        if test:
             print('loading model')
             if path is None:
                 model_path = os.path.join(self.args.checkpoints, setting, 'checkpoints')
