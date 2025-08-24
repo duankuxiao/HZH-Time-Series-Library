@@ -328,27 +328,27 @@ class LLMBlock(nn.Module):
         self.reprogramming_layer.to(device=self.device)
         self.patch_embedding.to(device=self.device)
 
-    def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast=None, mask=None):
+    def forward(self, x_enc, mask=None):
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
-            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)
+            dec_out = self.forecast(x_enc, )
             return dec_out
         if self.task_name == 'imputation_forecast':
-            dec_out = self.imputation_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)
+            dec_out = self.imputation_forecast(x_enc, mask)
             return dec_out
         if self.task_name == 'imputation':
-            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)
+            dec_out = self.imputation(x_enc, mask)
             return dec_out
         if self.task_name == 'interval_forecast':
             # mu, sigma = self.interval_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
             # return mu, sigma
-            enc_out = self.interval_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
+            enc_out = self.interval_forecast(x_enc)
             return enc_out
         else:
-            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
+            dec_out = self.forecast(x_enc)
             return dec_out
         return None
 
-    def forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
+    def forecast(self, x_enc,):
         x_enc = self.normalize_layers(x_enc, 'norm')
 
         B, T, N = x_enc.size()
@@ -415,7 +415,7 @@ class LLMBlock(nn.Module):
         dec_out = self.normalize_layers(dec_out, 'denorm')
         return dec_out
 
-    def imputation_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
+    def imputation_forecast(self, x_enc, missing_mask):
         x_enc = self.normalize_layers(x_enc, 'norm')
 
         B, T, N = x_enc.size()
@@ -474,10 +474,11 @@ class LLMBlock(nn.Module):
         dec_out = self.normalize_layers(dec_out, 'denorm')
         return dec_out
 
-    def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
+    def imputation(self, x_enc, missing_mask):
         x_enc = self.normalize_layers(x_enc, 'norm')
-
         B, T, N = x_enc.size()
+        if missing_mask is not None:
+            missing_mask = missing_mask.permute(0, 2, 1).contiguous().reshape(B * N, T, 1)
         if self.use_prompt:
             x_enc = x_enc.permute(0, 2, 1).contiguous().reshape(B * N, T, 1)
 
@@ -493,15 +494,27 @@ class LLMBlock(nn.Module):
                 max_values_str = str(max_values[b].tolist()[0])
                 median_values_str = str(medians[b].tolist()[0])
                 lags_values_str = str(lags[b].tolist())
+                # prompt_ = (
+                #     f"<|start_prompt|>Dataset description: {self.description}"
+                #     f"Task description: imputation the {str(self.seq_len)} steps; "
+                #     "Input statistics: "
+                #     f"min value {min_values_str}, "
+                #     f"max value {max_values_str}, "
+                #     f"median value {median_values_str}, "
+                #     f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
+                #     f"top {self.top_k} lags are : {lags_values_str}<|end_prompt|>"
+                # )
                 prompt_ = (
                     f"<|start_prompt|>Dataset description: {self.description}"
-                    f"Task description: imputation the {str(self.seq_len)} steps; "
+                    "Task description: "
+                    f"given the observed information, "
+                    f"impute the missing values that indicated as 0 in f{missing_mask[b].flatten()}; "
                     "Input statistics: "
                     f"min value {min_values_str}, "
                     f"max value {max_values_str}, "
                     f"median value {median_values_str}, "
                     f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
-                    f"top {self.top_k} lags are : {lags_values_str}<|end_prompt|>"
+                    f"top 5 lags are : {lags_values_str}<|<end_prompt>|>"
                 )
 
                 prompt.append(prompt_)
@@ -534,7 +547,7 @@ class LLMBlock(nn.Module):
         dec_out = self.normalize_layers(dec_out, 'denorm')
         return dec_out
 
-    def interval_forecast(self, x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast):
+    def interval_forecast(self, x_enc):
         x_enc = self.normalize_layers(x_enc, 'norm')
 
         B, T, N = x_enc.size()
@@ -656,7 +669,7 @@ class ReprogrammingLayer(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, configs,encoder_other_model='Transformer'):
+    def __init__(self, configs,encoder_other_model='Linear'):
         super(Model, self).__init__()
         self.task_name = configs.task_name
         self.pred_len = configs.pred_len
@@ -676,10 +689,10 @@ class Model(nn.Module):
             self.encoder_other = nn.Linear(configs.enc_in - configs.c_out, transformer_d_model)
 
         elif self.encoder_other_model == 'LSTM':
-            self.encoder_other = nn.LSTM(configs.enc_in, configs.rnn_dim, num_layers=configs.rnn_layers, batch_first=True)
+            self.encoder_other = nn.LSTM(configs.enc_in - configs.c_out, configs.rnn_dim, num_layers=configs.rnn_layers, batch_first=True)
 
         elif self.encoder_other_model == 'Transformer':
-            self.enc_embedding = DataEmbedding(configs.enc_in, transformer_d_model, configs.embed, configs.freq, configs.dropout)
+            self.enc_embedding = DataEmbedding(configs.enc_in - configs.c_out, transformer_d_model, configs.embed, configs.freq, configs.dropout)
 
             self.encoder_other = Encoder(
                 [
@@ -765,7 +778,7 @@ class Model(nn.Module):
 
         x_enc_target = x_enc[:,:,-self.c_out:]
 
-        enc_out_target = self.LLM_encoder(x_enc_target, None, None, None, x_forecast)
+        enc_out_target = self.LLM_encoder(x_enc_target)
         if self.encoder_other_model == 'Transformer':
             enc_in = self.enc_embedding(x_enc, x_mark_enc)
             enc_out, attns = self.encoder_other(enc_in)
@@ -807,7 +820,7 @@ class Model(nn.Module):
         x_enc_target = x_enc[:,:,-self.c_out:]
 
         # 1
-        enc_out_target = self.LLM_encoder(x_enc_target, x_mark_enc, x_dec, x_mark_dec, x_forecast)
+        enc_out_target = self.LLM_encoder(x_enc_target)
         if self.encoder_other_model == 'Transformer':
             enc_in = self.enc_embedding(x_enc, x_mark_enc)
             enc_out, attns = self.encoder_other(enc_in)
@@ -852,17 +865,17 @@ class Model(nn.Module):
             x_enc /= stdev
 
         x_enc_target = x_enc[:, :, -self.c_out:]
-        enc_out_target = self.LLM_encoder(x_enc_target, x_mark_enc, None, None, None)
+        enc_out_target = self.LLM_encoder(x_enc_target,mask[:, :, -self.c_out:])
 
         if self.encoder_other_model == 'Transformer':
-            enc_in = self.enc_embedding(x_enc, x_mark_enc)
+            enc_in = self.enc_embedding(x_enc[:, :, :-self.c_out], x_mark_enc)
             enc_out, attns = self.encoder_other(enc_in, attn_mask=mask)
             # enc_out = self.encoder_linear_projection(enc_out.permute(0,2,1)).permute(0,2,1)
         elif self.encoder_other_model == 'LSTM':
             enc_out, (_) = self.encoder_other(x_enc)
             # enc_out = self.encoder_linear_projection(enc_out.permute(0, 2, 1)).permute(0, 2, 1)
         elif self.encoder_other_model == 'Linear':
-            enc_out = self.encoder_other(x_enc)
+            enc_out = self.encoder_other(x_enc[:, :, :-self.c_out])  # x_enc[:, :, :-self.c_out]
             # enc_out = self.encoder_linear_projection(enc_out.permute(0, 2, 1)).permute(0, 2, 1)
 
         enc_out_target = mask[:, :, -self.c_out:] * x_enc[:, :, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * enc_out_target
@@ -892,7 +905,7 @@ class Model(nn.Module):
             x_enc /= stdev
 
         x_enc_target = x_enc[:, :, -self.c_out:]
-        enc_out_target = self.LLM_encoder(x_enc_target, x_mark_enc, None, None, None)
+        enc_out_target = self.LLM_encoder(x_enc_target)
 
         if self.encoder_other_model == 'Transformer':
             enc_in = self.enc_embedding(x_enc, x_mark_enc)

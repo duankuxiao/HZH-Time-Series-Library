@@ -92,7 +92,7 @@ class Exp_Imputation(Exp_Basic):
         with torch.no_grad():
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark, x_forecast) in enumerate(vali_loader):
                 f_dim = self.f_dim if self.args.mask_target_only else self.args.enc_in
-                _, mask, inp = mask_custom(batch_x[:, :, -self.f_dim:], mask_rate=self.args.mask_rate, method=self.args.mask_method,f_dim=f_dim,seed=self.args.fix_seed,targets_only=self.args.mask_target_only)
+                _, mask, inp = mask_custom(batch_x, mask_rate=self.args.mask_rate, method=self.args.mask_method,f_dim=f_dim,seed=self.args.fix_seed,targets_only=self.args.mask_target_only)
 
                 inp = inp.float().to(self.device)
                 batch_x_mark = batch_x_mark.float().to(self.device)
@@ -172,7 +172,7 @@ class Exp_Imputation(Exp_Basic):
 
                 # imputation input
                 f_dim = self.f_dim if self.args.mask_target_only else self.args.enc_in
-                _, mask, inp = mask_custom(batch_x[:, :, -self.f_dim:], mask_rate=self.args.mask_rate, method=self.args.mask_method, f_dim=f_dim, seed=self.args.fix_seed,targets_only=self.args.mask_target_only)
+                _, mask, inp = mask_custom(batch_x, mask_rate=self.args.mask_rate, method=self.args.mask_method, f_dim=f_dim, seed=self.args.fix_seed,targets_only=self.args.mask_target_only)
 
                 if self.args.accelerate:
                     pass
@@ -316,7 +316,7 @@ class Exp_Imputation(Exp_Basic):
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark, x_forecast) in enumerate(test_loader):
 
                 f_dim = self.f_dim if self.args.mask_target_only else self.args.enc_in
-                _, mask, inp = mask_custom(batch_x[:, :, -self.f_dim:], mask_rate=self.args.mask_rate, method=self.args.mask_method, f_dim=f_dim, seed=self.args.fix_seed,targets_only=self.args.mask_target_only)
+                _, mask, inp = mask_custom(batch_x, mask_rate=self.args.mask_rate, method=self.args.mask_method, f_dim=f_dim, seed=self.args.fix_seed,targets_only=self.args.mask_target_only)
 
                 batch_x_mark = batch_x_mark.float().to(self.device)
                 inp = inp.float().to(self.device)
@@ -409,7 +409,7 @@ class Exp_Imputation(Exp_Basic):
         res_df = pd.DataFrame(np.hstack(data_parts), columns=columns)
 
         # Initialize metrics dictionaries
-        metrics = {key: [] for key in ["trainable_params","mse", "rmse", "nrmse", "mae", "mape", "rae", "r2", "corr"]}
+        metrics = {key: [] for key in ["trainable_params","mse", "rmse", "nrmse", "mae", "mape", "rae", "r2", "corr","mse_inter", "rmse_inter", "nrmse_inter", "mae_inter", "mape_inter", "rae_inter", "r2_inter", "corr_inter"]}
         imputation_metrics = {key: [] for key in ["trainable_params","mse_imputation", "rmse_imputation", "mae_imputation", "mre_imputation","mse_imputation_inter", "rmse_imputation_inter", "mae_imputation_inter", "mre_imputation_inter"]}
 
         # Calculate metrics for each target
@@ -420,6 +420,8 @@ class Exp_Imputation(Exp_Basic):
 
             # Metrics for full sequence
             mse, rmse, nrmse, mae, mape, rae, r2, corr = results_evaluation(true_i, imputation_i)
+            mse_inter, rmse_inter, nrmse_inter, mae_inter, mape_inter, rae_inter, r2_inter, corr_inter = results_evaluation(true_i, inter_i)
+
             metrics['trainable_params'] = trainable_params
             metrics["mse"].append(mse)
             metrics["rmse"].append(rmse)
@@ -429,6 +431,15 @@ class Exp_Imputation(Exp_Basic):
             metrics["rae"].append(rae)
             metrics["r2"].append(r2)
             metrics["corr"].append(corr)
+
+            metrics["mse_inter"].append(mse_inter)
+            metrics["rmse_inter"].append(rmse_inter)
+            metrics["nrmse_inter"].append(nrmse_inter)
+            metrics["mae_inter"].append(mae_inter)
+            metrics["mape_inter"].append(mape_inter)
+            metrics["rae_inter"].append(rae_inter)
+            metrics["r2_inter"].append(r2_inter)
+            metrics["corr_inter"].append(corr_inter)
 
             # Metrics for imputation (model output)
             mse_imp, rmse_imp, mae_imp, mre_imp = results_evaluation_imputation(true_i, imputation_i, mask_i)

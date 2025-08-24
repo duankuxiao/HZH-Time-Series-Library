@@ -842,7 +842,7 @@ def mask_custom(X_ori,mask_rate=0.1,method='mcar',f_dim=3,cycle=20,pos=10,scale=
     elif method == 'rdo':
         # grind the dataset with randomly drop observations pattern
         # X_with_mask_data = rdo(X_ori, p=mask_rate)
-        X_with_mask_data = generate_rdo_mask_3d(X_ori, missing_rate=mask_rate, f_dim=f_dim, seed=seed, tail_targets_only=targets_only)
+        X_with_mask_data = generate_rdo_mask_3d(X_ori, row_drop_rate=mask_rate, f_dim=f_dim, seed=seed, tail_targets_only=targets_only)
     elif method == 'mnar':
         # grind the dataset with MNAR pattern
         X_with_mask_data = mnar_x(X_ori, offset=mask_rate)

@@ -92,12 +92,12 @@ if __name__ == '__main__':
         np.random.seed(fix_seed)
 
         args.mask_rate = mask_rate
-        args.mask_method = 'mcar'
+        args.mask_method = 'rdo'
         all_results = []
-        for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'PatchTST', 'TimesNet','LLMformer']:
-        # for model in ['LLMformer']:
+        # for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'PatchTST', 'TimesNet','LLMformer']:
+        for model in ['LLMformer']:
 
-            args.model_id = 'test'
+            args.model_id = '8'
             args.model = model
             args.loss_method = "fix"  # missing  fix  adaptive
             args.loss = 'MAE'
