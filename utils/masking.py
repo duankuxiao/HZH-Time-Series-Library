@@ -4,7 +4,7 @@ import numpy as np
 from scipy import optimize
 import math
 
-from utils.mask_method import generate_mar_mask_tail_targets, generate_mcar_mask_3d, generate_rdo_mask_3d
+from utils.mask_method import generate_mcar_mask, generate_mar_mask, generate_rdo_mask
 
 
 class TriangularCausalMask():
@@ -834,15 +834,17 @@ def mask_custom(X_ori,mask_rate=0.1,method='mcar',f_dim=3,cycle=20,pos=10,scale=
     # grind the dataset with MCAR pattern, 10% missing probability, and using 0 to fill missing values
     if method == 'mcar':
         # X_with_mask_data = mcar(X_ori, p=mask_rate)
-        X_with_mask_data = generate_mcar_mask_3d(X_ori, missing_rate=mask_rate,f_dim=f_dim,seed=seed,tail_targets_only=targets_only)
+        X_with_mask_data = generate_mcar_mask(X_ori, missing_rate=mask_rate,f_dim=f_dim,seed=seed,tail_targets_only=targets_only)
     elif method == 'mar':
         # grind the dataset with MAR pattern
         # X_with_mask_data = mar_logistic(X_ori[:, 0, :], obs_rate=mask_rate, missing_rate=mask_rate)
-        X_with_mask_data = generate_mar_mask_tail_targets(X_ori,obs_rate=0.5,missing_rate=mask_rate,f_dim=f_dim,seed=seed,tail_targets_only=targets_only)
+        X_with_mask_data = generate_mar_mask(X_ori,obs_rate=0.5,missing_rate=mask_rate,f_dim=f_dim,seed=seed,tail_targets_only=targets_only)
     elif method == 'rdo':
         # grind the dataset with randomly drop observations pattern
         # X_with_mask_data = rdo(X_ori, p=mask_rate)
-        X_with_mask_data = generate_rdo_mask_3d(X_ori, row_drop_rate=mask_rate, f_dim=f_dim, seed=seed, tail_targets_only=targets_only)
+        X_with_mask_data = generate_rdo_mask(X_ori, row_drop_rate=mask_rate, f_dim=f_dim, seed=seed, tail_targets_only=targets_only)
+
+
     elif method == 'mnar':
         # grind the dataset with MNAR pattern
         X_with_mask_data = mnar_x(X_ori, offset=mask_rate)

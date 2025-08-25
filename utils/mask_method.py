@@ -11,12 +11,12 @@ def _make_generator(device, seed):
     return g
 
 @torch.no_grad()
-def generate_mar_mask_tail_targets(
+def generate_mar_mask(
     X: torch.Tensor,           # [B,T,D]
     f_dim: int,                # 最后 f_dim 是目标特征，全部做 MAR
     obs_rate: float = 0.5,     # 在非目标列里选取的预测器比例 (0,1]；=1 表示全部非目标列都保留观测并用作预测器
     missing_rate=0.2,          # 目标列的缺失率：标量或长度=f_dim 的 1D 张量/列表
-    strict: bool = True,       # True: 预测器列永远观测（严格 MAR）；False: 放宽（不建议用于“严格”定义）
+    strict: bool = False,       # True: 预测器列永远观测（严格 MAR）；False: 放宽（不建议用于“严格”定义）
     max_iter: int = 30,
     seed: int = 42,
     eps: float = 1e-8,
@@ -160,7 +160,7 @@ def generate_mar_mask_tail_targets(
 
 
 @torch.no_grad()
-def generate_mcar_mask_3d(
+def generate_mcar_mask(
     X: torch.Tensor,                  # [B, T, D] 完整数据（float，不能含 NaN/Inf）
     missing_rate=0.2,                 # 缺失率：标量 (0,1) 或 1D 向量（见下）
     tail_targets_only: bool = False,  # True: 仅对最后 f_dim 列造缺
@@ -249,7 +249,7 @@ def generate_mcar_mask_3d(
 
 
 @torch.no_grad()
-def generate_rdo_mask_3d(
+def generate_rdo_mask(
     X: torch.Tensor,                  # [B, T, D] 完整数据（float）
     row_drop_rate: float = 0.3,       # 行丢失比例（被选列在这些时间步全部缺失），(0,1)
     tail_targets_only: bool = False,  # True: 仅对“最后 f_dim 列”造缺

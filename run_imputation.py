@@ -81,8 +81,8 @@ if __name__ == '__main__':
     from copy import deepcopy
     from utils.hyparameter_setup import model_hyparameter_setup
 
-    # for mask_rate in [0.1, 0.2, 0.3, 0.4, 0.5,0.6,0.7,0.8,0.9]:
-    for mask_rate in [0.3]:
+    for mask_rate in [0.1, 0.2, 0.3, 0.4, 0.5,0.6,0.7,0.8,0.9]:
+    # for mask_rate in [0.3]:
 
         args = deepcopy(default_args)
 
@@ -94,17 +94,17 @@ if __name__ == '__main__':
         args.mask_rate = mask_rate
         args.mask_method = 'rdo'
         all_results = []
-        # for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'PatchTST', 'TimesNet','LLMformer']:
-        for model in ['LLMformer']:
+        for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'PatchTST', 'TimesNet','LLMformer']:
+        # for model in ['PatchTST']:
 
-            args.model_id = '8'
+            args.model_id = '1'
             args.model = model
             args.loss_method = "fix"  # missing  fix  adaptive
             args.loss = 'MAE'
             # args.data_path = '{}.csv'.format(args.model_id)
             # args.source_data_path = '{}.csv'.format(args.model_id)
             args.task_name = 'imputation'
-            args.mask_target_only = False
+            args.mask_target_only = True
             args.pred_len = 0
             args.label_len = 0
             args = model_hyparameter_setup(args)
