@@ -42,6 +42,8 @@ def get_setting(args, ii):
         setting = 'few-shot{}_'.format(args.percent) + setting
     if args.scale:
         setting += '_scale'
+    if args.output_ori:
+        setting += '_ori'
     return setting
 
 def main(args):
@@ -94,17 +96,18 @@ if __name__ == '__main__':
         args.mask_rate = mask_rate
         args.mask_method = 'rdo'
         all_results = []
-        for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'PatchTST', 'TimesNet','LLMformer']:
-        # for model in ['PatchTST']:
+        for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer','PatchTST', 'TimesNet','LLMformer']:
+        # for model in ['TimesNet']:
 
-            args.model_id = '1'
+            args.model_id = 'test10'
             args.model = model
             args.loss_method = "fix"  # missing  fix  adaptive
+            args.output_ori = True
             args.loss = 'MAE'
             # args.data_path = '{}.csv'.format(args.model_id)
             # args.source_data_path = '{}.csv'.format(args.model_id)
             args.task_name = 'imputation'
-            args.mask_target_only = True
+            args.mask_target_only = False
             args.pred_len = 0
             args.label_len = 0
             args = model_hyparameter_setup(args)

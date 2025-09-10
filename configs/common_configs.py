@@ -55,6 +55,8 @@ parser.add_argument('--pred_weight', type=float, default=1, help='pred_weight')
 parser.add_argument('--interpolate_method', type=str, default='linear', help=['linear','polynomial', 'spline'])
 parser.add_argument('--interpolate_order', type=int, default=1, help='1<order<5 for spline, 2 or odd number for polynomial')
 parser.add_argument('--mask_target_only', action='store_true', default=False, help='mask_target_only')
+parser.add_argument('--output_ori', default=True, help='mask_target_only')
+
 
 parser.add_argument('--seasonal_patterns', type=str, default='Hourly', help='subset for M4')
 parser.add_argument('--inverse', action='store_true', help='inverse output data', default=False)

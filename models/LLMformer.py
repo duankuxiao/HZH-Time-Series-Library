@@ -13,6 +13,7 @@ from layers.Embed import PatchEmbedding
 import transformers
 from layers.StandardNorm import Normalize
 from utils.interval_forecasting_tools import gaussian_sample, negative_binomial_sample
+from utils.masking import masked_standardize_3d
 from .Distribution import Gaussian,NegativeBinomial
 
 
@@ -669,7 +670,7 @@ class ReprogrammingLayer(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self, configs,encoder_other_model='Linear'):
+    def __init__(self, configs,encoder_other_model='Transformer'):
         super(Model, self).__init__()
         self.task_name = configs.task_name
         self.pred_len = configs.pred_len
@@ -677,6 +678,7 @@ class Model(nn.Module):
         self.label_len = configs.label_len
         self.c_out = configs.c_out
         self.output_attention = configs.output_attention
+        self.output_ori = configs.output_ori
         self.likelihood = configs.likelihood
         self.use_norm = configs.use_norm
 
@@ -857,12 +859,13 @@ class Model(nn.Module):
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
         if self.use_norm:
             # Normalization from Non-stationary Transformer
-            means = torch.sum(x_enc, dim=1) / torch.sum(mask == 1, dim=1)
-            means = means.unsqueeze(1).detach()
-            x_enc = x_enc - means
-            stdev = torch.sqrt(torch.sum(x_enc * x_enc, dim=1) / torch.sum(mask == 1, dim=1) + 1e-5)
-            stdev = stdev.unsqueeze(1).detach()
-            x_enc /= stdev
+            # means = torch.sum(x_enc, dim=1) / torch.sum(mask == 1, dim=1)
+            # means = means.unsqueeze(1).detach()
+            # x_enc = x_enc - means
+            # stdev = torch.sqrt(torch.sum(x_enc * x_enc, dim=1) / torch.sum(mask == 1, dim=1) + 1e-5)
+            # stdev = stdev.unsqueeze(1).detach()
+            # x_enc /= stdev
+            x_enc, means, stdev = masked_standardize_3d(x_enc, mask)
 
         x_enc_target = x_enc[:, :, -self.c_out:]
         enc_out_target = self.LLM_encoder(x_enc_target,mask[:, :, -self.c_out:])
@@ -877,13 +880,12 @@ class Model(nn.Module):
         elif self.encoder_other_model == 'Linear':
             enc_out = self.encoder_other(x_enc[:, :, :-self.c_out])  # x_enc[:, :, :-self.c_out]
             # enc_out = self.encoder_linear_projection(enc_out.permute(0, 2, 1)).permute(0, 2, 1)
-
-        enc_out_target = mask[:, :, -self.c_out:] * x_enc[:, :, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * enc_out_target
+        if self.output_ori:
+            enc_out_target = mask[:, :, -self.c_out:] * x_enc[:, :, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * enc_out_target
 
         dec_in = self.dec_embedding(enc_out_target, x_mark_enc)
         dec_out = self.decoder(dec_in, enc_out, x_mask=None, cross_mask=mask)
         dec_out = self.projection(dec_out)
-        dec_out = mask[:, :, -self.c_out:] * x_enc[:, :, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out
 
         if self.use_norm:
             # De-Normalization from Non-stationary Transformer
@@ -954,11 +956,13 @@ class Model(nn.Module):
             return dec_out[:, -self.pred_len:, :]  # [B, L, D]
         if self.task_name == 'imputation':
             dec_out1, dec_out2 = self.imputation(x_enc, x_mark_enc, x_dec, x_mark_dec, mask)
-            dec_out2 = mask[:, :, -self.c_out:] * x_enc[:, :, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out2
+            if self.output_ori:
+                dec_out2 = mask[:, :, -self.c_out:] * x_enc[:, :, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out2
             return dec_out1, dec_out2   # [B, L, D]
         if self.task_name == 'imputation_forecast':
             enc_out_target, dec_out = self.imputation_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, mask)
-            dec_out[:, :self.seq_len, -self.c_out:] = mask[:, :, -self.c_out:] * x_enc[:, :self.seq_len, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out[:, :self.seq_len, -self.c_out:]
+            if self.output_ori:
+                dec_out[:, :self.seq_len, -self.c_out:] = mask[:, :, -self.c_out:] * x_enc[:, :self.seq_len, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out[:, :self.seq_len, -self.c_out:]
             return enc_out_target, dec_out   # [B, L, D]
         if self.task_name == 'anomaly_detection':
             dec_out = self.anomaly_detection(x_enc)

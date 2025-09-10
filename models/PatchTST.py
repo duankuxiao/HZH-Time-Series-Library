@@ -4,6 +4,7 @@ from layers.Transformer_EncDec import Encoder, EncoderLayer
 from layers.SelfAttention_Family import FullAttention, AttentionLayer
 from layers.Embed import PositionalEmbedding
 from utils.interval_forecasting_tools import gaussian_sample, negative_binomial_sample
+from utils.masking import masked_standardize_3d
 from .Distribution import Gaussian, NegativeBinomial
 
 
@@ -81,6 +82,8 @@ class Model(nn.Module):
         self.use_forecast = configs.use_forecast
         self.likelihood = configs.likelihood
         self.use_norm = configs.use_norm
+        self.output_ori = configs.output_ori
+
         # patching and embedding
         self.patch_embedding = PatchEmbedding(
             configs.d_model, configs.patch_len, configs.stride, padding, configs.dropout)
@@ -237,15 +240,18 @@ class Model(nn.Module):
         return dec_out
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
+
         if self.use_norm:
             # Normalization from Non-stationary Transformer
-            means = torch.sum(x_enc, dim=1) / torch.sum(mask == 1, dim=1)
-            means = means.unsqueeze(1).detach()
-            x_enc = x_enc - means
-            x_enc = x_enc.masked_fill(mask == 0, 0)
-            stdev = torch.sqrt(torch.sum(x_enc * x_enc, dim=1) / torch.sum(mask == 1, dim=1) + 1e-5)
-            stdev = stdev.unsqueeze(1).detach()
-            x_enc /= stdev
+            # means = torch.sum(x_enc, dim=1) / torch.sum(mask == 1, dim=1)
+            # means = means.unsqueeze(1).detach()
+            # x_enc = x_enc - means
+            # x_enc = x_enc.masked_fill(mask == 0, 0)
+            # stdev = torch.sqrt(torch.sum(x_enc * x_enc, dim=1) / torch.sum(mask == 1, dim=1) + 1e-5)
+            # stdev = stdev.unsqueeze(1).detach()
+            # x_enc /= stdev
+            x_enc, means, stdev = masked_standardize_3d(x_enc, mask)
+
 
         # do patching and embedding
         x_enc = x_enc.permute(0, 2, 1)
@@ -337,13 +343,13 @@ class Model(nn.Module):
             return dec_out[:, -self.pred_len:, :]  # [B, L, D]
         if self.task_name == 'imputation_forecast':
             dec_out = self.imputation_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast, mask)
-            dec_out[:, :self.seq_len, -self.c_out:] = mask[:, :, -self.c_out:] * x_enc[:, :self.seq_len, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out[:, :self.seq_len,
-                                                                                                                                                          -self.c_out:]
-
+            if self.output_ori:
+                dec_out[:, :self.seq_len, -self.c_out:] = mask[:, :, -self.c_out:] * x_enc[:, :, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out[:, :, -self.c_out:]
             return dec_out
         if self.task_name == 'imputation':
             dec_out = self.imputation(x_enc, x_mark_enc, x_dec, x_mark_dec, mask)
-            dec_out = mask[:, :, -self.c_out:] * x_enc[:, :, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out[:, :, -self.c_out:]
+            if self.output_ori:
+                dec_out = mask[:, :, -self.c_out:] * x_enc[:, :, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out[:, :, -self.c_out:]
             return dec_out  # [B, L, D]
         if self.task_name == 'anomaly_detection':
             dec_out = self.anomaly_detection(x_enc)

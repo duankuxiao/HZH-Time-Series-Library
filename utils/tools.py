@@ -175,6 +175,7 @@ def visual(true, preds=None, name='./pic/test.pdf'):
     plt.legend()
     plt.savefig(name, bbox_inches='tight')
 
+
 def heatmap(data,output_file):
     data_coor = data.corr()
     mask = np.zeros_like(data_coor, dtype=bool)
@@ -190,6 +191,9 @@ def heatmap(data,output_file):
     plt.yticks(fontsize=8)
     plt.show()
 
+
+def cal_accuracy(y_pred, y_true):
+    return np.mean(y_pred == y_true)
 
 if __name__ == '__main__':
     path = r'D:\Time-LLM-main\results\noforecast\1_DLinear_aircon_ftM_sl6_ll6_pl36_sd20_td5_dm32_nh8_el4_dl4_df64_fc3_dropout0.1_ebtimeF_test_0_scale\checkpoints\configs.pkl'

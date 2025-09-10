@@ -411,5 +411,4 @@ def interpolate_nan_matrix(matrix, method='linear', axis=0, order=None):
     df_interpolated = df.interpolate(method='linear').fillna(method='bfill').fillna(method='ffill')
     # 将 DataFrame 转换回 ndarray
     interpolated_matrix = df_interpolated.to_numpy()
-
     return interpolated_matrix

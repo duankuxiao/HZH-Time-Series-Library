@@ -830,7 +830,7 @@ def block_missing(
     return corrupted_X
 
 
-def mask_custom(X_ori,mask_rate=0.1,method='mcar',f_dim=3,cycle=20,pos=10,scale=3,seq_len=5,block_width=3, block_len=3,seed=4213,targets_only=False):
+def mask_custom(X_ori, mask_rate=0.1,method='mcar',f_dim=3,cycle=20,pos=10,scale=3,seq_len=5,block_width=3, block_len=3,seed=4213,targets_only=False):
     # grind the dataset with MCAR pattern, 10% missing probability, and using 0 to fill missing values
     if method == 'mcar':
         # X_with_mask_data = mcar(X_ori, p=mask_rate)
@@ -838,12 +838,11 @@ def mask_custom(X_ori,mask_rate=0.1,method='mcar',f_dim=3,cycle=20,pos=10,scale=
     elif method == 'mar':
         # grind the dataset with MAR pattern
         # X_with_mask_data = mar_logistic(X_ori[:, 0, :], obs_rate=mask_rate, missing_rate=mask_rate)
-        X_with_mask_data = generate_mar_mask(X_ori,obs_rate=0.5,missing_rate=mask_rate,f_dim=f_dim,seed=seed,tail_targets_only=targets_only)
+        X_with_mask_data = generate_mar_mask(X_ori,obs_rate=0.5,missing_rate=mask_rate,f_dim=f_dim,seed=seed)
     elif method == 'rdo':
         # grind the dataset with randomly drop observations pattern
         # X_with_mask_data = rdo(X_ori, p=mask_rate)
         X_with_mask_data = generate_rdo_mask(X_ori, row_drop_rate=mask_rate, f_dim=f_dim, seed=seed, tail_targets_only=targets_only)
-
 
     elif method == 'mnar':
         # grind the dataset with MNAR pattern
@@ -860,3 +859,74 @@ def mask_custom(X_ori,mask_rate=0.1,method='mcar',f_dim=3,cycle=20,pos=10,scale=
     mask = (np.isnan(X_with_mask_data) ^ np.isnan(X_ori)) ^ 1
     inp = X_ori.masked_fill(mask == 0, 0)
     return X_with_mask_data, mask, inp
+
+@torch.no_grad()
+def masked_standardize_3d(
+    x_enc: torch.Tensor,          # [B,T,C]
+    mask: torch.Tensor,           # [B,T,1] 或 [B,T,C]，1=观测，0=缺失
+    eps: float = 1e-5,            # 数值稳定项
+    fill_missing_zero: bool = True,  # 归一化后是否把缺失位置置 0
+):
+    """
+    返回:
+      x_norm: [B,T,C]  归一化后的输入
+      means : [B,1,C]  每样本每特征的时间均值
+      stdev : [B,1,C]  每样本每特征的时间标准差
+    """
+    assert x_enc.ndim == 3 and mask.ndim == 3, "x_enc, mask 必须是 [B,T,C] 与 [B,T,1/ C]"
+    B, T, C = x_enc.shape
+
+    # 将 mask 扩展到与 x_enc 同维度
+    m = mask
+    if m.shape[-1] == 1 and C != 1:
+        m = m.expand(-1, -1, C)
+    elif m.shape[-1] != C:
+        raise ValueError(f"mask 最后一维需为 1 或 {C}，当前 {m.shape[-1]}")
+
+    x = x_enc.float()
+    m = m.to(dtype=x.dtype)
+
+    # --- 统计（时间维度）---
+    num   = (x * m).sum(dim=1)          # [B,C]
+    denom = m.sum(dim=1)                # [B,C]
+    valid = denom > 0                   # 该样本-特征是否有观测
+
+    # 均值：对 valid 做除法，对无观测回退到全局均值
+    means_bt = torch.zeros_like(num)
+    means_bt[valid] = num[valid] / denom[valid].clamp_min(1.0)
+
+    if not valid.all():
+        # 全局（跨 batch/时间）的掩码均值作为回退
+        g_num   = num.sum(dim=0)                        # [C]
+        g_denom = denom.sum(dim=0).clamp_min(1.0)       # [C]
+        g_mean  = g_num / g_denom                       # [C]
+        means_bt[~valid] = g_mean.unsqueeze(0).expand_as(means_bt)[~valid]
+
+    means = means_bt.unsqueeze(1).detach()  # [B,1,C]
+
+    # 去中心化
+    x_center = x - means
+
+    # 方差（用掩码）：E[(x-μ)^2]，对无观测回退到全局方差
+    sq_num = ((x_center * x_center) * m).sum(dim=1)     # [B,C]
+    var_bt = torch.zeros_like(sq_num)
+    var_bt[valid] = sq_num[valid] / denom[valid].clamp_min(1.0)
+
+    if not valid.all():
+        g_sq_num = sq_num.sum(dim=0)                    # [C]
+        g_var    = g_sq_num / g_denom                   # [C]（用上面 g_denom）
+        var_bt[~valid] = g_var.unsqueeze(0).expand_as(var_bt)[~valid]
+
+    stdev = torch.sqrt(var_bt + eps).unsqueeze(1).detach()  # [B,1,C]
+
+    # 归一化
+    x_norm = x_center / stdev
+
+    # 可选：把缺失位置置 0（常见做法，避免模型“看到”无意义值）
+    if fill_missing_zero:
+        x_norm = x_norm.masked_fill(m == 0, 0.0)
+
+    # 恢复到原 dtype
+    x_norm = x_norm.to(dtype=x_enc.dtype)
+
+    return x_norm, means, stdev

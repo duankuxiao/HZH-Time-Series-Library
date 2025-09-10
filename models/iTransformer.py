@@ -22,6 +22,7 @@ class Model(nn.Module):
         self.output_attention = configs.output_attention
         self.likelihood = configs.likelihood
         self.use_norm = configs.use_norm
+        self.output_ori = configs.output_ori
 
         # Embedding
         self.enc_embedding = DataEmbedding_inverted(configs.seq_len, configs.d_model, configs.embed, configs.freq,
@@ -213,12 +214,13 @@ class Model(nn.Module):
             return dec_out[:, -self.pred_len:, :]  # [B, L, D]
         if self.task_name == 'imputation_forecast':
             dec_out = self.imputation_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, x_forecast)
-            dec_out[:, :self.seq_len, -self.c_out:] = mask[:, :, -self.c_out:] * x_enc[:, :self.seq_len, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out[:, :self.seq_len, -self.c_out:]
+            if self.output_ori:
+                dec_out[:, :self.seq_len, -self.c_out:] = mask[:, :, -self.c_out:] * x_enc[:, :self.seq_len, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out[:, :self.seq_len, -self.c_out:]
             return dec_out  # [B, L, D]
-
         if self.task_name == 'imputation':
             dec_out = self.imputation(x_enc, x_mark_enc, x_dec, x_mark_dec, mask)
-            dec_out = mask * x_enc + (1 - mask) * dec_out
+            if self.output_ori:
+                dec_out = mask * x_enc + (1 - mask) * dec_out
             return dec_out[:, :, -self.c_out:]  # [B, L, D]
         if self.task_name == 'anomaly_detection':
             dec_out = self.anomaly_detection(x_enc)

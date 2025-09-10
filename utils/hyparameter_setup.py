@@ -29,8 +29,8 @@ def model_hyparameter_setup(args):
         args.llm_model = 'GPT2'  # defalut GPT2  BERT LLAMA1b LLAMA3b
         args.d_model = 32
         args.d_ff = 64
-        args.e_layers = 4  # 2
-        args.d_layers = 4  # 2
+        args.e_layers = 2  # 2
+        args.d_layers = 2  # 2
         args.llm_layers = 6
 
     if 'RNN' in args.model:
@@ -87,6 +87,8 @@ def model_hyparameter_setup(args):
         args.llm_layers = 16
 
     if args.model == 'PatchTST':  # default
+        args.use_norm = True
+
         args.dropout = 0.2
         args.head_dropout = 0
         args.d_model = 256  # 128 for large dataset  16
@@ -98,6 +100,7 @@ def model_hyparameter_setup(args):
             args.d_ff = 128
 
     if args.model == 'TimesNet':
+        args.use_norm = True
         if args.task_name == 'imputation':
             args.learning_rate = 0.001  # 0.0001 for forecast   0.001 for imputation
             args.d_model = 64  # min{max[2**log(seq_dim),32],512} for forecast   min{max[2**log(seq_dim),64],128} for imputation

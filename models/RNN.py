@@ -20,6 +20,8 @@ class Model(nn.Module):
         self.use_forecast = configs.use_forecast
         self.likelihood = configs.likelihood
         self.use_norm = configs.use_norm
+        self.output_ori = configs.output_ori
+
         if self.use_forecast:
             self.forecast_projection = nn.Linear(configs.forecast_dim, configs.enc_in)
         if configs.rnn_model == 'GRU':
@@ -136,11 +138,13 @@ class Model(nn.Module):
             return dec_out[:, -self.pred_len:, :]  # [B, L, D]
         if self.task_name == 'imputation_forecast':
             dec_out = self.forecast(x_enc,x_forecast)
-            dec_out[:, :self.seq_len, -self.c_out:] = mask[:, :, -self.c_out:] * x_enc[:, :self.seq_len, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out[:, :self.seq_len, -self.c_out:]
+            if self.output_ori:
+                dec_out[:, :self.seq_len, -self.c_out:] = mask[:, :, -self.c_out:] * x_enc[:, :self.seq_len, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out[:, :self.seq_len, -self.c_out:]
             return dec_out  # [B, L, D]
         if self.task_name == 'imputation':
             dec_out = self.imputation(x_enc)
-            dec_out = mask[:, :, -self.c_out:] * x_enc[:, :, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out
+            if self.output_ori:
+                dec_out = mask[:, :, -self.c_out:] * x_enc[:, :, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out
             return dec_out  # [B, L, D]
         if self.task_name == 'anomaly_detection':
             dec_out = self.anomaly_detection(x_enc)

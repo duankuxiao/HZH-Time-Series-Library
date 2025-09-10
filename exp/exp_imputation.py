@@ -29,6 +29,7 @@ class Exp_Imputation(Exp_Basic):
         self.loss = args.loss
         if self.args.loss_method == "adaptive":
             self.log_sigma_missing = nn.Parameter(torch.zeros(1))
+            self.log_sigma_missing_2 = nn.Parameter(torch.zeros(1))
             self.log_sigma_ori = nn.Parameter(torch.zeros(1))
 
 
@@ -72,18 +73,44 @@ class Exp_Imputation(Exp_Basic):
 
     def _loss_function(self, criterion, outputs, true, mask):
         mask_ = mask ^ 1
-        if isinstance(outputs, tuple):
-            output1 = outputs[0]
-            output2 = outputs[1]
-            if self.loss_method == "fix":
-                loss = criterion(output2, true, mask_) + criterion(output1, true, mask_)
-            elif self.loss_method == "adaptive":
-                missing_loss = criterion(output1, true, mask_)
-                ori_loss = criterion(output2, true, mask_)
-                loss = 0.5 * (torch.exp(-self.log_sigma_missing.to(true.device)) * missing_loss + torch.exp(-self.log_sigma_ori.to(true.device)) * ori_loss +
-                              self.log_sigma_missing.to(true.device) + self.log_sigma_ori.to(true.device))
+        if self.args.output_ori:
+            if isinstance(outputs, tuple):
+                output1 = outputs[0]
+                output2 = outputs[1]
+                if self.loss_method == "fix":
+                    loss = 10 * (criterion(output1, true, mask_) + criterion(output2, true, mask_)) + (criterion(output1, true, mask) + criterion(output2, true, mask))
+                elif self.loss_method == "adaptive":
+                    missing_loss = criterion(output1, true, mask_)
+                    missing_loss_2 = criterion(output2, true, mask_)
+                    ori_loss = criterion(output2, true, mask)
+                    loss = 0.5 * (torch.exp(-self.log_sigma_missing.to(true.device)) * missing_loss + torch.exp(-self.log_sigma_missing_2.to(true.device)) * missing_loss_2 +
+                                  torch.exp(-self.log_sigma_ori.to(true.device)) * ori_loss +
+                                  self.log_sigma_missing_2.to(true.device) + self.log_sigma_missing.to(true.device) + self.log_sigma_ori.to(true.device))
+            else:
+                if self.loss_method == "fix":
+                    loss = criterion(outputs, true, mask) + 10 * criterion(outputs, true, mask_)
+                elif self.loss_method == "adaptive":
+                    missing_loss = criterion(outputs, true, mask_)
+                    ori_loss = criterion(outputs, true, mask)
+                    loss = 0.5 * (torch.exp(-self.log_sigma_missing.to(true.device)) * missing_loss + torch.exp(-self.log_sigma_ori.to(true.device)) * ori_loss +
+                                  self.log_sigma_missing.to(true.device) + self.log_sigma_ori.to(true.device))
+                else:
+                    loss = criterion(outputs, true, mask_)
+
         else:
-            loss = criterion(outputs, true, mask_)
+            if isinstance(outputs, tuple):
+                output1 = outputs[0]
+                output2 = outputs[1]
+                if self.loss_method == "fix":
+                    loss = criterion(output2, true, mask_) + criterion(output1, true, mask_)
+                elif self.loss_method == "adaptive":
+                    missing_loss = criterion(output1, true, mask_)
+                    ori_loss = criterion(output2, true, mask_)
+                    loss = 0.5 * (torch.exp(-self.log_sigma_missing.to(true.device)) * missing_loss + torch.exp(-self.log_sigma_ori.to(true.device)) * ori_loss +
+                                  self.log_sigma_missing.to(true.device) + self.log_sigma_ori.to(true.device))
+            else:
+                loss = criterion(outputs, true, mask_)
+
         return loss
 
     def vali(self, vali_data, vali_loader, criterion):
@@ -91,7 +118,7 @@ class Exp_Imputation(Exp_Basic):
         self.model.eval()
         with torch.no_grad():
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark, x_forecast) in enumerate(vali_loader):
-                f_dim = self.f_dim if self.args.mask_target_only else self.args.enc_in
+                f_dim = self.args.c_out
                 _, mask, inp = mask_custom(batch_x, mask_rate=self.args.mask_rate, method=self.args.mask_method,f_dim=f_dim,seed=self.args.fix_seed,targets_only=self.args.mask_target_only)
 
                 inp = inp.float().to(self.device)
@@ -171,7 +198,7 @@ class Exp_Imputation(Exp_Basic):
                 batch_x_mark = batch_x_mark.float()
 
                 # imputation input
-                f_dim = self.f_dim if self.args.mask_target_only else self.args.enc_in
+                f_dim = self.args.c_out
                 _, mask, inp = mask_custom(batch_x, mask_rate=self.args.mask_rate, method=self.args.mask_method, f_dim=f_dim, seed=self.args.fix_seed,targets_only=self.args.mask_target_only)
 
                 if self.args.accelerate:
@@ -182,6 +209,8 @@ class Exp_Imputation(Exp_Basic):
                     batch_x_mark = batch_x_mark.to(self.device)
                     inp = inp.to(self.device)
                     mask = mask.to(self.device)
+                    if torch.isnan(inp).any():
+                        print(inp)
 
                     # encoder - decoder
                     if self.args.output_attention:
@@ -198,7 +227,7 @@ class Exp_Imputation(Exp_Basic):
                         outputs = outputs[:, :self.args.seq_len, -self.f_dim:]
                     batch_x = batch_x[:, :self.args.seq_len, -self.f_dim:]
                     mask = mask[:, :self.args.seq_len, -self.f_dim:]
-                    loss = self._loss_function(criterion,outputs, batch_x, mask)
+                    loss = self._loss_function(criterion, outputs, batch_x, mask)
                     train_loss.append(loss.item())
 
                 if self.args.accelerate:
@@ -315,7 +344,7 @@ class Exp_Imputation(Exp_Basic):
         with torch.no_grad():
             for i, (batch_x, batch_y, batch_x_mark, batch_y_mark, x_forecast) in enumerate(test_loader):
 
-                f_dim = self.f_dim if self.args.mask_target_only else self.args.enc_in
+                f_dim = self.args.c_out
                 _, mask, inp = mask_custom(batch_x, mask_rate=self.args.mask_rate, method=self.args.mask_method, f_dim=f_dim, seed=self.args.fix_seed,targets_only=self.args.mask_target_only)
 
                 batch_x_mark = batch_x_mark.float().to(self.device)
@@ -377,7 +406,7 @@ class Exp_Imputation(Exp_Basic):
 
         [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(imputation_trues.flatten(), imputations.flatten())
         print('mae:{}, r2:{}, dtw:{}'.format(mae, r2, dtw))
-        f = open(os.path.join('./results', "result_long_term_forecast.txt"), 'a')
+        f = open(os.path.join('./results', "result_imputation.txt"), 'a')
         f.write(setting + "  \n")
         f.write('mae:{}, r2:{}, dtw:{}'.format(mae, r2, dtw))
         f.write('\n')
