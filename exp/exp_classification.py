@@ -27,9 +27,9 @@ class Exp_Classification(Exp_Basic):
         # model input depends on data
         train_data, train_loader = self._get_data(flag='train')
         test_data, test_loader = self._get_data(flag='test')
-        self.args.seq_len = max(train_data.max_seq_len, test_data.max_seq_len)
+        self.args.seq_len = train_data.seq_len
         self.args.pred_len = 0
-        self.args.enc_in = train_data.feature_df.shape[1]
+        self.args.enc_in = train_data.feature_dim
         self.args.num_class = len(train_data.class_names)
 
         model = self.model_dict[self.args.model].Model(self.args).float()
@@ -77,7 +77,7 @@ class Exp_Classification(Exp_Basic):
                 # encoder - decoder
                 outputs = self.model(batch_x, padding_mask, None, None)
                 pred = outputs.detach()
-                loss = criterion(pred, label.long().squeeze())
+                loss = criterion(pred, label.long())
                 total_loss.append(loss.item())
 
                 preds.append(outputs.detach())
@@ -122,7 +122,7 @@ class Exp_Classification(Exp_Basic):
             self.accelerator.print(f"Process {self.accelerator.process_index} is using device {self.accelerator.device}")
 
         # Initialize a dictionary to store loss values
-        loss_records = {"epoch": [], "time": [],"train_loss": [], "vali_loss": []}
+        loss_records = {"epoch": [], "time": [],"train_loss": [], "vali_loss": [], "accuracy": []}
 
         for epoch in range(self.args.train_epochs):
             iter_count = 0
@@ -155,18 +155,20 @@ class Exp_Classification(Exp_Basic):
                     model_optim.step()
 
             train_loss = np.average(train_loss)
-            vali_loss = self.vali(vali_data, vali_loader, criterion)
+            vali_loss,accuracy = self.vali(vali_data, vali_loader, criterion)
 
             # Record loss values
             loss_records["epoch"].append(epoch + 1)
             loss_records["time"].append(round((time.time() - time_start)/60,4))
             loss_records["train_loss"].append(train_loss)
             loss_records["vali_loss"].append(vali_loss)
+            loss_records["accuracy"].append(accuracy)
+
 
             # test_loss = self.vali(test_data, test_loader, criterion)
             cost_time = round((time.time() - epoch_time) / 60, 2)
             print(" Epoch: {} cost time: {} min".format(epoch + 1, cost_time))
-            print("☆☆☆☆☆Train Loss: {0:.7f} Vali Loss: {1:.7f}".format(train_loss, vali_loss))
+            print("☆☆☆☆☆Train Loss: {0:.7f} Vali Loss: {1:.7f}, accuracy: {1:.4f}".format(train_loss, vali_loss,accuracy))
             early_stopping(vali_loss, self.model, path)
 
             if early_stopping.early_stop:
@@ -248,7 +250,6 @@ class Exp_Classification(Exp_Basic):
 
         trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
 
-        [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(trues.flatten(), preds.flatten())
         print('accuracy:{}'.format(accuracy))
         f = open(os.path.join('./results', "result_classification.txt"), 'a')
         f.write(setting + "  \n")
@@ -256,15 +257,14 @@ class Exp_Classification(Exp_Basic):
         f.write('\n')
         f.write('\n')
         f.close()
-        np.save(os.path.join(folder_path, 'metrics_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), np.array([mae, mse, rmse, r2, corr]))
         np.save(os.path.join(folder_path, 'pred_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), preds)
         np.save(os.path.join(folder_path, 'true_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), trues)
 
-        if self.args.features == 'M':
-            pred_res,metrics_df = self.res_evaluation_multi_target(trues, preds, trainable_params, folder_path)
-        else:
-            pred_res,metrics_df = self.res_evaluation(trues,preds,trainable_params, folder_path)
-        return pred_res,metrics_df
+        # if self.args.features == 'M':
+        #     pred_res,metrics_df = self.res_evaluation_multi_target(trues, preds, trainable_params, folder_path)
+        # else:
+        #     pred_res,metrics_df = self.res_evaluation(trues,preds,trainable_params, folder_path)
+        # return pred_res,metrics_df
 
     def res_evaluation(self,true, pred,trainable_params, path):
         stride = self.args.pred_len

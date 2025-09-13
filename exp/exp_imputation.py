@@ -439,7 +439,7 @@ class Exp_Imputation(Exp_Basic):
 
         # Initialize metrics dictionaries
         metrics = {key: [] for key in ["trainable_params","mse", "rmse", "nrmse", "mae", "mape", "rae", "r2", "corr","mse_inter", "rmse_inter", "nrmse_inter", "mae_inter", "mape_inter", "rae_inter", "r2_inter", "corr_inter"]}
-        imputation_metrics = {key: [] for key in ["trainable_params","mse_imputation", "rmse_imputation", "mae_imputation", "mre_imputation","mse_imputation_inter", "rmse_imputation_inter", "mae_imputation_inter", "mre_imputation_inter"]}
+        imputation_metrics = {key: [] for key in ["trainable_params","mse_imputation", "rmse_imputation", "mae_imputation", "mre_imputation","mse_imputation_inter", "rmse_imputation_inter", "mae_imputation_inter","mre_imputation_inter"]}
 
         # Calculate metrics for each target
         for idx, target in enumerate(self.args.target):

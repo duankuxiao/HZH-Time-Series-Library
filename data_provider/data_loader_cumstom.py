@@ -187,6 +187,53 @@ class Dataset_cumstom(Dataset):
         self.data_forecast = data[border1:border2, :self.forecast_dim]
         self.data_stamp = data_stamp
 
+class Dataset_classification(Dataset):
+    def __init__(self,configs, root_path, flag='train', size=None,
+                 features='S', data_path='PV_power.csv',
+                 target=['PV'], scale=True, timeenc=0, freq='h', percent=100,seasonal_patterns=None):
+
+        self.num_train = configs.num_train
+        self.num_test = configs.num_test
+        self.task_name = configs.task_name
+        self.source_data_path = configs.source_data_path
+        self.forecast_dim = configs.forecast_dim
+        self.feature_cols = configs.feature_cols
+        self.c_out = configs.c_out
+        if size == None:
+            self.seq_len = 24 * 3
+            self.label_len = 24
+            self.pred_len = 24
+        else:
+            self.seq_len = size[0]
+            self.label_len = size[1]
+            self.pred_len = size[2]
+        # init
+        assert flag in ['train', 'test', 'val']
+        type_map = {'train': 0, 'val': 1, 'test': 2}
+        self.set_type = type_map[flag]
+        self.percent = percent
+        self.__read_data__()
+        self.seq_len = self.data.shape[1]
+        self.feature_dim = self.data.shape[2]
+        self.class_names = np.unique(self.labels)
+
+
+    def __getitem__(self, index):
+        mark = np.zeros_like(self.data)
+        return self.data[index,:,:],self.labels[index], mark[index,:,:]
+
+    def __len__(self):
+        return len(self.data)
+
+    def __read_data__(self):
+        npz = np.load(r"D:\Time-LLM-main\dataset\dataset_splits.npz")
+        if self.set_type == 'train':
+            self.data = npz["train_data"]
+            self.labels = npz["train_labels"]
+        else:
+            self.data = npz["test_data"]
+            self.labels = npz["test_labels"]
+
 
 if __name__ == '__main__':
     from utils.tools import heatmap
@@ -200,45 +247,15 @@ if __name__ == '__main__':
     # data_path = 'pv'
     # heatmap(data,data_path)
 
-    folder = r'D:\Time-LLM-main\dataset\electricity'
-    # data_file = 'kyushu.csv'
-    # data = pd.read_csv(os.path.join(folder, data_file), index_col=0)
-    # data_path = 'kyushu_electricity'
-    # heatmap(data, data_path)
+    import numpy as np, os
 
-    # data_file = 'spot_index.csv'
-    # data = pd.read_csv(os.path.join(folder, data_file))
-    # df_repeated = data.loc[data.index.repeat(24)].reset_index(drop=True)
-    # df_repeated.to_csv(os.path.join(folder, data_file[:-4] + '_24h.csv'), index=False)
-    # print(df_repeated)
-
-    # data_file = 'intraday_30min.csv'
-    # df = pd.read_csv(os.path.join(folder, data_file))
-    # data = df.iloc[::2, :]
-    # print(data)
-    # data.to_csv(os.path.join(folder, data_file[:-4] + '_1h.csv'))
-
-    folder = r'D:\Time-LLM-main\dataset\electricity\hokkaido'
-    file_names = [f'sup_dem_results_{year}_{quarter}q.csv' for year in range(2019, 2024) for quarter in range(1, 5)]
-    file_names = file_names[3:-1]  # 限制到 '23_3q'
-
-
-    # 读取并合并所有文件
-    dfs = []
-    for file_name in file_names:
-        file_path = os.path.join(folder, file_name)
-        # # 读取txt文件为DataFrame，假设是逗号分隔
-        # df = pd.read_csv(os.path.join(folder,file_name[:-4]+'.txt'), delimiter=',', encoding='utf-8')
-        # output_csv_path = file_path
-        # # 将DataFrame保存为csv文件
-        # df.to_csv(output_csv_path, index=False, encoding='utf-8')
-
-        if os.path.exists(file_path):  # 检查文件是否存在
-            df = pd.read_csv(file_path,encoding='SHIFT-JIS').iloc[3:,:]
-            dfs.append(df)
-
-    # 合并所有DataFrame
-    combined_df = pd.concat(dfs, ignore_index=True)
-
-    # 保存为一个新的csv文件
-    combined_df.to_csv(os.path.join(folder,'hokkaido.csv'), index=False, encoding='SHIFT-JIS')
+    npz = np.load(r"D:\Time-LLM-main\dataset\dataset_splits.npz")
+    train_data = npz["train_data"]
+    train_labels = npz["train_labels"]
+    test_data = npz["test_data"]
+    test_labels = npz["test_labels"]
+    print(train_data.shape)
+    print(train_data)
+    print(train_labels.shape)
+    print(train_labels)
+    print(len(np.unique(train_labels)))

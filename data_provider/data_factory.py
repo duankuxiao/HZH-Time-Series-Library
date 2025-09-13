@@ -1,6 +1,6 @@
 from data_provider.data_loader import Dataset_ETT_hour, Dataset_ETT_minute, Dataset_Custom, Dataset_M4
 from torch.utils.data import DataLoader
-from data_provider.data_loader_cumstom import Dataset_cumstom
+from data_provider.data_loader_cumstom import Dataset_cumstom, Dataset_classification
 from data_provider.data_loader_LLM import Dataset_cumstom_llm
 from data_provider.uea import collate_fn
 
@@ -34,8 +34,8 @@ def data_provider(args, flag):
 
     if args.task_name == 'classification':
         drop_last = False
-        data_set = Data(
-            args=args,
+        data_set = Dataset_classification(
+            configs=args,
             root_path=args.root_path,
             flag=flag,
         )
@@ -46,7 +46,6 @@ def data_provider(args, flag):
             shuffle=shuffle_flag,
             num_workers=args.num_workers,
             drop_last=drop_last,
-            collate_fn=lambda x: collate_fn(x, max_len=args.seq_len)
         )
         return data_set, data_loader
 

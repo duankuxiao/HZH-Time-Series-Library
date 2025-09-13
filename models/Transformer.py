@@ -183,7 +183,7 @@ class Model(nn.Module):
         # Output
         output = self.act(enc_out)  # the output transformer encoder/decoder embeddings don't include non-linearity
         output = self.dropout(output)
-        output = output * x_mark_enc.unsqueeze(-1)  # zero-out padding embeddings
+        # output = output * x_mark_enc.unsqueeze(-1)  # zero-out padding embeddings
         output = output.reshape(output.shape[0], -1)  # (batch_size, seq_length * d_model)
         output = self.projection(output)  # (batch_size, num_classes)
         return output

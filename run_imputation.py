@@ -83,41 +83,58 @@ if __name__ == '__main__':
     from copy import deepcopy
     from utils.hyparameter_setup import model_hyparameter_setup
 
-    for mask_rate in [0.1, 0.2, 0.3, 0.4, 0.5,0.6,0.7,0.8,0.9]:
-    # for mask_rate in [0.3]:
-
-        args = deepcopy(default_args)
-
-        fix_seed = args.fix_seed
-        random.seed(fix_seed)
-        torch.manual_seed(fix_seed)
-        np.random.seed(fix_seed)
-
-        args.mask_rate = mask_rate
-        args.mask_method = 'rdo'
+    # for mask_rate in [0.1, 0.2, 0.3, 0.4, 0.5,0.6,0.7,0.8,0.9]:
+    for mask_rate in [0.5]:
         all_results = []
-        for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer','PatchTST', 'TimesNet','LLMformer']:
-        # for model in ['TimesNet']:
 
-            args.model_id = 'test10'
-            args.model = model
-            args.loss_method = "fix"  # missing  fix  adaptive
-            args.output_ori = True
-            args.loss = 'MAE'
-            # args.data_path = '{}.csv'.format(args.model_id)
-            # args.source_data_path = '{}.csv'.format(args.model_id)
-            args.task_name = 'imputation'
-            args.mask_target_only = False
-            args.pred_len = 0
-            args.label_len = 0
-            args = model_hyparameter_setup(args)
-            # args.patience = 3
+        for fix_seed in [1,12,123,1234, 12345, 123456, 1234567,12345678,123456789,1234567890]:
 
-            res_df, metrics_df, imputation_metrics_df = main(args)
-            imputation_metrics_df.insert(0, 'model', model)
-            imputation_metrics_df.insert(1, 'mask_rate', mask_rate)
+            args = deepcopy(default_args)
+            if mask_rate == 0.8 or mask_rate == 0.6:
+                args.fix_seed = 12
+            if mask_rate == 0.7:
+                args.fix_seed = 123456
+            if mask_rate == 0.5:
+                args.fix_seed = 1234
 
-            all_results.append(imputation_metrics_df.iloc[-1:])
+            args.patience = 3
+            args.fix_seed = fix_seed
+            random.seed(fix_seed)
+            torch.manual_seed(fix_seed)
+            np.random.seed(fix_seed)
 
-            final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
-            final_metrics_df.to_csv('./results/{}_all_models_comparison_mr{}.csv'.format(args.model_id, mask_rate))
+
+            args.mask_rate = mask_rate
+            args.mask_method = 'rdo'
+            # for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer','PatchTST', 'TimesNet','LLMformer']:
+            for model in ['RNN']:
+
+                args.model_id = '{}'.format(fix_seed)
+                args.model = model
+                args.loss_method = "fix"  # missing  fix  adaptive
+                args.output_ori = True
+                args.loss = 'MAE'
+                # args.data_path = '{}.csv'.format(args.model_id)
+                # args.source_data_path = '{}.csv'.format(args.model_id)
+                args.task_name = 'imputation'
+                args.mask_target_only = False
+                args.pred_len = 0
+                args.label_len = 0
+                args = model_hyparameter_setup(args)
+                # args.patience = 3
+
+                res_df, metrics_df, imputation_metrics_df = main(args)
+                imputation_metrics_df.insert(0, 'model', model)
+                imputation_metrics_df.insert(1, 'fix_seed', fix_seed)
+
+                all_results.append(imputation_metrics_df.iloc[-1:])
+
+                final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
+                # final_metrics_df.to_csv('./results/{}_all_models_comparison_mr{}.csv'.format(args.model_id, mask_rate))
+
+                avg_row = final_metrics_df.mean(numeric_only=True)
+                avg_row.name = "average"  # 新行的索引，可以是字符串、时间戳等
+                # 将这一行追加到原 DataFrame 的末尾
+                df_with_avg = pd.concat([final_metrics_df, pd.DataFrame([avg_row])])
+                df_with_avg.to_csv('./results/seed_all_models_comparison_mr{}.csv'.format(mask_rate))
+

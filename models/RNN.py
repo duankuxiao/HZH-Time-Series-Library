@@ -53,7 +53,7 @@ class Model(nn.Module):
         if self.task_name == 'classification':
             self.act = F.gelu
             self.dropout = nn.Dropout(configs.dropout)
-            self.output_projection = nn.Linear(configs.enc_in * configs.seq_len, configs.num_class)
+            self.output_projection = nn.Linear(configs.rnn_dim * configs.seq_len, configs.num_class)
 
     def encoder(self, x_enc,x_forecast=None):
         if self.use_norm:
@@ -125,11 +125,13 @@ class Model(nn.Module):
         return self.encoder(x_enc)
 
     def classification(self, x_enc):
-        enc_out = self.encoder(x_enc)
+        enc_out,_ = self.rnn_layer(x_enc)
         # Output
-        # (batch_size, seq_length * d_model)
-        output = enc_out.reshape(enc_out.shape[0], -1)
-        output = self.projection(output)  # (batch_size, num_classes)
+        # Output
+        output = self.act(enc_out)  # the output transformer encoder/decoder embeddings don't include non-linearity
+        output = self.dropout(output)
+        output = output.reshape(output.shape[0], -1)  # (batch_size, seq_length * d_model)
+        output = self.output_projection(output)  # (batch_size, num_classes)
         return output
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast=None, mask=None):
