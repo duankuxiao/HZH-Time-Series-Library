@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, mean_absolute_percentage_error
 from utils.interval_forecasting_tools import gaussian_nll, crps_score, picp, piw, pinaw
+from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
 
 
 def empirical_correlation_coefficient(y_true, y_pred):
@@ -41,6 +42,13 @@ def results_evaluation(y_test_seq, y_pred_seq):
     corr = empirical_correlation_coefficient(y_true=y_test_seq,y_pred=y_pred_seq)
     return [mse, rmse,nrmse, mae,mape,rae, r2,corr]
 
+
+def results_evaluation_classification(y_test_seq, y_pred_seq):
+    acc = accuracy_score(y_true=y_test_seq, y_pred=y_pred_seq)
+    f1 = f1_score(y_true=y_test_seq, y_pred=y_pred_seq,average='micro')
+    precision = precision_score(y_true=y_test_seq, y_pred=y_pred_seq,average='micro')
+    recall = recall_score(y_true=y_test_seq, y_pred=y_pred_seq,average='micro')
+    return acc, precision, f1, recall
 
 
 

@@ -7,8 +7,10 @@ def model_hyparameter_setup(args):
     args.use_norm = True
 
     # default
-    if args.task_name == 'imputation':
+    if args.task_name == 'imputation' or args.task_name == 'classification':
         args.learning_rate = 0.001
+        args.patience = 10
+        args.train_epochs = 100
     else:
         args.learning_rate = 0.0001
     args.d_model = 512
@@ -17,6 +19,11 @@ def model_hyparameter_setup(args):
     args.d_layers = 1
     args.factor = 3
     args.moving_avg = 25
+    if args.task_name == 'classification':
+        args.e_layers = 4
+        args.d_model = 256  # 128 default
+        args.d_ff = 512  # 256 default
+        args.top_k = 3
 
     if args.model == 'LLMformer':
         # if args.task_name == 'imputation':
@@ -37,6 +44,10 @@ def model_hyparameter_setup(args):
         args.use_norm = False
         args.rnn_dim = 256
         args.rnn_layers = 2
+        if args.task_name == 'classification':
+            args.rnn_dim = 64
+            args.rnn_layers = 3
+
 
     if args.model == 'Transformer':
         args.use_norm = False
@@ -46,6 +57,7 @@ def model_hyparameter_setup(args):
         if args.task_name == 'imputation':
             args.d_model = 128
             args.d_ff = 128
+
 
     if args.model == 'DLinear':
         args.use_norm = False
@@ -57,6 +69,7 @@ def model_hyparameter_setup(args):
         if args.task_name == 'imputation':
             args.d_model = 128
             args.d_ff = 128
+
 
     if args.model == 'Autoformer':
         if args.task_name == 'imputation':
@@ -98,17 +111,27 @@ def model_hyparameter_setup(args):
         if args.task_name == 'imputation':
             args.d_model = 128
             args.d_ff = 128
+        elif args.task_name == 'classification':
+            args.e_layers = 3
+            args.d_model = 128
+            args.d_ff = 256
+            args.top_k = 3
 
     if args.model == 'TimesNet':
+        args.e_layers = 2
+
         args.use_norm = True
         if args.task_name == 'imputation':
-            args.learning_rate = 0.001  # 0.0001 for forecast   0.001 for imputation
             args.d_model = 64  # min{max[2**log(seq_dim),32],512} for forecast   min{max[2**log(seq_dim),64],128} for imputation
             args.d_ff = 64
             args.top_k = 3  # 5 for forecast   3 for imputation, classification, anomaly detection
-
+        elif args.task_name == 'classification':
+            args.d_model = 64
+            args.d_ff = 128  # 256
+            args.top_k = 3
+            args.num_kernels = 4
+            args.train_epochs = 30
         else:
-            args.learning_rate = 0.0001  # 0.0001 for forecast   0.001 for imputation
             args.d_model = 32  # min{max[2**log(seq_dim),32],512} for forecast   min{max[2**log(seq_dim),64],128} for imputation
             args.d_ff = 32
             args.top_k = 5  # 5 for forecast   3 for imputation, classification, anomaly detection

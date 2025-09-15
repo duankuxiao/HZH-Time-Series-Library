@@ -54,7 +54,7 @@ def main(args):
             exp.train(setting)
 
             print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-            exp.test(setting)
+            metrics_df = exp.test(setting)
             torch.cuda.empty_cache()
     else:
         ii = 0
@@ -62,8 +62,9 @@ def main(args):
 
         exp = Exp(args)  # set experiments
         print(' >>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-        exp.test(setting, test=1)
+        metrics_df = exp.test(setting, test=1)
     torch.cuda.empty_cache()
+    return metrics_df
 
 
 if __name__ == '__main__':
@@ -73,8 +74,10 @@ if __name__ == '__main__':
     from copy import deepcopy
     from utils.hyparameter_setup import model_hyparameter_setup
 
-    all_results = {}
-    for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer','PatchTST', 'TimesNet']:
+    all_results = []
+    for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet']:
+    # for model in ['RNN']:
+
         args = deepcopy(default_args)
         fix_seed = 4213
         args.fix_seed = fix_seed
@@ -82,21 +85,21 @@ if __name__ == '__main__':
         torch.manual_seed(fix_seed)
         np.random.seed(fix_seed)
 
-        args.model_id = 'test'
+        args.model_id = '5'
         args.model = model
         args.task_name = 'classification'
         args.pred_len = 0
         args.label_len = 0
         args = model_hyparameter_setup(args)
-        # args.patience = 3
+        # args.patience = 2
+        # args.train_epochs = 3
 
-        res_df, metrics_df, imputation_metrics_df = main(args)
-        imputation_metrics_df.insert(0, 'model', model)
-        imputation_metrics_df.insert(1, 'fix_seed', fix_seed)
+        metrics_df = main(args)
+        metrics_df.insert(0, 'model', model)
 
-        all_results.append(imputation_metrics_df.iloc[-1:])
+        all_results.append(metrics_df.iloc[-1:])
 
         final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
-        final_metrics_df.to_csv('./results/all_models_comparison.csv'.format(args.model_id))
+        final_metrics_df.to_csv('./results/{}_all_models_comparison.csv'.format(args.model_id))
 
 

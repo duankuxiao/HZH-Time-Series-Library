@@ -12,9 +12,8 @@ import os
 import time
 import warnings
 import numpy as np
-from utils.dtw_metric import dtw, accelerated_dtw
-from utils.augmentation import run_augmentation, run_augmentation_single
-from utils.tools import results_evaluation, save_config
+from utils.metrics import results_evaluation_classification
+from utils.tools import save_config
 from torch.optim import lr_scheduler
 
 warnings.filterwarnings('ignore')
@@ -191,7 +190,7 @@ class Exp_Classification(Exp_Basic):
         print(report)
         peak_alloc = torch.cuda.max_memory_allocated(self.device)
         used_bytes = torch.cuda.memory_allocated(self.device)
-        with open(os.path.join(folder_path,"memory_summary_{}_{}.txt".format(round(used_bytes*1024/(10**9),1),round(speed*1000,2))), "w") as f:
+        with open(os.path.join(folder_path,"memory_summary_{}_spped{}itrms.txt".format(round(peak_alloc*1024/(10**9),1),round(speed*1000,2))), "w") as f:
             f.write(report)
         print("Saved CUDA memory summary to cuda_memory_summary.txt")
         return self.model
@@ -257,92 +256,10 @@ class Exp_Classification(Exp_Basic):
         f.write('\n')
         f.write('\n')
         f.close()
-        np.save(os.path.join(folder_path, 'pred_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), preds)
-        np.save(os.path.join(folder_path, 'true_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), trues)
 
-        # if self.args.features == 'M':
-        #     pred_res,metrics_df = self.res_evaluation_multi_target(trues, preds, trainable_params, folder_path)
-        # else:
-        #     pred_res,metrics_df = self.res_evaluation(trues,preds,trainable_params, folder_path)
-        # return pred_res,metrics_df
+        [acc, precision, f1, recall] = results_evaluation_classification(trues, predictions)
 
-    def res_evaluation(self,true, pred,trainable_params, path):
-        stride = self.args.pred_len
-        pred_output = np.squeeze(pred,axis=-1)[::stride, :].reshape(-1, 1)
-        true_output = np.squeeze(true,axis=-1)[::stride, :].reshape(-1, 1)
-
-        pred_res = pd.DataFrame({'pred': pred_output.flatten(), 'true': true_output.flatten()})
-        pred_res.loc[pred_res['true'] < 1e-3, 'true'] = 0
-        pred_res.loc[pred_res['true'] < 1e-3, 'pred'] = 0
-
-        [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(pred_res['true'].values, pred_res['pred'].values)
-
-        pred_res.to_csv(os.path.join(path, 'pred_results_{}_{}.csv'.format(self.args.data,self.args.data_path[:-4])))
-        metrics_df = pd.DataFrame({'trainable_params':trainable_params,'mse':mse,'rmse': rmse,'nrmse':nrmse, 'mae': mae, 'mape': mape,'rae':rae,'r2': r2,'corr':corr}, index=[0])
-        metrics_df.to_csv(os.path.join(path, 'metrics_results_{}_{}.csv'.format(self.args.data,self.args.data_path[:-4])))
-
-        print('RMSE: {} MAE: {} R2: {}'.format(rmse, mae, r2))
-        return pred_res,metrics_df
-
-    def res_evaluation_multi_target(self,true,pred,trainable_params,path):
-        stride = self.args.pred_len
-        true = true[::stride,:,:].reshape(-1,len(self.args.target))
-        pred = pred[::stride,:,:].reshape(-1,len(self.args.target))
-        columns_list = []
-        for i in self.args.target:
-            columns_list.append('{}_true'.format(i))
-            columns_list.append('{}_pred'.format(i))
-        res_df = pd.DataFrame(columns=columns_list)
-        mse_list, rmse_list, mae_list, r2_list, corr_list,mape_list = [], [], [], [], [], []
-        nrmse_list,rae_list = [],[]
-        for i in self.args.target:
-            res_df['{}_pred'.format(i)] = pred[:, self.args.target.index(i)]
-            res_df['{}_true'.format(i)] = true[:, self.args.target.index(i)]
-            self._show_plot(i,y_true=true[:, self.args.target.index(i)],y_pred=pred[:, self.args.target.index(i)],path=path)
-
-            [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(true[:, self.args.target.index(i)], pred[:, self.args.target.index(i)])
-            print('{} mse:{}, rmse:{} mae:{} r2:{} corr:{}'.format(i, mse, rmse, mae, r2, corr))
-            np.save(os.path.join(path, 'metrics_{}.npy'.format(i)), np.array([mse, rmse, mae, r2, corr]))
-
-            mse_list.append(mse)
-            rmse_list.append(rmse)
-            nrmse_list.append(nrmse)
-            mae_list.append(mae)
-            mape_list.append(mape)
-            rae_list.append(rae)
-            r2_list.append(r2)
-            corr_list.append(corr)
-
-        res_metrics_df = pd.DataFrame(columns=['trainable_params','mse', 'rmse','nrmse', 'mae','mape','rae', 'r2','corr'],
-                                      index=[i for i in self.args.target])
-        res_metrics_df['trainable_params'] = trainable_params
-        res_metrics_df['mse'] = mse_list
-        res_metrics_df['rmse'] = rmse_list
-        res_metrics_df['nrmse'] = nrmse_list
-        res_metrics_df['rae'] = rae_list
-        res_metrics_df['mae'] = mae_list
-        res_metrics_df['mape'] = mape_list
-        res_metrics_df['r2'] = r2_list
-        res_metrics_df['corr'] = corr_list
-        res_metrics_df.loc['mean'] = res_metrics_df.mean()
-        print(res_metrics_df.loc['mean'])
-        res_df.to_csv(os.path.join(path, 'pred_res_{}.csv'.format(self.args.data_path[:-4])))
-        res_metrics_df.to_csv(os.path.join(path, 'res_metrics_df_{}.csv'.format(self.args.data_path[:-4])))
-        return res_df,res_metrics_df
-
-    def _show_plot(self,i,y_true,y_pred,path=None):
-        x_range = np.arange(self.args.num_train -self.args.pred_len*7, self.args.num_train)
-        y_pred_plot = y_pred[-self.args.pred_len*7:]
-        plt.figure(self.args.target.index(i)+1, figsize=(20, 5))
-        plt.plot(x_range, y_pred_plot, "r-", label="Forecast values")
-        yplot = y_true[-self.args.pred_len*7:]
-        plt.plot(x_range, yplot, "k-", label="True values")
-        ymin, ymax = plt.ylim()
-        plt.vlines(self.args.num_train - self.args.pred_len*7, ymin, ymax, color="blue", linestyles="dashed", linewidth=2)
-        plt.ylim(ymin, ymax)
-        plt.legend(loc="upper left")
-        plt.title('Prediction')
-        plt.xlabel("Periods")
-        plt.ylabel("Y")
-        plt.savefig(os.path.join(path,'{}.png'.format(i)))
-        plt.close()
+        metrics_df = pd.DataFrame({'trainable_params': trainable_params, 'acc': acc, 'precision': precision, 'f1': f1, 'recall': recall},
+                                  index=[0])
+        metrics_df.to_csv(os.path.join(folder_path, 'metrics_results.csv'))
+        return metrics_df
