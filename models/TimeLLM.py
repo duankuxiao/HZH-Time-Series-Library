@@ -229,16 +229,15 @@ class Model(nn.Module):
 
         if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
             self.output_projection = FlattenHead(configs.enc_in, self.head_nf, self.pred_len, head_dropout=configs.dropout)
-        if self.task_name == 'imputation':
+        elif self.task_name == 'imputation':
             self.output_projection = FlattenHead(configs.enc_in, self.head_nf, self.seq_len, head_dropout=configs.dropout)
-        if self.task_name == 'imputation_forecast':
+        elif self.task_name == 'imputation_forecast':
             self.output_projection = FlattenHead(configs.enc_in, self.head_nf, self.pred_len+self.seq_len, head_dropout=configs.dropout)
-        if self.task_name == 'interval_forecast':
+        elif self.task_name == 'interval_forecast':
             # self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
             self.output_projection = FlattenHead(configs.enc_in, self.head_nf, self.pred_len, head_dropout=configs.dropout)
             self.likelihood_layer_sigma = FlattenHead(configs.enc_in, self.head_nf, self.pred_len, head_dropout=configs.dropout)
             self.likelihood_layer_sigma.to(device=self.device)
-
         else:
             raise NotImplementedError
 

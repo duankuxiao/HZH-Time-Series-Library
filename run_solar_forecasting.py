@@ -86,32 +86,26 @@ def main(args):
 
 if __name__ == '__main__':
     # from configs.solar_radiation_confi gs import args as default_args
-    from configs.operational_configs import args as default_args
+    # from configs.operational_configs import args as default_args
+    from configs.HVAC_configs import args as default_args
     from copy import deepcopy
     from utils.hyparameter_setup import model_hyparameter_setup
 
     all_results = []
-    # for model in ['RNN', 'Transformer','DLinear','Informer','Autoformer', 'iTransformer', 'TimesNet','PatchTST','TimeLLM', 'TimeLLMformer']:
-    for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST']:
-    # for model in ['RNN', 'iTransformer', 'TimesNet', 'PatchTST']:
-
-    # for model in ['TimesNet']:
+    for model in ['RNN', 'Transformer','DLinear','Informer','Autoformer', 'iTransformer', 'TimesNet','PatchTST','TimeLLM', 'LLMformer']:
+    # for model in ['LLMformer']:
 
         args = deepcopy(default_args)
-
         args.is_training = 1
 
-        args.model_id = '5min7test'
-        args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
+        args.model_id = 'test'
+        args.model = model
         args = model_hyparameter_setup(args)
-
-        # args.patience = 2
-        # args.learning_rate = 0.001
-        args.train_epochs = 10
+        args.task_name = 'long_term_forecast'
 
         _, res_metrics_df = main(args)
         res_metrics_df.insert(0, 'model', model)
-        all_results.append(res_metrics_df)
+        all_results.append(res_metrics_df.iloc[-1:])
         final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
         final_metrics_df.to_csv('./results/{}_all_models_comparison.csv'.format(args.model_id))
 

@@ -75,17 +75,17 @@ if __name__ == '__main__':
     from utils.hyparameter_setup import model_hyparameter_setup
 
     all_results = []
-    for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet']:
-    # for model in ['RNN']:
+    for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer','PatchTST', 'TimesNet']:
+    # for model in ['PatchTST', 'TimesNet']:
 
         args = deepcopy(default_args)
-        fix_seed = 4213
+        fix_seed = 1234
         args.fix_seed = fix_seed
         random.seed(fix_seed)
         torch.manual_seed(fix_seed)
         np.random.seed(fix_seed)
 
-        args.model_id = '5'
+        args.model_id = '2'
         args.model = model
         args.task_name = 'classification'
         args.pred_len = 0

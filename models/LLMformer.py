@@ -688,13 +688,13 @@ class Model(nn.Module):
         transformer_d_ff = transformer_d_model * 2  # configs.d_ff
         transformer_enc_layers = configs.e_layers  # configs.e_layers
         if self.encoder_other_model == 'Linear':
-            self.encoder_other = nn.Linear(configs.enc_in - configs.c_out, transformer_d_model)
+            self.encoder_other = nn.Linear(configs.enc_in, transformer_d_model)
 
         elif self.encoder_other_model == 'LSTM':
             self.encoder_other = nn.LSTM(configs.enc_in - configs.c_out, configs.rnn_dim, num_layers=configs.rnn_layers, batch_first=True)
 
         elif self.encoder_other_model == 'Transformer':
-            self.enc_embedding = DataEmbedding(configs.enc_in - configs.c_out, transformer_d_model, configs.embed, configs.freq, configs.dropout)
+            self.enc_embedding = DataEmbedding(configs.enc_in, transformer_d_model, configs.embed, configs.freq, configs.dropout)
 
             self.encoder_other = Encoder(
                 [

@@ -439,13 +439,18 @@ class Exp_Imputation(Exp_Basic):
 
         # Initialize metrics dictionaries
         metrics = {key: [] for key in ["trainable_params","mse", "rmse", "nrmse", "mae", "mape", "rae", "r2", "corr","mse_inter", "rmse_inter", "nrmse_inter", "mae_inter", "mape_inter", "rae_inter", "r2_inter", "corr_inter"]}
-        imputation_metrics = {key: [] for key in ["trainable_params","mse_imputation", "rmse_imputation", "mae_imputation", "mre_imputation","mse_imputation_inter", "rmse_imputation_inter", "mae_imputation_inter","mre_imputation_inter"]}
+        imputation_metrics = {key: [] for key in ["trainable_params", "mse_imputation", "rmse_imputation", "mae_imputation","mape_imputation", "mre_imputation", "mse_imputation_inter", "rmse_imputation_inter", "mae_imputation_inter","mape_imputation_inter","mre_imputation_inter"]}
 
         # Calculate metrics for each target
         for idx, target in enumerate(self.args.target):
             true_i, imputation_i, inter_i, withnan_i, mask_i = (
                 true[:, idx], imputations[:, idx], pred_interpolate[:, idx], X_withnan[:, idx], mask[:, idx])
-            self._show_plot(idx,y_withnan=withnan_i,y_true=true_i,y_imputation=imputation_i,y_inter=inter_i,path=path)
+            # self._show_plot(idx,y_withnan=withnan_i,y_true=true_i,y_imputation=imputation_i,y_inter=inter_i,path=path)
+            imputation_i = np.where(true_i <= 0.0001, 0, imputation_i)
+            inter_i = np.where(true_i <= 0.0001, 0, inter_i)
+
+            # true_i = np.where(true_i <= 0.0001, 0, true_i)
+
 
             # Metrics for full sequence
             mse, rmse, nrmse, mae, mape, rae, r2, corr = results_evaluation(true_i, imputation_i)
@@ -471,19 +476,21 @@ class Exp_Imputation(Exp_Basic):
             metrics["corr_inter"].append(corr_inter)
 
             # Metrics for imputation (model output)
-            mse_imp, rmse_imp, mae_imp, mre_imp = results_evaluation_imputation(true_i, imputation_i, mask_i)
+            mse_imp, rmse_imp, mae_imp, mape_imp, mre_imp = results_evaluation_imputation(true_i, imputation_i, mask_i)
             imputation_metrics['trainable_params'] = trainable_params
             imputation_metrics["mse_imputation"].append(mse_imp)
             imputation_metrics["rmse_imputation"].append(rmse_imp)
             imputation_metrics["mae_imputation"].append(mae_imp)
+            imputation_metrics["mape_imputation"].append(mape_imp)
             imputation_metrics["mre_imputation"].append(mre_imp)
 
             # Metrics for imputation (interpolation)
-            mse_imp_inter, rmse_imp_inter, mae_imp_inter, mre_imp_inter = results_evaluation_imputation(true_i, inter_i, mask_i)
+            mse_imp_inter, rmse_imp_inter, mae_imp_inter, mape_imp_inter, mre_imp_inter = results_evaluation_imputation(true_i, inter_i, mask_i)
 
             imputation_metrics["mse_imputation_inter"].append(mse_imp_inter)
             imputation_metrics["rmse_imputation_inter"].append(rmse_imp_inter)
             imputation_metrics["mae_imputation_inter"].append(mae_imp_inter)
+            imputation_metrics["mape_imputation_inter"].append(mape_imp_inter)
             imputation_metrics["mre_imputation_inter"].append(mre_imp_inter)
 
         # Create DataFrames for metrics

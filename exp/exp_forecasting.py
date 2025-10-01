@@ -436,6 +436,10 @@ class Exp_Forecast(Exp_Basic):
         for i in self.args.target:
             res_df['{}_pred'.format(i)] = pred[:, self.args.target.index(i)]
             res_df['{}_true'.format(i)] = true[:, self.args.target.index(i)]
+            res_df.loc[res_df['{}_true'.format(i)] < 1e-3, '{}_true'.format(i)] = 0
+            res_df.loc[res_df['{}_true'.format(i)] < 1e-3, '{}_pred'.format(i)] = 0
+            res_df.loc[res_df['{}_pred'.format(i)] < 1e-3, '{}_pred'.format(i)] = 0
+
             self._show_plot(i,y_true=true[:, self.args.target.index(i)],y_pred=pred[:, self.args.target.index(i)],path=path)
 
             [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(true[:, self.args.target.index(i)], pred[:, self.args.target.index(i)])

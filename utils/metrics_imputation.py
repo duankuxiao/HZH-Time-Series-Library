@@ -103,6 +103,22 @@ def calc_mae(
     else:
         return lib.mean(lib.abs(predictions - targets))
 
+def calc_mape(
+    predictions: Union[np.ndarray, torch.Tensor],
+    targets: Union[np.ndarray, torch.Tensor],
+    masks: Optional[Union[np.ndarray, torch.Tensor]] = None,
+) -> Union[float, torch.Tensor]:
+    lib = _check_inputs(predictions, targets, masks)
+
+    # 避免除以0（例如目标为0时）
+    epsilon = np.finfo(np.float64).eps
+    percentage_error = lib.abs((predictions - targets) / lib.maximum(lib.abs(targets), epsilon))
+
+    if masks is not None:
+        return (percentage_error * masks).sum() / (lib.sum(masks) + 1e-12)
+    else:
+        return percentage_error.mean()
+
 
 def calc_mse(
     predictions: Union[np.ndarray, torch.Tensor],
@@ -378,12 +394,15 @@ def calc_quantile_crps_sum(
         CRPS += q_loss / denominator
     return CRPS.item() / len(quantiles)
 
-def results_evaluation_imputation(y_test_seq, y_pred_seq,mask):
+
+def results_evaluation_imputation(y_test_seq, y_pred_seq, mask):
     mae = calc_mae(targets=y_test_seq, predictions=y_pred_seq,masks=mask)
+    mape = calc_mape(targets=y_test_seq, predictions=y_pred_seq,masks=mask)
     mse = calc_mse(targets=y_test_seq, predictions=y_pred_seq,masks=mask)
     rmse = calc_rmse(targets=y_test_seq, predictions=y_pred_seq,masks=mask)
     mre = calc_mre(targets=y_test_seq, predictions=y_pred_seq,masks=mask)
-    return [mse, rmse, mae,mre]
+    return [mse, rmse, mae, mape, mre]
+
 
 def interpolate_nan_matrix(matrix, method='linear', axis=0, order=None):
     """
