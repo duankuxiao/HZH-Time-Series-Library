@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, mean_absolute_percentage_error
 from utils.interval_forecasting_tools import gaussian_nll, crps_score, picp, piw, pinaw
-from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
+from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score, average_precision_score
 
 
 def empirical_correlation_coefficient(y_true, y_pred):
@@ -80,26 +80,32 @@ def calc_mape_without_outliers(
 
 def results_evaluation_classification(y_test_seq, y_pred_seq):
     acc = accuracy_score(y_true=y_test_seq, y_pred=y_pred_seq)
-    f1 = f1_score(y_true=y_test_seq, y_pred=y_pred_seq,average='micro')
-    precision = precision_score(y_true=y_test_seq, y_pred=y_pred_seq,average='micro')
-    recall = recall_score(y_true=y_test_seq, y_pred=y_pred_seq,average='micro')
+    f1 = f1_score(y_true=y_test_seq, y_pred=y_pred_seq,average='macro')
+    precision = precision_score(y_true=y_test_seq, y_pred=y_pred_seq,average='macro')
+    recall = recall_score(y_true=y_test_seq, y_pred=y_pred_seq,average='macro')
     return acc, precision, f1, recall
 
 
 
-def results_probability_forecast_evaluation(y_true, mu, sigma):
-    nll = gaussian_nll(y_true, mu, sigma)
-    crps = crps_score(y_true, mu, sigma)
-    picp90 = picp(y_true, mu, sigma, alpha=0.9)
-    picp80 = picp(y_true, mu, sigma, alpha=0.8)
-    picp70 = picp(y_true, mu, sigma, alpha=0.7)
-    piw90 = piw(mu, sigma, alpha=0.9)
-    piw80 = piw(mu, sigma, alpha=0.8)
-    piw70 = piw(mu, sigma, alpha=0.7)
-    pinaw90 = pinaw(y_true, mu, sigma, alpha=0.9)
-    pinaw80 = pinaw(y_true,mu, sigma, alpha=0.8)
-    pinaw70 = pinaw(y_true,mu, sigma, alpha=0.7)
-    return [nll, crps, picp90, picp80, picp70, piw90, piw80, piw70, pinaw90, pinaw80, pinaw70]
+def results_probability_forecast_evaluation(y_true, mu, sigma = None,y_lower = None, y_upper = None):
+    if sigma is not None:
+        nll = gaussian_nll(y_true, mu, sigma)
+        crps = crps_score(y_true, mu, sigma)
+        picp90 = picp(y_true, mu, sigma, alpha=0.9)
+        picp80 = picp(y_true, mu, sigma, alpha=0.8)
+        picp70 = picp(y_true, mu, sigma, alpha=0.7)
+        piw90 = piw(mu, sigma, alpha=0.9)
+        piw80 = piw(mu, sigma, alpha=0.8)
+        piw70 = piw(mu, sigma, alpha=0.7)
+        pinaw90 = pinaw(y_true, mu, sigma, alpha=0.9)
+        pinaw80 = pinaw(y_true,mu, sigma, alpha=0.8)
+        pinaw70 = pinaw(y_true,mu, sigma, alpha=0.7)
+        return [nll, crps, picp90, picp80, picp70, piw90, piw80, piw70, pinaw90, pinaw80, pinaw70]
+    else:
+        picp90 = np.mean((y_true >= y_lower) & (y_true <= y_upper))
+        piw90 = np.mean(y_upper - y_lower)
+        return [picp90, piw90]
+
 
 
 def NRMSE(y_true, y_pred,rmse):
