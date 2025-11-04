@@ -443,6 +443,121 @@ class Exp_Forecast(Exp_Basic):
         pred_res,metrics_df = self.res_evaluation_multi_target(trues, preds,mus,sigamas,trainable_params, folder_path)
         return pred_res,metrics_df
 
+    def run_quantile_regression_baseline(self):
+        import lightgbm as lgb
+        train_data, train_loader = self._get_data(flag='train')
+        vali_data, vali_loader = self._get_data(flag='val')
+        test_data, test_loader = self._get_data(flag='test')
+        def train_quantile_model(X, y, quantile):
+            params = {
+                'objective': 'quantile',
+                'alpha': quantile,
+                'verbosity': -1
+            }
+            train_set = lgb.Dataset(X, y)
+            model = lgb.train(params, train_set, num_boost_round=100)
+            return model
+
+        X_list, y_list = [], []
+        for batch_x, batch_y, batch_x_mark, batch_y_mark, x_forecast in train_loader:
+            # batch_x: [B, seq_len, num_features]
+            # batch_y: [B, pred_len, num_targets]
+            # 只取最后一个时间点作为输入（或 mean pooling）
+            input_feats = batch_x[:, -1, :]  # [B, num_features]
+            target_vals = batch_y[:, 0, :]  # [B, num_targets]，预测未来第一步
+
+            X_list.append(input_feats.numpy())
+            y_list.append(target_vals.numpy())
+
+        X_all = np.concatenate(X_list, axis=0)  # [N, num_features]
+        y_all = np.concatenate(y_list, axis=0)  # [N, num_targets]
+        num_targets = y_all.shape[1]
+        models = []
+
+        for i in range(num_targets):
+            y_target = y_all[:, i]
+
+            lower_model = train_quantile_model(X_all, y_target, 0.05)
+            median_model = train_quantile_model(X_all, y_target, 0.5)
+            upper_model = train_quantile_model(X_all, y_target, 0.95)
+
+            models.append((lower_model, median_model, upper_model))
+        X_test = []
+        Y_true = []
+
+        for batch_x, batch_y, batch_x_mark, batch_y_mark, x_forecast in test_loader:
+            input_feats = batch_x[:, -1, :]  # [B, num_features]
+            X_test.append(input_feats.numpy())
+            Y_true.append(batch_y[:, 0, :].numpy())  # 只预测第一步
+
+        X_test = np.concatenate(X_test, axis=0)  # [N, num_features]
+        Y_true = np.concatenate(Y_true, axis=0)  # [N, num_targets]
+
+        picp90_list, piw90_list = [], []
+        mse_list, rmse_list, mae_list, r2_list, corr_list, mape_list = [], [], [], [], [], []
+        nrmse_list,rae_list = [],[]
+        columns_list = []
+        for i in self.args.target:
+            columns_list.append('{}_true'.format(i))
+            columns_list.append('{}_mean'.format(i))
+            columns_list.append('{}_95'.format(i))
+            columns_list.append('{}_5'.format(i))
+
+        res_df = pd.DataFrame(columns=columns_list)
+
+        for i in range(num_targets):
+
+            y_lower_all, y_pred_all, y_upper_all = [], [], []
+
+            lower_model, median_model, upper_model = models[i]
+
+            y_lower_all.append(lower_model.predict(X_test))
+            y_pred_all.append(median_model.predict(X_test))
+            y_upper_all.append(upper_model.predict(X_test))
+
+            # Stack: [N, num_targets]
+            y_lower_all = np.stack(y_lower_all, axis=1)
+            y_pred_all = np.stack(y_pred_all, axis=1)
+            y_upper_all = np.stack(y_upper_all, axis=1)
+
+            res_df['{}_true'.format(self.args.target[i])] = Y_true[:,i]
+            res_df['{}_mean'.format(self.args.target[i])] = y_pred_all
+            res_df['{}_95'.format(self.args.target[i])] = y_upper_all
+            res_df['{}_5'.format(self.args.target[i])] = y_lower_all
+
+            [mse, rmse, nrmse, mae, mape, rae, r2, corr] = results_evaluation(Y_true[:,i].reshape(-1,1), y_pred_all)
+            picp90, piw90 = results_probability_forecast_evaluation(Y_true[:,i].reshape(-1,1), mu=y_pred_all, y_lower=y_lower_all, y_upper=y_upper_all)
+            picp90_list.append(picp90)
+            piw90_list.append(piw90)
+
+            mse_list.append(mse)
+            rmse_list.append(rmse)
+            nrmse_list.append(nrmse)
+            mae_list.append(mae)
+            mape_list.append(mape)
+            rae_list.append(rae)
+            r2_list.append(r2)
+            corr_list.append(corr)
+        res_metrics_df = pd.DataFrame(
+            columns=['picp90', 'piw90',  'mse', 'rmse', 'nrmse', 'mae', 'mape', 'rae', 'r2', 'corr'],
+            index=[i for i in self.args.target])
+        res_metrics_df['picp90'] = picp90_list
+        res_metrics_df['piw90'] = piw90_list
+        res_metrics_df['mse'] = mse_list
+        res_metrics_df['rmse'] = rmse_list
+        res_metrics_df['nrmse'] = nrmse_list
+        res_metrics_df['rae'] = rae_list
+        res_metrics_df['mae'] = mae_list
+        res_metrics_df['mape'] = mape_list
+        res_metrics_df['r2'] = r2_list
+        res_metrics_df['corr'] = corr_list
+        res_metrics_df.loc['mean'] = res_metrics_df.mean()
+        print(res_metrics_df.loc['mean'])
+        plt.show()
+        path = r'D:\Time-LLM-main\results'
+        res_metrics_df.to_csv(os.path.join(path, 'res_metrics_regression_{}.csv'.format(self.args.data_path[:-4])))
+        return res_metrics_df
+
     def res_evaluation_multi_target(self,true,pred,mus, sigmas, trainable_params,path):
         stride = self.args.pred_len
         true = true[::stride,:,:].reshape(-1,len(self.args.target))

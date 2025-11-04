@@ -83,50 +83,73 @@ def main(args):
         return res_df, res_metrics_df
 
 
+def test():
+    from configs.electricity_configs import args as default_args
+    from utils.hyparameter_setup import model_hyparameter_setup
+    from copy import deepcopy
+    from exp.exp_interval_forecasting import Exp_Forecast
+
+    data = 'tokyo'
+    args = deepcopy(default_args)
+
+    args.task_name = 'interval_forecast'  # 'interval_forecast'  'long_term_forecast'
+
+    args.seq_len = 72
+    args.pred_len = 24
+    args.scale = False
+    args.label_len = args.seq_len
+    args = model_hyparameter_setup(args)
+    args.data_path = '{}.csv'.format(data)
+    args.source_data_path = '{}.csv'.format(data)
+    exp = Exp_Forecast(args)
+    df = exp.run_quantile_regression_baseline()
+    return df
 
 if __name__ == '__main__':
-    from utils.hyparameter_setup import model_hyparameter_setup
-    from configs.electricity_configs import args as default_args
-    # from configs.solar_radiation_configs import args as default_args
-    from copy import deepcopy
+    test()
 
-    model_list = ['RNN', 'Transformer', 'Informer', 'iTransformer', 'TimesNet', 'PatchTST', 'LLMformer']
-    # model_list = ['PatchTST']
-    # for data in ['kansai','hokkaido', 'kyushu', 'tohoku']:  # 'Sapporo','Sendai','Fukuoka','Tokyo'   'hokkaido', 'kyushu', 'tohoku'
-    for data in ['tokyo']:  # 'Sapporo','Sendai','Fukuoka','Tokyo'   'hokkaido', 'kyushu', 'tohoku'
-        for loss_method in ['hybridmu']:  # 'g' 'mse' 'msemu' 'hybridmu'   'adaptive'
-            all_results = []
-
-            for model in model_list:
-                # for pred_len in [1,24, 48, 72, 96,  120,144, 168,216,240,264,288,312, 336, 720]:
-                for pred_len in [24]:
-
-                    # for model in ['TimeLLMformer']:  # 'AttLLM'
-
-                    args = deepcopy(default_args)
-                    args.data_path = '{}.csv'.format(data)
-                    args.source_data_path = '{}.csv'.format(data)
-                    args.task_name = 'interval_forecast'  # 'interval_forecast'  'long_term_forecast'
-
-                    args.seq_len = 72
-                    args.pred_len = pred_len
-                    args.label_len = args.seq_len
-                    args.is_training = 1
-                    # args.model_id = loss_method
-                    args.use_prompt = False
-                    args.model_id = 'seed{}'.format(fix_seed)
-                    # args.model_id = '{}{}'.format(model_list.index(model)+1,data)
-                    args.loss_method = loss_method  # 'g' 'nb' 'mse' 'msemu' 'hybridmu'
-
-                    args.model = model   #  [Autoformer, TimeLLM, TimesNet, D Linear, Informer, Transformer, TimeMixer, iTransformer, LLMformer, RNN, PatchTST,]
-                    args = model_hyparameter_setup(args)
-                    # args.learning_rate = 0.00015
-                    _, res_metrics_df, loss_df = main(args)
-                    res_metrics_df.insert(0, 'model', model)
-
-                    # pred_len
-                    res_metrics_df.insert(1, 'pred_len', pred_len)
-
-                    all_results.append(res_metrics_df.iloc[-1:])
-                    final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
-                    final_metrics_df.to_csv('./results/pf_{}_all_models_comparison.csv'.format(args.model_id))
+    # from utils.hyparameter_setup import model_hyparameter_setup
+    # from configs.electricity_configs import args as default_args
+    # # from configs.solar_radiation_configs import args as default_args
+    # from copy import deepcopy
+    #
+    # model_list = ['RNN', 'Transformer', 'Informer', 'iTransformer', 'TimesNet', 'PatchTST', 'LLMformer']
+    # # model_list = ['PatchTST']
+    # # for data in ['kansai','hokkaido', 'kyushu', 'tohoku']:  # 'Sapporo','Sendai','Fukuoka','Tokyo'   'hokkaido', 'kyushu', 'tohoku'
+    # for data in ['tokyo']:  # 'Sapporo','Sendai','Fukuoka','Tokyo'   'hokkaido', 'kyushu', 'tohoku'
+    #     for loss_method in ['hybridmu']:  # 'g' 'mse' 'msemu' 'hybridmu'   'adaptive'
+    #         all_results = []
+    #
+    #         for model in model_list:
+    #             # for pred_len in [1,24, 48, 72, 96,  120,144, 168,216,240,264,288,312, 336, 720]:
+    #             for pred_len in [24]:
+    #
+    #                 # for model in ['TimeLLMformer']:  # 'AttLLM'
+    #
+    #                 args = deepcopy(default_args)
+    #                 args.data_path = '{}.csv'.format(data)
+    #                 args.source_data_path = '{}.csv'.format(data)
+    #                 args.task_name = 'interval_forecast'  # 'interval_forecast'  'long_term_forecast'
+    #
+    #                 args.seq_len = 72
+    #                 args.pred_len = pred_len
+    #                 args.label_len = args.seq_len
+    #                 args.is_training = 1
+    #                 # args.model_id = loss_method
+    #                 args.use_prompt = False
+    #                 args.model_id = 'seed{}'.format(fix_seed)
+    #                 # args.model_id = '{}{}'.format(model_list.index(model)+1,data)
+    #                 args.loss_method = loss_method  # 'g' 'nb' 'mse' 'msemu' 'hybridmu'
+    #
+    #                 args.model = model   #  [Autoformer, TimeLLM, TimesNet, D Linear, Informer, Transformer, TimeMixer, iTransformer, LLMformer, RNN, PatchTST,]
+    #                 args = model_hyparameter_setup(args)
+    #                 # args.learning_rate = 0.00015
+    #                 _, res_metrics_df, loss_df = main(args)
+    #                 res_metrics_df.insert(0, 'model', model)
+    #
+    #                 # pred_len
+    #                 res_metrics_df.insert(1, 'pred_len', pred_len)
+    #
+    #                 all_results.append(res_metrics_df.iloc[-1:])
+    #                 final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
+    #                 final_metrics_df.to_csv('./results/pf_{}_all_models_comparison.csv'.format(args.model_id))
