@@ -54,7 +54,7 @@ def main(args):
             exp.train(setting)
 
             print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-            metrics_df = exp.test(setting)
+            metrics_df,pred_res = exp.test(setting)
             torch.cuda.empty_cache()
     else:
         ii = 0
@@ -62,9 +62,9 @@ def main(args):
 
         exp = Exp(args)  # set experiments
         print(' >>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
-        metrics_df = exp.test(setting, test=1)
+        metrics_df,pred_res = exp.test(setting, test=1)
     torch.cuda.empty_cache()
-    return metrics_df
+    return metrics_df,pred_res
 
 
 if __name__ == '__main__':
@@ -76,7 +76,7 @@ if __name__ == '__main__':
 
     all_results = []
     for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer','PatchTST', 'TimesNet']:
-    # for model in ['PatchTST', 'TimesNet']:
+    # for model in ['Autoformer']:
 
         args = deepcopy(default_args)
         fix_seed = 1234
@@ -84,22 +84,27 @@ if __name__ == '__main__':
         random.seed(fix_seed)
         torch.manual_seed(fix_seed)
         np.random.seed(fix_seed)
+        args.is_training = 0
 
-        args.model_id = '2'
+        args.model_id = 'train80'
         args.model = model
         args.task_name = 'classification'
         args.pred_len = 0
         args.label_len = 0
-        args = model_hyparameter_setup(args)
-        # args.patience = 2
-        # args.train_epochs = 3
 
-        metrics_df = main(args)
+        args.data_path = 'dataset_splits_train80_test20.npz'  # dataset_splits_train40_test60
+        args = model_hyparameter_setup(args)
+        args.seq_len = 6
+        args.enc_in = 16
+        # args.patience = 2
+        args.train_epochs = 50
+
+        metrics_df,_ = main(args)
         metrics_df.insert(0, 'model', model)
 
         all_results.append(metrics_df.iloc[-1:])
 
         final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
-        final_metrics_df.to_csv('./results/{}_all_models_comparison.csv'.format(args.model_id))
+        # final_metrics_df.to_csv('./results/{}_all_models_comparison.csv'.format(args.model_id))
 
 

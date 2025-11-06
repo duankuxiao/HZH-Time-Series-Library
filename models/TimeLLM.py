@@ -44,6 +44,8 @@ class Model(nn.Module):
         self.stride = configs.stride
         self.use_prompt = configs.use_prompt
         self.use_forecast = configs.use_forecast
+        self.output_ori = configs.output_ori
+
         if self.use_forecast:
             self.forecast_projection = nn.Linear(configs.forecast_dim, configs.enc_in)
 
@@ -255,7 +257,8 @@ class Model(nn.Module):
             return dec_out[:, -self.pred_len:, :]
         if self.task_name == 'imputation':
             dec_out = self.imputation(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast,mask)
-            dec_out = mask[:, :, -self.c_out:] * x_enc[:, :, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out
+            if self.output_ori:
+                dec_out = mask[:, :, -self.c_out:] * x_enc[:, :, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out
             return dec_out[:, :self.seq_len, :]
         if self.task_name == 'imputation_forecast':
             dec_out = self.imputation_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec,x_forecast)

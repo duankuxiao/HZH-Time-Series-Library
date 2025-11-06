@@ -9,8 +9,8 @@ def model_hyparameter_setup(args):
     # default
     if args.task_name == 'imputation' or args.task_name == 'classification':
         args.learning_rate = 0.001
-        args.patience = 10
-        args.train_epochs = 60 if args.task_name == 'imputation' else 100
+        args.patience = 6
+        args.train_epochs = 36 if args.task_name == 'imputation' else 100
     else:
         args.learning_rate = 0.0001
     args.d_model = 512
@@ -22,34 +22,30 @@ def model_hyparameter_setup(args):
     if args.task_name == 'classification':
         args.e_layers = 4
         args.d_model = 256  # 128 default
-        args.d_ff = 256  # 256 default
+        args.d_ff = 512  # 256 default
         args.top_k = 3
         args.patch_len = 2
         args.stride = 1
 
     if args.model == 'LLMformer':
+        args.batch_size = 10
         if args.task_name == 'imputation':
-            args.learning_rate = 0.01  # 0.001 for imputation 0.0001 for forecast (0.01 for LLM model)  for electricity
+            args.use_norm = True
+            args.learning_rate = 0.001
         else:
-            args.learning_rate = 0.0001
-
-        args.patience = 8
-        # args.lradj = 'PEMS'
-        args.llm_model = 'GPT2'  # defalut GPT2  BERT LLAMA1b LLAMA3b
-        args.d_model = 32  # imputation 32
-        args.d_ff = 64  # imputation 64  64
-        args.e_layers = 2  # 2
-        args.d_layers = 2  # 2
+            args.learning_rate = 0.001
+        args.patience = 6
+        args.llm_model = 'GPT2'
+        args.d_model = 16
+        args.d_ff = 64
+        args.e_layers = 2
+        args.d_layers = 3
         args.llm_layers = 6
 
     if 'RNN' in args.model:
         args.use_norm = False
         args.rnn_dim = 256
         args.rnn_layers = 2
-        if args.task_name == 'classification':
-            args.rnn_dim = 64
-            args.rnn_layers = 3
-
 
     if args.model == 'Transformer':
         args.use_norm = False
@@ -59,6 +55,9 @@ def model_hyparameter_setup(args):
         if args.task_name == 'imputation':
             args.d_model = 128
             args.d_ff = 128
+        if args.task_name == 'classification':
+            args.d_model = 128
+            args.d_ff = 256
 
     if args.model == 'DLinear':
         args.use_norm = False
@@ -76,6 +75,11 @@ def model_hyparameter_setup(args):
         if args.task_name == 'imputation':
             args.d_model = 128
             args.d_ff = 128
+        if args.task_name == 'classification':
+            args.d_model = 512
+            args.d_ff = 2048
+            args.e_layers = 4
+
         args.use_norm = False
 
     if args.model == 'iTransformer':  # default
@@ -83,11 +87,15 @@ def model_hyparameter_setup(args):
         args.d_model = 512
         args.d_ff = 512
         if args.task_name == 'imputation':
-            args.d_model = 128
-            args.d_ff = 128
+            args.use_norm = False
+            args.d_model = 512
+            args.d_ff = 512
+        if args.task_name == 'classification':
+            args.d_model = 256
+            args.d_ff = 512
 
-    if args.model == 'TimeLLM':  # default
-        args.llm_model = 'BERT'  # defalut GPT2
+    if args.model == 'TimeLLM':
+        args.llm_model = 'GPT2'
         args.patience = 3
         args.batch_size = 12
         args.learning_rate = 0.01
@@ -97,40 +105,37 @@ def model_hyparameter_setup(args):
         args.top_k = 5
         args.d_model = 16
         args.d_ff = 32
-        args.llm_layers = 16
+        args.llm_layers = 12
 
-    if args.model == 'PatchTST':  # default
+    if args.model == 'PatchTST':
         args.use_norm = True
-
-        args.dropout = 0.2
-        args.head_dropout = 0
-        args.d_model = 256  # 128 for large dataset  16
-        args.d_ff = 256  # 256 for large dataset  128
-        args.e_layers = 2  # 3
-        args.n_heads = 8  # for small dataset 4  large dataset 16
+        args.d_model = 128
+        args.d_ff = 256
+        args.e_layers = 2
+        args.n_heads = 8
         if args.task_name == 'imputation':
-            args.d_model = 128
-            args.d_ff = 128
-        elif args.task_name == 'classification':
-            args.e_layers = 3
-            args.d_model = 128
+            args.d_model = 256
             args.d_ff = 256
-            args.top_k = 3
+            args.e_layers = 4
+        elif args.task_name == 'classification':
+            args.e_layers = 4
+            args.d_model = 512
+            args.d_ff = 512
 
     if args.model == 'TimesNet':
         args.e_layers = 2
-
         args.use_norm = True
+        args.train_epochs = 10
         if args.task_name == 'imputation':
             args.d_model = 64  # min{max[2**log(seq_dim),32],512} for forecast   min{max[2**log(seq_dim),64],128} for imputation
             args.d_ff = 64
             args.top_k = 3  # 5 for forecast   3 for imputation, classification, anomaly detection
         elif args.task_name == 'classification':
-            args.d_model = 64
-            args.d_ff = 128  # 256
+            args.d_model = 256
+            args.d_ff = 256
+            args.e_layers = 4
             args.top_k = 3
             args.num_kernels = 4
-            args.train_epochs = 30
         else:
             args.d_model = 32  # min{max[2**log(seq_dim),32],512} for forecast   min{max[2**log(seq_dim),64],128} for imputation
             args.d_ff = 32

@@ -73,44 +73,39 @@ class Exp_Imputation(Exp_Basic):
 
     def _loss_function(self, criterion, outputs, true, mask):
         mask_ = mask ^ 1
-        if self.args.output_ori:
+        if self.args.output_ori is False:
             if isinstance(outputs, tuple):
-                output1 = outputs[0]
-                output2 = outputs[1]
+                missing_loss = criterion(outputs[0], true, mask_)
+                missing_loss_2 = criterion(outputs[1], true, mask_)
+                ori_loss = criterion(outputs[1], true, mask)
                 if self.loss_method == "fix":
-                    loss = 10 * (criterion(output1, true, mask_) + criterion(output2, true, mask_)) + (criterion(output1, true, mask) + criterion(output2, true, mask))
+                    loss = 5 * (missing_loss + missing_loss_2) + ori_loss
                 elif self.loss_method == "adaptive":
-                    missing_loss = criterion(output1, true, mask_)
-                    missing_loss_2 = criterion(output2, true, mask_)
-                    ori_loss = criterion(output2, true, mask)
-                    loss = 0.5 * (torch.exp(-self.log_sigma_missing.to(true.device)) * missing_loss + torch.exp(-self.log_sigma_missing_2.to(true.device)) * missing_loss_2 +
-                                  torch.exp(-self.log_sigma_ori.to(true.device)) * ori_loss +
-                                  self.log_sigma_missing_2.to(true.device) + self.log_sigma_missing.to(true.device) + self.log_sigma_ori.to(true.device))
+                    # loss = 0.5 * (torch.exp(-self.log_sigma_missing.to(true.device)) * missing_loss + torch.exp(-self.log_sigma_missing_2.to(true.device)) * missing_loss_2 +
+                    #               torch.exp(-self.log_sigma_ori.to(true.device)) * ori_loss +
+                    #               self.log_sigma_missing_2.to(true.device) + self.log_sigma_missing.to(true.device) + self.log_sigma_ori.to(true.device))
+                    loss = ori_loss + 2 / self.args.mask_rate * (missing_loss_2 + missing_loss)
             else:
+                missing_loss = criterion(outputs, true, mask_)
+                ori_loss = criterion(outputs, true, mask)
                 if self.loss_method == "fix":
-                    loss = criterion(outputs, true, mask) + 10 * criterion(outputs, true, mask_)
+                    loss = ori_loss + 10 * missing_loss
                 elif self.loss_method == "adaptive":
-                    missing_loss = criterion(outputs, true, mask_)
-                    ori_loss = criterion(outputs, true, mask)
-                    loss = 0.5 * (torch.exp(-self.log_sigma_missing.to(true.device)) * missing_loss + torch.exp(-self.log_sigma_ori.to(true.device)) * ori_loss +
-                                  self.log_sigma_missing.to(true.device) + self.log_sigma_ori.to(true.device))
-                else:
-                    loss = criterion(outputs, true, mask_)
-
+                    # loss = 0.5 * (torch.exp(-self.log_sigma_missing.to(true.device)) * missing_loss + torch.exp(-self.log_sigma_ori.to(true.device)) * ori_loss +
+                    #               self.log_sigma_missing.to(true.device) + self.log_sigma_ori.to(true.device))
+                    loss = ori_loss + 2 / self.args.mask_rate * missing_loss
         else:
             if isinstance(outputs, tuple):
-                output1 = outputs[0]
-                output2 = outputs[1]
+                missing_loss = criterion(outputs[0], true, mask_)
+                missing_loss_2 = criterion(outputs[1], true, mask_)
                 if self.loss_method == "fix":
-                    loss = criterion(output2, true, mask_) + criterion(output1, true, mask_)
+                    loss = missing_loss_2 + missing_loss
                 elif self.loss_method == "adaptive":
-                    missing_loss = criterion(output1, true, mask_)
-                    ori_loss = criterion(output2, true, mask_)
-                    loss = 0.5 * (torch.exp(-self.log_sigma_missing.to(true.device)) * missing_loss + torch.exp(-self.log_sigma_ori.to(true.device)) * ori_loss +
-                                  self.log_sigma_missing.to(true.device) + self.log_sigma_ori.to(true.device))
+                    # loss = 0.5 * (torch.exp(-self.log_sigma_missing.to(true.device)) * missing_loss + torch.exp(-self.log_sigma_missing_2.to(true.device)) * missing_loss_2 +
+                    #               self.log_sigma_missing.to(true.device) + self.log_sigma_missing_2.to(true.device))
+                    loss = missing_loss_2 + missing_loss
             else:
                 loss = criterion(outputs, true, mask_)
-
         return loss
 
     def vali(self, vali_data, vali_loader, criterion):
@@ -450,7 +445,6 @@ class Exp_Imputation(Exp_Basic):
             inter_i = np.where(true_i <= 0.0001, 0, inter_i)
 
             # true_i = np.where(true_i <= 0.0001, 0, true_i)
-
 
             # Metrics for full sequence
             mse, rmse, nrmse, mae, mape, rae, r2, corr = results_evaluation(true_i, imputation_i)

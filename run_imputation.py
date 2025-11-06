@@ -42,6 +42,8 @@ def get_setting(args, ii):
         setting = 'few-shot{}_'.format(args.percent) + setting
     if args.scale:
         setting += '_scale'
+    if args.mask_target_only:
+        setting += '_target'
     if args.output_ori:
         setting += '_ori'
     return setting
@@ -85,43 +87,69 @@ if __name__ == '__main__':
 
     all_results_imputation = []
     all_results = []
-    for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'PatchTST', 'TimesNet', 'LLMformer']:
-    # for model in ['LLMformer']:
+    # for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'iTransformer', 'PatchTST', 'TimesNet', 'LLMformer']:
+    for model in ['LLMformer',]:
+    #     for mask_rate in [0.3]:
+        for mask_rate in [0.1, 0.2, 0.3, 0.4, 0.5]:
+            # all_results_imputation = []
+            # all_results = []
+            # for seed in [1,12,123,12345,123456,1234567,12345678,123456789,1234567890]:
+            # for seed in [4, 42, 421, 4212, 94213, 974213, 9974213, 19974213, 199714213,1997715213]:
 
-        for mask_rate in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
-        # for mask_rate in [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
-
-        # for seed in [1,12,123,1234,12345,123456,1234567,12345678,123456789,1234567890]:
-        # for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'PatchTST', 'TimesNet', 'LLMformer']:
-        # for model in ['RNN']:
+                # for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'PatchTST', 'TimesNet', 'LLMformer']:
+                # for model in ['RNN']:
 
             args = deepcopy(default_args)
-            if mask_rate == 0.1:
-                args.fix_seed = 123
-            if mask_rate == 0.2:
-                args.fix_seed = 123456789
-            if mask_rate == 0.3 or mask_rate == 0.4:
-                args.fix_seed = 123456
-            if mask_rate == 0.5 or mask_rate == 0.6:
-                args.fix_seed = 1234567890
-            if mask_rate == 0.7:
-                args.fix_seed = 123456
-            if mask_rate == 0.8:
-                args.fix_seed = 1234
-            if mask_rate == 0.9:
-                args.fix_seed = 1235
+            args.mask_method = 'mcar'
+            if args.mask_method == 'rdo':
+                if mask_rate == 0.1:
+                    args.fix_seed = 1
+                elif mask_rate == 0.2 or mask_rate == 0.6 or mask_rate == 0.9:
+                    args.fix_seed = 12345678
+                elif mask_rate == 0.3 or mask_rate == 0.8:
+                    args.fix_seed = 12
+                elif mask_rate == 0.4:
+                    args.fix_seed = 1234567
+                elif mask_rate == 0.5:
+                    args.fix_seed = 123
+                elif mask_rate == 0.7:
+                    args.fix_seed = 123456789
+            elif args.mask_method == 'mcar':
+                if mask_rate == 0.1 or mask_rate == 0.3 or mask_rate == 0.5:
+                    args.fix_seed = 123456
+                elif mask_rate == 0.2:
+                    args.fix_seed = 12345678
+                elif mask_rate == 0.4:
+                    args.fix_seed = 1234567890
+            # elif args.mask_method == 'mar':  # obs_rate = 0.5
+            #     if mask_rate == 0.1:
+            #         args.fix_seed = 19974213
+            #     elif mask_rate == 0.2:
+            #         args.fix_seed = 974213
+            #     elif mask_rate == 0.3:
+            #         args.fix_seed = 1997715213
+            #     elif mask_rate == 0.4:
+            #         args.fix_seed = 4213
+            #     elif mask_rate == 0.5:
+            #         args.fix_seed = 94213
+            elif args.mask_method == 'mar':   # obs_rate = 1.0
+                if mask_rate == 0.1 or mask_rate == 0.3 or mask_rate == 0.4:
+                    args.fix_seed = 9974213
+                elif mask_rate == 0.2:
+                    args.fix_seed = 4212
+                elif mask_rate == 0.5:
+                    args.fix_seed = 19974213
 
-
+            # args.fix_seed = seed
             random.seed(args.fix_seed)
             torch.manual_seed(args.fix_seed)
             np.random.seed(args.fix_seed)
-            args.mask_method = 'rdo'
             args.mask_rate = mask_rate
 
-            args.model_id = 'test'
+            args.model_id = '7'
             args.model = model
-            args.loss_method = "fix"  # missing  fix  adaptive
-            args.output_ori = True
+            args.loss_method = "adaptive"  # missing  fix  adaptive
+            args.output_ori = False
             args.loss = 'MAE'
             # args.data_path = '{}.csv'.format(args.model_id)
             # args.source_data_path = '{}.csv'.format(args.model_id)
@@ -130,13 +158,14 @@ if __name__ == '__main__':
             args.pred_len = 0
             args.label_len = 0
             args = model_hyparameter_setup(args)
-
-            # args.patience = 2
-            # args.train_epochs = 3
+            args.is_training = 1
+            # args.patience = 1
+            # args.train_epochs = 1
 
             res_df, metrics_df, imputation_metrics_df = main(args)
             imputation_metrics_df.insert(0, 'model', model)
             imputation_metrics_df.insert(1, 'mask_rate', mask_rate)
+            # imputation_metrics_df.insert(2, 'seed', seed)
 
             metrics_df.insert(0, 'model', model)
             metrics_df.insert(1, 'mask_rate', mask_rate)

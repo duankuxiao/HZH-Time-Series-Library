@@ -555,6 +555,7 @@ class Exp_Forecast(Exp_Basic):
         print(res_metrics_df.loc['mean'])
         plt.show()
         path = r'D:\Time-LLM-main\results'
+        res_df.to_csv(os.path.join(path, 'pred_res_regression_{}.csv'.format(self.args.data_path[:-4])))
         res_metrics_df.to_csv(os.path.join(path, 'res_metrics_regression_{}.csv'.format(self.args.data_path[:-4])))
         return res_metrics_df
 

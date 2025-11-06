@@ -7,10 +7,7 @@ import numpy as np
 os.environ['CURL_CA_BUNDLE'] = ''
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:64"
 
-fix_seed = 4213
-random.seed(fix_seed)
-torch.manual_seed(fix_seed)
-np.random.seed(fix_seed)
+
 
 
 def get_setting(args,ii):
@@ -34,7 +31,7 @@ def get_setting(args,ii):
         args.dropout,
         args.embed, ii)
 
-    if 'TimeLLM' in args.model:
+    if 'LLM' in args.model:
         setting += '_{}_llmd{}_llmf{}_tk{}'.format(args.llm_model, args.llm_dim, args.llm_layers, args.top_k)
         if args.use_prompt:
             setting += '_prompt'
@@ -59,6 +56,7 @@ def main(args):
         from exp.exp_forecasting import Exp_Forecast
 
     Exp = Exp_Forecast
+    torch.cuda.empty_cache()
 
     if args.is_training:
         for ii in range(args.itr):
@@ -92,14 +90,19 @@ if __name__ == '__main__':
     from utils.hyparameter_setup import model_hyparameter_setup
 
     all_results = []
-    for model in ['RNN', 'Transformer','DLinear','Informer','Autoformer', 'iTransformer', 'TimesNet','PatchTST','TimeLLM', 'LLMformer']:
-    # for model in ['LLMformer']:
+    # for model in ['RNN', 'Transformer','DLinear','Informer','Autoformer', 'iTransformer', 'TimesNet','PatchTST','TimeLLM', 'LLMformer']:
+    for model in ['TimeLLM','LLMformer']:
 
         args = deepcopy(default_args)
         args.is_training = 1
+        fix_seed = 4213
+        random.seed(fix_seed)
+        torch.manual_seed(fix_seed)
+        np.random.seed(fix_seed)
 
-        args.model_id = 'test'
+        args.model_id = '2year'
         args.model = model
+        args.is_training = 1
         args = model_hyparameter_setup(args)
         args.task_name = 'long_term_forecast'
 

@@ -12,150 +12,145 @@ def _make_generator(device, seed):
 
 @torch.no_grad()
 def generate_mar_mask(
-    X: torch.Tensor,           # [B,T,D]
-    f_dim: int,                # 最后 f_dim 是目标特征，全部做 MAR
-    obs_rate: float = 0.5,     # 在非目标列里选取的预测器比例 (0,1]；=1 表示全部非目标列都保留观测并用作预测器
-    missing_rate=0.2,          # 目标列的缺失率：标量或长度=f_dim 的 1D 张量/列表
-    strict: bool = False,       # True: 预测器列永远观测（严格 MAR）；False: 放宽（不建议用于“严格”定义）
+    X: torch.Tensor,               # [B,T,D]
+    f_dim: int,                    # 最后 f_dim 列全部做 MAR 目标
+    always_obs: int | list = 4,        # 永久观测的“前几列”：
+                                   #   - int: 前 always_obs 列（0..always_obs-1）
+                                   #   - list[int]: 直接提供永久观测列的索引（可不局限于“前几列”）
+    obs_rate: float = 0.5,     # 中间列中按比例选择“也做 MAR 的列”；其余中间列将“永久观测”
+    missing_rate=0.2,              # 目标缺失率：标量或长度==目标列数的向量
+    seed: int = 4213,
     max_iter: int = 30,
-    seed: int = 42,
     eps: float = 1e-8,
 ):
-    assert X.ndim == 3, "X 必须是 [batch, seq, feature]"
-    B, T, D = X.shape
-    assert 1 <= f_dim <= D, "f_dim 范围应为 [1, D]"
-    ctx = D - f_dim                      # 非目标列数量
-    if strict and ctx == 0:
-        raise ValueError("strict MAR 需要至少 1 个非目标列作为预测器（D - f_dim > 0）。")
-
-    if isinstance(missing_rate, (int, float)):
-        assert 0 < missing_rate < 1, "missing_rate 应在 (0,1)"
-    else:
-        # 各目标列各自的缺失率
-        mr = torch.as_tensor(missing_rate, dtype=torch.float32)
-        if mr.numel() != f_dim or not torch.all((mr > 0) & (mr < 1)):
-            raise ValueError("missing_rate 需为标量或长度=f_dim 的 (0,1) 向量。")
-
+    """
+    返回:
+      X_miss: [B,T,D] 置缺后的数据 (NaN=缺失)
+      mask  : [B,T,D] 观测指示 (1=观测, 0=缺失)
+      info  : dict  索引与达成缺失率统计
+    说明:
+      - “严格 MAR”：所有被造缺的目标列，其缺失概率仅依赖“永久观测列”（predictors）。
+      - 目标列 = 最后 f_dim 列 ∪ 中间段里按 obs_rate_mid 选出的列。
+      - 永久观测列 = 手动指定的 always_obs 列 ∪ 中间段里未被选中的列。
+    """
+    assert X.ndim == 3, "X 必须是 [B,T,D]"
     device = X.device
+    B, T, D = X.shape
+    assert 1 <= f_dim <= D, "f_dim ∈ [1, D]"
+    # 1) 解析永久观测的“手动列”
+    if isinstance(always_obs, int):
+        assert 0 <= always_obs <= D, "always_obs (int) 需在 [0, D]"
+        base_pred_idx = torch.arange(0, always_obs, device=device)
+    else:
+        idx = torch.as_tensor(always_obs, device=device)
+        if idx.numel() > 0:
+            assert torch.all((0 <= idx) & (idx < D)), "always_obs (list) 中存在越界索引"
+        base_pred_idx = idx.unique().sort().values
+
+    # 2) 明确尾段目标列（最后 f_dim）
+    tail_target_idx = torch.arange(D - f_dim, D, device=device)
+
+    # 3) 拆出“中间段”候选（既不在 base_pred，也不在尾段）
+    all_idx = torch.arange(0, D, device=device)
+    mid_mask = torch.ones(D, dtype=torch.bool, device=device)
+    mid_mask[base_pred_idx] = False
+    mid_mask[tail_target_idx] = False
+    mid_candidates = all_idx[mid_mask]  # 这些列要被分成：一部分也做 MAR，一部分永久观测
+
+    # 4) 在“中间段”里，按 obs_rate_mid 选择“也做 MAR 的列”
+    assert 0.0 <= obs_rate <= 1.0, "obs_rate_mid ∈ [0,1]"
+    gen = _make_generator(device, seed)
+    if mid_candidates.numel() > 0:
+        n_mid_tar = int(round(obs_rate * mid_candidates.numel()))
+        if n_mid_tar > 0:
+            perm = mid_candidates[torch.randperm(mid_candidates.numel(), generator=gen, device=device)]
+            mid_target_idx = perm[:n_mid_tar]
+            mid_pred_idx   = perm[n_mid_tar:]
+        else:
+            mid_target_idx = torch.tensor([], device=device, dtype=torch.long)
+            mid_pred_idx   = mid_candidates
+    else:
+        mid_target_idx = torch.tensor([], device=device, dtype=torch.long)
+        mid_pred_idx   = torch.tensor([], device=device, dtype=torch.long)
+
+    # 5) 最终集合
+    predictor_idx = torch.cat([base_pred_idx, mid_pred_idx]).unique().sort().values
+    target_idx    = torch.cat([tail_target_idx, mid_target_idx]).unique().sort().values
+
+    if predictor_idx.numel() == 0:
+        raise ValueError("严格 MAR 需要至少 1 个永久观测（预测器）列。请增加 always_obs 或降低 obs_rate_mid。")
+    if target_idx.numel() == 0:
+        raise ValueError("未选出任何 MAR 目标列。请增加 f_dim 或增大 obs_rate_mid。")
+
+    # 6) 标准化输入，准备线性打分 S = Xz[:, predictors] @ W → 目标
     N = B * T
     X2d = X.reshape(N, D).float()
     if not torch.isfinite(X2d).all():
         raise ValueError("X 含 NaN/Inf，请先清洗。")
 
-    # 标准化，避免数值不稳
     mu = X2d.mean(dim=0)
     sd = X2d.std(dim=0)
     sd = torch.where(sd < eps, torch.ones_like(sd), sd)
     Xz = (X2d - mu) / sd
 
-    gen = _make_generator(device, seed)
+    n_pred = predictor_idx.numel()
+    n_targ = target_idx.numel()
 
-    # 索引
-    target_idx = torch.arange(D - f_dim, D, device=device)       # 目标：最后 f_dim 列
-    ctx_idx = torch.arange(0, ctx, device=device) if ctx > 0 else torch.tensor([], device=device)
+    # 权重矩阵（小尺度初始化，数值稳健）
+    W = torch.randn(n_pred, n_targ, generator=gen, device=device) / (n_pred ** 0.5)
+    S = Xz[:, predictor_idx] @ W  # [N, n_targ]
 
-    # 把 missing_rate 变成长度 f_dim 的向量
-    def _mr_vec():
-        if isinstance(missing_rate, (int, float)):
-            return torch.full((f_dim,), float(missing_rate), device=device)
-        return torch.as_tensor(missing_rate, device=device, dtype=X2d.dtype)
-
-    if strict:
-        # 从非目标列中选取预测器（并永久观测）
-        assert 0 < obs_rate <= 1, "strict 模式下 obs_rate 应在 (0,1]"
-        n_pred_pool = ctx_idx.numel()
-        n_pred = max(1, int(round(obs_rate * n_pred_pool)))
-        if n_pred > n_pred_pool:
-            n_pred = n_pred_pool
-        # 固定选择或随机选择都可以；用随机可复现
-        if n_pred == n_pred_pool:
-            pred_idx = ctx_idx
-        else:
-            perm = ctx_idx[torch.randperm(n_pred_pool, generator=gen, device=device)]
-            pred_idx = perm[:n_pred]
-
-        # 线性打分：仅用预测器 → 目标
-        W = torch.randn(n_pred, f_dim, generator=gen, device=device) / (n_pred ** 0.5)
-        S = Xz[:, pred_idx] @ W                                     # [N, f_dim]
-
-        mr = _mr_vec()                                              # [f_dim]
-        lo = torch.full((f_dim,), -20.0, device=device)
-        hi = torch.full((f_dim,),  20.0, device=device)
-        for _ in range(max_iter):
-            mid = (lo + hi) / 2.0
-            p = torch.sigmoid(S + mid)
-            m = p.mean(dim=0)
-            hi = torch.where(m > mr, mid, hi)
-            lo = torch.where(m <= mr, mid, lo)
-        alpha = (lo + hi) / 2.0
-        miss_prob_t = torch.sigmoid(S + alpha)                      # [N, f_dim]
-
-        # 采样掩码（注意：对目标列）
-        u = torch.rand(miss_prob_t.shape, device=device, dtype=miss_prob_t.dtype, generator=gen)
-        mask_t = (u > miss_prob_t).float()                          # [N, f_dim]
-
-        # 汇总成完整 mask：预测器列永远观测=1；目标列按 mask_t；其余非目标但未选为预测器的列也强制观测（严格 MAR）
-        mask2d = torch.ones(N, D, device=device)
-        mask2d[:, target_idx] = mask_t
-        mask2d[:, ctx_idx] = 1.0                                    # 非目标列总体观测
-        # 可选：如果你只想让“被选为预测器”的列保证观测，而其它非目标列也可以被随意保留观测，上一行保持即可。
-
-        info = {
-            "mode": "strict_tail_targets",
-            "predictor_idx": pred_idx.tolist(),
-            "target_idx": target_idx.tolist(),
-        }
-
+    # 7) 目标缺失率向量
+    if isinstance(missing_rate, (list, tuple)):
+        mr = torch.tensor(missing_rate, dtype=X2d.dtype, device=device)
+    elif isinstance(missing_rate, torch.Tensor):
+        mr = missing_rate.to(device=device, dtype=X2d.dtype)
     else:
-        # 非 strict：每个目标列依赖若干非目标列（若 ctx=0，则无法定义 MAR，直接报错以避免混淆）
-        if ctx == 0:
-            raise ValueError("non-strict 也需要至少 1 个非目标列来定义对‘已观测变量’的依赖；否则会变成 MNAR。")
-        k = max(1, int(round(obs_rate * ctx)))   # 每个目标列的预测器个数
-        W = torch.zeros(ctx, f_dim, device=device)
-        for j in range(f_dim):
-            perm = ctx_idx[torch.randperm(ctx, generator=gen, device=device)]
-            sel = perm[:k]
-            W[(sel - 0), j] = torch.randn(sel.numel(), generator=gen, device=device) / (k ** 0.5)
+        mr = torch.full((n_targ,), float(missing_rate), device=device, dtype=X2d.dtype)
 
-        S = Xz[:, ctx_idx] @ W                                       # [N, f_dim]
-        mr = _mr_vec()
-        lo = torch.full((f_dim,), -20.0, device=device)
-        hi = torch.full((f_dim,),  20.0, device=device)
-        for _ in range(max_iter):
-            mid = (lo + hi) / 2.0
-            p = torch.sigmoid(S + mid)
-            m = p.mean(dim=0)
-            hi = torch.where(m > mr, mid, hi)
-            lo = torch.where(m <= mr, mid, lo)
-        alpha = (lo + hi) / 2.0
-        miss_prob_t = torch.sigmoid(S + alpha)
+    if mr.numel() != n_targ:
+        raise ValueError(f"missing_rate 长度应为 {n_targ}（目标列数），当前 {mr.numel()}")
+    if not torch.all((mr > 0) & (mr < 1)):
+        raise ValueError("missing_rate 中应全部位于 (0,1)")
 
-        u = torch.rand(miss_prob_t.shape, device=device, dtype=miss_prob_t.dtype, generator=gen)
-        mask_t = (u > miss_prob_t).float()
+    # 8) 二分求每个目标列的截距 alpha，使 mean(sigmoid(S + alpha)) = mr
+    lo = torch.full((n_targ,), -20.0, device=device)
+    hi = torch.full((n_targ,),  20.0, device=device)
+    for _ in range(max_iter):
+        mid = (lo + hi) / 2.0
+        p = torch.sigmoid(S + mid)      # [N, n_targ]
+        m = p.mean(dim=0)               # [n_targ]
+        hi = torch.where(m > mr, mid, hi)
+        lo = torch.where(m <= mr, mid, lo)
+    alpha = (lo + hi) / 2.0
+    miss_prob = torch.sigmoid(S + alpha)  # [N, n_targ]
 
-        mask2d = torch.ones(N, D, device=device)
-        mask2d[:, target_idx] = mask_t
-        # 非 strict 下，非目标列默认全观测（可视为“始终可用的外生变量”）
-        mask2d[:, ctx_idx] = 1.0
+    # 9) 采样缺失并组装 mask：预测器列永久观测=1；目标列按采样结果
+    u = torch.rand(miss_prob.shape, device=device, dtype=miss_prob.dtype, generator=gen)
+    mask_t = (u > miss_prob).float()   # [N, n_targ]  1=观测, 0=缺失
 
-        info = {
-            "mode": "non_strict_tail_targets",
-            "predictors_per_target": k,
-            "target_idx": target_idx.tolist(),
-        }
+    mask2d = torch.ones(N, D, device=device)
+    mask2d[:, target_idx] = mask_t
+    mask2d[:, predictor_idx] = 1.0     # 永久观测
 
-    # 还原形状并应用
+    # 10) 还原形状并应用
     mask = mask2d.view(B, T, D)
     X_miss = X.clone()
     X_miss[mask == 0] = float("nan")
 
-    # 统计
-    overall = float((mask == 0).float().mean().cpu())
-    target_rate = float((mask[:, :, target_idx] == 0).float().mean().cpu())
-    info.update({
-        "achieved_missing_rate_overall": overall,
-        "achieved_missing_rate_targets": target_rate,
-    })
+    info = {
+        "mode": "strict_custom",
+        "predictor_idx": predictor_idx.tolist(),
+        "target_idx": target_idx.tolist(),
+        "base_predictor_idx": base_pred_idx.tolist(),
+        "mid_target_idx": mid_target_idx.tolist(),
+        "mid_predictor_idx": mid_pred_idx.tolist(),
+        "tail_target_idx": tail_target_idx.tolist(),
+        "achieved_missing_rate_overall": float((mask == 0).float().mean().cpu()),
+        "achieved_missing_rate_targets": float((mask[:, :, target_idx] == 0).float().mean().cpu()),
+        "n_pred": int(n_pred),
+        "n_target": int(n_targ),
+    }
     return X_miss
 
 

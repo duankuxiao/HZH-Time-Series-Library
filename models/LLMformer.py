@@ -294,12 +294,11 @@ class LLMBlock(nn.Module):
 
         self.dropout = nn.Dropout(configs.dropout)
 
-        self.patch_embedding = PatchEmbedding(
-            configs.d_model, self.patch_len, self.stride, configs.dropout)
+        self.patch_embedding = PatchEmbedding(configs.d_model, self.patch_len, self.stride, configs.dropout)
 
         self.word_embeddings = self.llm_model.get_input_embeddings().weight
         self.vocab_size = self.word_embeddings.shape[0]
-        self.num_tokens = 1000
+        self.num_tokens = 2000
         self.mapping_layer = nn.Linear(self.vocab_size, self.num_tokens)
         self.reprogramming_layer = ReprogrammingLayer(configs.d_model, configs.n_heads, self.d_ff, self.d_llm)
 
@@ -312,18 +311,17 @@ class LLMBlock(nn.Module):
         if self.task_name == 'imputation':
             self.output_projection = FlattenHead(configs.enc_in, self.head_nf, self.seq_len, head_dropout=configs.dropout)
             self.output_projection.to(device=self.device)
-        # if self.task_name == 'interval_forecast':
-        #     if configs.likelihood == "g":
-        #         # self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
-        #         self.likelihood_layer_mu = FlattenHead(configs.enc_in, self.head_nf, self.pred_len, head_dropout=configs.dropout)
-        #         self.likelihood_layer_sigma = FlattenHead(configs.enc_in, self.head_nf, self.pred_len, head_dropout=configs.dropout)
-        #     elif configs.likelihood == "nb":
-        #         self.likelihood_layer = NegativeBinomial(configs.d_model, configs.c_out)
-        #     else:
-        #         self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
+        if self.task_name == 'interval_forecast':
+            if configs.likelihood == "g":
+                # self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
+                self.likelihood_layer_mu = FlattenHead(configs.enc_in, self.head_nf, self.pred_len, head_dropout=configs.dropout)
+                self.likelihood_layer_sigma = FlattenHead(configs.enc_in, self.head_nf, self.pred_len, head_dropout=configs.dropout)
+            elif configs.likelihood == "nb":
+                self.likelihood_layer = NegativeBinomial(configs.d_model, configs.c_out)
+            else:
+                self.likelihood_layer = Gaussian(configs.d_model, configs.c_out)
 
         self.normalize_layers = Normalize(configs.enc_in, affine=False)
-
         self.llm_model.to(device=self.device)
         self.mapping_layer.to(device=self.device)
         self.reprogramming_layer.to(device=self.device)
@@ -405,14 +403,10 @@ class LLMBlock(nn.Module):
 
         dec_out = self.llm_model(inputs_embeds=llama_enc_out).last_hidden_state
         dec_out = dec_out[:, :, :self.d_ff]
-
-        dec_out = torch.reshape(
-            dec_out, (-1, n_vars, dec_out.shape[-2], dec_out.shape[-1]))
+        dec_out = torch.reshape(dec_out, (-1, n_vars, dec_out.shape[-2], dec_out.shape[-1]))
         dec_out = dec_out.permute(0, 1, 3, 2).contiguous()
-
         dec_out = self.output_projection(dec_out[:, :, :, -self.patch_nums:])
         dec_out = dec_out.permute(0, 2, 1).contiguous()
-
         dec_out = self.normalize_layers(dec_out, 'denorm')
         return dec_out
 
@@ -495,56 +489,48 @@ class LLMBlock(nn.Module):
                 max_values_str = str(max_values[b].tolist()[0])
                 median_values_str = str(medians[b].tolist()[0])
                 lags_values_str = str(lags[b].tolist())
-                # prompt_ = (
-                #     f"<|start_prompt|>Dataset description: {self.description}"
-                #     f"Task description: imputation the {str(self.seq_len)} steps; "
-                #     "Input statistics: "
-                #     f"min value {min_values_str}, "
-                #     f"max value {max_values_str}, "
-                #     f"median value {median_values_str}, "
-                #     f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
-                #     f"top {self.top_k} lags are : {lags_values_str}<|end_prompt|>"
-                # )
                 prompt_ = (
                     f"<|start_prompt|>Dataset description: {self.description}"
-                    "Task description: "
-                    f"given the observed information, "
-                    f"impute the missing values that indicated as 0 in f{missing_mask[b].flatten()}; "
+                    f"Task description: impute the missing values; "
                     "Input statistics: "
                     f"min value {min_values_str}, "
                     f"max value {max_values_str}, "
                     f"median value {median_values_str}, "
                     f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
-                    f"top 5 lags are : {lags_values_str}<|<end_prompt>|>"
+                    f"top {self.top_k} lags are : {lags_values_str}<|end_prompt|>"
                 )
+                # prompt_ = (
+                #     f"<|start_prompt|>Dataset description: {self.description}"
+                #     "Task description: "
+                #     f"given the observed information, "
+                #     f"impute the missing values that indicated as 0; "  # in f{missing_mask[b].flatten()}
+                #     "Input statistics: "
+                #     f"min value {min_values_str}, "
+                #     f"max value {max_values_str}, "
+                #     f"median value {median_values_str}, "
+                #     f"the trend of input is {'upward' if trends[b] > 0 else 'downward'}, "
+                #     f"top 5 lags are : {lags_values_str}<|<end_prompt>|>"
+                # )
 
                 prompt.append(prompt_)
             # x_enc [B * N, T, 1]
-            x_enc = x_enc.reshape(B, N, T) # [B, T, N]
+            x_enc = x_enc.reshape(B, N, T)  # [B, T, N]
 
             prompt = self.tokenizer(prompt, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
             prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)
-
         source_embeddings = self.mapping_layer(self.word_embeddings.permute(1, 0)).permute(1, 0)
-
         enc_out, n_vars = self.patch_embedding(x_enc.to(torch.bfloat16))
         enc_out = self.reprogramming_layer(enc_out, source_embeddings, source_embeddings)
-
         if self.use_prompt:
             llama_enc_out = torch.cat([prompt_embeddings, enc_out], dim=1)
         else:
             llama_enc_out = enc_out
-
         dec_out = self.llm_model(inputs_embeds=llama_enc_out).last_hidden_state
         dec_out = dec_out[:, :, :self.d_ff]
-
-        dec_out = torch.reshape(
-            dec_out, (-1, n_vars, dec_out.shape[-2], dec_out.shape[-1]))
+        dec_out = torch.reshape(dec_out, (-1, n_vars, dec_out.shape[-2], dec_out.shape[-1]))
         dec_out = dec_out.permute(0, 1, 3, 2).contiguous()
-
         dec_out = self.output_projection(dec_out[:, :, :, -self.patch_nums:])
         dec_out = dec_out.permute(0, 2, 1).contiguous()
-
         dec_out = self.normalize_layers(dec_out, 'denorm')
         return dec_out
 
@@ -685,16 +671,16 @@ class Model(nn.Module):
         # Encoder
         self.encoder_other_model = encoder_other_model
         transformer_d_model = 64  # configs.d_model
-        transformer_d_ff = transformer_d_model * 2  # configs.d_ff
+        transformer_d_ff = transformer_d_model * 4  # configs.d_ff
         transformer_enc_layers = configs.e_layers  # configs.e_layers
         if self.encoder_other_model == 'Linear':
             self.encoder_other = nn.Linear(configs.enc_in, transformer_d_model)
 
         elif self.encoder_other_model == 'LSTM':
-            self.encoder_other = nn.LSTM(configs.enc_in - configs.c_out, configs.rnn_dim, num_layers=configs.rnn_layers, batch_first=True)
+            self.encoder_other = nn.LSTM(configs.enc_in, configs.rnn_dim, num_layers=configs.rnn_layers, batch_first=True)
 
         elif self.encoder_other_model == 'Transformer':
-            self.enc_embedding = DataEmbedding(configs.enc_in, transformer_d_model, configs.embed, configs.freq, configs.dropout)
+            self.enc_embedding = DataEmbedding(configs.enc_in - configs.c_out, transformer_d_model, configs.embed, configs.freq, configs.dropout)
 
             self.encoder_other = Encoder(
                 [
@@ -858,13 +844,6 @@ class Model(nn.Module):
 
     def imputation(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask):
         if self.use_norm:
-            # Normalization from Non-stationary Transformer
-            # means = torch.sum(x_enc, dim=1) / torch.sum(mask == 1, dim=1)
-            # means = means.unsqueeze(1).detach()
-            # x_enc = x_enc - means
-            # stdev = torch.sqrt(torch.sum(x_enc * x_enc, dim=1) / torch.sum(mask == 1, dim=1) + 1e-5)
-            # stdev = stdev.unsqueeze(1).detach()
-            # x_enc /= stdev
             x_enc, means, stdev = masked_standardize_3d(x_enc, mask)
 
         x_enc_target = x_enc[:, :, -self.c_out:]
@@ -872,16 +851,12 @@ class Model(nn.Module):
 
         if self.encoder_other_model == 'Transformer':
             enc_in = self.enc_embedding(x_enc[:, :, :-self.c_out], x_mark_enc)
-            enc_out, attns = self.encoder_other(enc_in, attn_mask=mask)
-            # enc_out = self.encoder_linear_projection(enc_out.permute(0,2,1)).permute(0,2,1)
+            enc_out, attns = self.encoder_other(enc_in, attn_mask=mask[:, :, :-self.c_out])
         elif self.encoder_other_model == 'LSTM':
             enc_out, (_) = self.encoder_other(x_enc)
-            # enc_out = self.encoder_linear_projection(enc_out.permute(0, 2, 1)).permute(0, 2, 1)
         elif self.encoder_other_model == 'Linear':
-            enc_out = self.encoder_other(x_enc[:, :, :-self.c_out])  # x_enc[:, :, :-self.c_out]
-            # enc_out = self.encoder_linear_projection(enc_out.permute(0, 2, 1)).permute(0, 2, 1)
-        if self.output_ori:
-            enc_out_target = mask[:, :, -self.c_out:] * x_enc[:, :, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * enc_out_target
+            enc_out = self.encoder_other(x_enc)  # x_enc[:, :, :-self.c_out]
+        enc_out_target = mask[:, :, -self.c_out:] * x_enc[:, :, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * enc_out_target
 
         dec_in = self.dec_embedding(enc_out_target, x_mark_enc)
         dec_out = self.decoder(dec_in, enc_out, x_mask=None, cross_mask=mask)
@@ -958,7 +933,7 @@ class Model(nn.Module):
             dec_out1, dec_out2 = self.imputation(x_enc, x_mark_enc, x_dec, x_mark_dec, mask)
             if self.output_ori:
                 dec_out2 = mask[:, :, -self.c_out:] * x_enc[:, :, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out2
-            return dec_out1, dec_out2   # [B, L, D]
+            return dec_out2   # [B, L, D]
         if self.task_name == 'imputation_forecast':
             enc_out_target, dec_out = self.imputation_forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, mask)
             if self.output_ori:

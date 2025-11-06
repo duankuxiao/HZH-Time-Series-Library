@@ -37,6 +37,7 @@ def data_provider(args, flag):
         data_set = Dataset_classification(
             configs=args,
             root_path=args.root_path,
+            data_path=args.data_path,
             flag=flag,
         )
 

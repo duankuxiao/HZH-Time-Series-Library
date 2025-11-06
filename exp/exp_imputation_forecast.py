@@ -26,15 +26,12 @@ warnings.filterwarnings('ignore')
 class Exp_Imputation_Forecast(Exp_Basic):
     def __init__(self, args):
         super(Exp_Imputation_Forecast, self).__init__(args)
+        self.loss_method = args.loss_method
+        self.loss = args.loss
         if self.args.loss_method == "adaptive":
             self.log_missing_loss = nn.Parameter(torch.zeros(1))
             self.log_pred_loss = nn.Parameter(torch.zeros(1))
-        if self.args.loss == 'MSE':
-            self.loss_func = calc_mse
-        elif self.args.loss == 'MAE':
-            self.loss_func = calc_mae
-        else:
-            raise NotImplementedError
+
 
     def _build_model(self):
         model = self.model_dict[self.args.model].Model(self.args).float()
@@ -55,7 +52,10 @@ class Exp_Imputation_Forecast(Exp_Basic):
         return model_optim
 
     def _select_criterion(self):
-        criterion = nn.MSELoss()
+        if self.loss == 'MSE':
+            criterion = calc_mse
+        elif self.loss == 'MAE':
+            criterion = calc_mae
         return criterion
 
     def _select_scheduler(self, model_optim, train_loader):

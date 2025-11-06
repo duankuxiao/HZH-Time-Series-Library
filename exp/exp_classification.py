@@ -258,8 +258,10 @@ class Exp_Classification(Exp_Basic):
         f.close()
 
         [acc, precision, f1, recall] = results_evaluation_classification(trues, predictions)
-
-        metrics_df = pd.DataFrame({'trainable_params': trainable_params, 'acc': acc, 'precision': precision, 'f1': f1, 'recall': recall},
+        pred_res = pd.DataFrame({'predictions': predictions, 'trues': trues})
+        metrics_df = pd.DataFrame({'trainable_params': trainable_params, 'acc': acc,  'precision': precision, 'f1': f1, 'recall': recall},
                                   index=[0])
         metrics_df.to_csv(os.path.join(folder_path, 'metrics_results.csv'))
-        return metrics_df
+        pred_res.to_csv(os.path.join(folder_path, 'pred_results.csv'))
+
+        return metrics_df,pred_res

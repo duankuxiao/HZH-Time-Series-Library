@@ -193,6 +193,7 @@ class Dataset_classification(Dataset):
                  target=['PV'], scale=True, timeenc=0, freq='h', percent=100,seasonal_patterns=None):
 
         self.num_train = configs.num_train
+        self.data_path = data_path
         self.num_test = configs.num_test
         self.task_name = configs.task_name
         self.source_data_path = configs.source_data_path
@@ -226,7 +227,7 @@ class Dataset_classification(Dataset):
         return len(self.data)
 
     def __read_data__(self):
-        npz = np.load(r"D:\Time-LLM-main\dataset\dataset_splits.npz")
+        npz = np.load(r"D:\Time-LLM-main\dataset\classification\{}".format(self.data_path))
         if self.set_type == 'train':
             self.data = npz["train_data"]
             self.labels = npz["train_labels"]
