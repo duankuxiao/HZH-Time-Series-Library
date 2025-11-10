@@ -361,7 +361,9 @@ class Exp_Imputation(Exp_Basic):
                     output = output[-1][:, :self.args.seq_len, -self.f_dim:]
                 else:
                     output = output[:, :self.args.seq_len, -self.f_dim:]
+
                 true = batch_x[:, :self.args.seq_len, -self.f_dim:]
+                output = mask * true + (1 - mask) * output
 
                 imputation = output.detach().cpu().numpy()
                 mask = mask.detach().cpu().numpy()

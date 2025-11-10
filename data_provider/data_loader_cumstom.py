@@ -131,7 +131,6 @@ class Dataset_cumstom(Dataset):
             border1s = [0, - num_vali - self.num_test - self.seq_len, - self.num_test - self.seq_len]
             border2s = [self.num_train, - self.num_test - self.seq_len, len(df_raw)]
 
-
         border1 = border1s[self.set_type]
         border2 = border2s[self.set_type]
 

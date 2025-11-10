@@ -18,7 +18,6 @@ args.features = 'M'
 # args.label_len = args.seq_len
 # args.forecast_dim = 1
 
-
 '''
 'Cumulative_Chiller_Energy_Consumption','Cumulative_Primary_Chilled_Water_Pump_Energy', 'Cumulative_Secondary_Chilled_Water_Pump_Energy', 'Cumulative_Cooling_Water_Pump_Energy ','Cumulative_Cooling_Tower_Energy', 
 'Process_Chilled_Water_Pressure_Difference', 'Process_Chilled_Water_Supply_Pressure', 'Process_Chilled_Water_Supply_Temperature','Chilled_Water_Bypass_Temperature',
@@ -27,7 +26,7 @@ args.features = 'M'
 '''
 args.data = 'hvac'
 args.root_path = './dataset/HVAC'
-args.data_path = 'summary_.csv'
+args.data_path = 'summary_2.csv'
 args.feature_cols = ['Temperature', 'Dewpoint','Dry_Bulb_Temperature', 'Wet_Bulb_Temperature', 'Total_Chiller_Power', 'Cooling_Tower_Total_Power', 'Cooling_Water_Pump_Total_Power',
                      'Total_Chilled_Water_Flowrate', 'Process_Chilled_Water_Flowrate',  'AC_Chilled_Water_Flowrate', 'Cooling_Water_Return_Temperature', 'Chiller_COP',
                      'Chilled_Water_Supply_Pressure', 'Chilled_Water_Pressure_Difference', 'Cooling_Water_Supply_Temperature',  'Secondary_Chilled_Water_Pump_Total_Power_Process',
@@ -35,18 +34,16 @@ args.feature_cols = ['Temperature', 'Dewpoint','Dry_Bulb_Temperature', 'Wet_Bulb
                      'Chilled_Water_Pump_Efficiency',   'Chilled_Water_Bypass_Temperature', 'Chilled_Water_Return_Temperature', 'Chilled_Water_Supply_Temperature',
                      'Total_Power', 'System_COP', 'System_Energy_Efficiency']
 
-#
 
 args.target = ['Total_Power','Total_Chiller_Power','System_Energy_Efficiency','Total_Cooling_Capacity']
-args.num_train = 34944  # 2023/03/08 - 2024/03/05
-args.num_test = 15840
-args.seq_len = 24
-args.pred_len = 24
+args.num_train = 35136  # 2023/03/08 - 2024/03/07
+args.num_test = 15840  # 2024/03/08 - 2024/08/19
+args.seq_len = 12
+args.pred_len = args.seq_len
 args.label_len = args.seq_len
 
-
 args.c_out = len(args.target)
-args.forecast_dim = 1
+args.forecast_dim = 2
 args.source_data_path = args.data_path
 args.enc_in = len(args.feature_cols)
 args.dec_in = len(args.feature_cols)
@@ -61,9 +58,9 @@ if __name__ == '__main__':
     import numpy as np
     from scipy.stats import zscore
 
-    df = pd.read_csv(os.path.join(r'D:\Time-LLM-main\dataset\HVAC', 'summary_.csv'))
+    df = pd.read_csv(os.path.join(r'D:\Time-LLM-main\dataset\HVAC', 'summary_2.csv'))
     # === 参数设置 ===
-    z_threshold = 50  # 超过这个z-score就算异常
+    z_threshold = 10  # 超过这个z-score就算异常
 
     for col in df.select_dtypes(include=[np.number]).columns:  # 仅处理数值列
         series = df[col]
@@ -83,9 +80,8 @@ if __name__ == '__main__':
 
             # 使用线性插值补全异常值
             df[col] = df[col].interpolate(method='linear', limit_direction='both')
-
         else:
             print(f"列：{col} 未发现异常值")
 
-        # === 对所有列执行插值补全 ===
-        # df.to_csv(os.path.join(r'D:\Time-LLM-main\dataset\HVAC', 'summary_.csv'))
+    # === 对所有列执行插值补全 ===
+    # df.to_csv(os.path.join(r'D:\Time-LLM-main\dataset\HVAC', 'summary_2.csv'))

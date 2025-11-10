@@ -9,8 +9,8 @@ def model_hyparameter_setup(args):
     # default
     if args.task_name == 'imputation' or args.task_name == 'classification':
         args.learning_rate = 0.001
-        args.patience = 6
-        args.train_epochs = 36 if args.task_name == 'imputation' else 100
+        args.patience = 5
+        args.train_epochs = 50 if args.task_name == 'imputation' else 100
     else:
         args.learning_rate = 0.0001
     args.d_model = 512
@@ -28,6 +28,7 @@ def model_hyparameter_setup(args):
         args.stride = 1
 
     if args.model == 'LLMformer':
+        args.train_epochs = 30
         args.batch_size = 10
         if args.task_name == 'imputation':
             args.use_norm = True
@@ -53,8 +54,8 @@ def model_hyparameter_setup(args):
         # args.d_model = 256
         # args.d_ff = 512
         if args.task_name == 'imputation':
-            args.d_model = 128
-            args.d_ff = 128
+            args.d_model = 256
+            args.d_ff = 512
         if args.task_name == 'classification':
             args.d_model = 128
             args.d_ff = 256
@@ -63,6 +64,7 @@ def model_hyparameter_setup(args):
         args.use_norm = False
 
     if args.model == 'Informer':
+        args.train_epochs = 20
         args.use_norm = False
         args.factor = 5
         args.d_layers = 2  # default 2  imputatiaon 1
@@ -73,8 +75,8 @@ def model_hyparameter_setup(args):
     if args.model == 'Autoformer':
         args.e_layers = 2
         if args.task_name == 'imputation':
-            args.d_model = 128
-            args.d_ff = 128
+            args.d_model = 512
+            args.d_ff = 2048
         if args.task_name == 'classification':
             args.d_model = 512
             args.d_ff = 2048
@@ -83,11 +85,12 @@ def model_hyparameter_setup(args):
         args.use_norm = False
 
     if args.model == 'iTransformer':  # default
+        args.train_epochs = 20
         args.e_layers = 3
         args.d_model = 512
         args.d_ff = 512
         if args.task_name == 'imputation':
-            args.use_norm = False
+            # args.use_norm = False
             args.d_model = 512
             args.d_ff = 512
         if args.task_name == 'classification':
@@ -108,14 +111,15 @@ def model_hyparameter_setup(args):
         args.llm_layers = 12
 
     if args.model == 'PatchTST':
+        args.train_epochs = 20
         args.use_norm = True
         args.d_model = 128
         args.d_ff = 256
         args.e_layers = 2
         args.n_heads = 8
         if args.task_name == 'imputation':
-            args.d_model = 256
-            args.d_ff = 256
+            args.d_model = 512
+            args.d_ff = 512
             args.e_layers = 4
         elif args.task_name == 'classification':
             args.e_layers = 4

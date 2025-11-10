@@ -59,7 +59,7 @@ class Model(nn.Module):
                     config=self.gpt2_config,
                 )
         self.hidden_dim_of_gpt2 = 768
-        self.mix = configs.mix_embeds
+        self.mix = True
 
         if self.mix:
             self.add_scale = nn.Parameter(torch.ones([]))
@@ -110,8 +110,12 @@ class Model(nn.Module):
         return dec_out
 
     def forward(self, x_enc, x_mark_enc, x_dec, x_mark_dec, mask=None):
-        dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, mask)
-        if self.output_ori:
-            dec_out[:, :self.seq_len, -self.c_out:] = mask[:, :, -self.c_out:] * x_enc[:, :self.seq_len, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out[:, :self.seq_len,
-                                                                                                                                                       -self.c_out:]
-        return dec_out
+        if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
+            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, mask)
+            return dec_out
+        if self.task_name == 'imputation':
+            dec_out = self.forecast(x_enc, x_mark_enc, x_dec, x_mark_dec, mask)
+            if self.output_ori:
+                dec_out[:, :self.seq_len, -self.c_out:] = mask[:, :, -self.c_out:] * x_enc[:, :self.seq_len, -self.c_out:] + (1 - mask[:, :, -self.c_out:]) * dec_out[:, :self.seq_len,
+                                                                                                                                                           -self.c_out:]
+            return dec_out
