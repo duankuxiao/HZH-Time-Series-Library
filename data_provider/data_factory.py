@@ -1,6 +1,7 @@
 from data_provider.data_loader import Dataset_ETT_hour, Dataset_ETT_minute, Dataset_Custom, Dataset_M4
 from torch.utils.data import DataLoader
 from data_provider.data_loader_cumstom import Dataset_cumstom, Dataset_classification
+from models.AutoTimes import Dataset_Custom as Dataset_Custom_AutoTimes
 from data_provider.data_loader_LLM import Dataset_cumstom_llm
 from data_provider.uea import collate_fn
 

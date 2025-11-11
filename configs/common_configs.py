@@ -52,9 +52,10 @@ parser.add_argument('--mask_method', type=str, default='rdo', help='mask_method'
 parser.add_argument('--ori_weight', type=float, default=1, help='ori_weight')
 parser.add_argument('--missing_weight', type=float, default=1, help='missing_weight')
 parser.add_argument('--pred_weight', type=float, default=1, help='pred_weight')
+parser.add_argument('--input_inter',default=False, help='whether to use input interpolation')
 parser.add_argument('--interpolate_method', type=str, default='linear', help=['linear','polynomial', 'spline'])
 parser.add_argument('--interpolate_order', type=int, default=1, help='1<order<5 for spline, 2 or odd number for polynomial')
-parser.add_argument('--mask_target_only', action='store_true', default=False, help='mask_target_only')
+parser.add_argument('--mask_target_only', default=False, help='mask_target_only')
 parser.add_argument('--output_ori', default=True, help='mask_target_only')
 
 

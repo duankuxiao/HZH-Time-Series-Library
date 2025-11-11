@@ -10,14 +10,13 @@ os.environ['CURL_CA_BUNDLE'] = ''
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:64"
 
 def get_setting(args, ii):
-    setting = '{}_{}_{}_ft{}_sl{}_ll{}_pl{}_sd{}_td{}_dm{}_df{}_nh{}_el{}_dl{}_ma{}_factor{}_dropout{}_loss{}_{}_{}{}'.format(
+    setting = '{}_{}_{}_ft{}_sl{}_ll{}_sd{}_td{}_dm{}_df{}_nh{}_el{}_dl{}_factor{}_loss{}_{}_{}{}'.format(
         args.model_id,
         args.model,
         args.data,
         args.features,
         args.seq_len,
         args.label_len,
-        args.pred_len,
         args.enc_in,
         args.c_out,
         args.d_model,
@@ -25,9 +24,7 @@ def get_setting(args, ii):
         args.n_heads,
         args.e_layers,
         args.d_layers,
-        args.moving_avg,
-        args.factor,
-        args.dropout, args.loss,args.loss_method,args.mask_method,args.mask_rate)
+        args.factor, args.loss,args.loss_method,args.mask_method,args.mask_rate)
 
     if 'LLM' in args.model:
         setting += '_{}_llmd{}_llmf{}_tk{}'.format(args.llm_model, args.llm_dim, args.llm_layers, args.top_k)
@@ -46,6 +43,8 @@ def get_setting(args, ii):
         setting += '_target'
     if args.output_ori:
         setting += '_ori'
+    if args.input_inter:
+        setting += '_int'
     return setting
 
 def main(args):
@@ -87,8 +86,8 @@ if __name__ == '__main__':
 
     all_results_imputation = []
     all_results = []
-    for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'iTransformer', 'PatchTST', 'TimesNet', 'LLMformer']:
-    # for model in ['LLMformer',]:
+    for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'iTransformer', 'PatchTST', 'TimesNet', 'LLMformer']:  # AutoTimes
+    # for model in ['AutoTimes',]:
     #     for mask_rate in [0.4,0.5]:
         for mask_rate in [0.1, 0.2, 0.3, 0.4, 0.5]:
             # all_results_imputation = []
@@ -100,7 +99,7 @@ if __name__ == '__main__':
                 # for model in ['RNN']:
 
             args = deepcopy(default_args)
-            args.mask_method = 'mar'
+            args.mask_method = 'mcar'
             if args.mask_method == 'rdo':
                 if mask_rate == 0.1:
                     args.fix_seed = 9974213
@@ -135,17 +134,16 @@ if __name__ == '__main__':
             np.random.seed(args.fix_seed)
             args.mask_rate = mask_rate
 
-            args.model_id = '4'
+            args.model_id = '2'
             args.model = model
             # 1 MSE Ture fix  2 MAE Ture fix  3 MAE False fix  4 MAE False  adaptive
-            args.loss_method = "adaptive"  # missing  fix  adaptive
+            args.loss_method = "fix"  # missing  fix  adaptive
             args.output_ori = False
             args.loss = 'MAE'
 
             args.task_name = 'imputation'
             args.mask_target_only = False
-            args.pred_len = 0
-            args.label_len = 0
+            args.input_inter = False
             args = model_hyparameter_setup(args)
             args.is_training = 1
 
