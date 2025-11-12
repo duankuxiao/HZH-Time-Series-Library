@@ -87,7 +87,7 @@ if __name__ == '__main__':
     all_results_imputation = []
     all_results = []
     for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'iTransformer', 'PatchTST', 'TimesNet', 'LLMformer']:  # AutoTimes
-    # for model in ['AutoTimes',]:
+    # for model in ['DLinear',]:
     #     for mask_rate in [0.4,0.5]:
         for mask_rate in [0.1, 0.2, 0.3, 0.4, 0.5]:
             # all_results_imputation = []
@@ -99,34 +99,30 @@ if __name__ == '__main__':
                 # for model in ['RNN']:
 
             args = deepcopy(default_args)
-            args.mask_method = 'mcar'
+            args.mask_method = 'rdo'
             if args.mask_method == 'rdo':
                 if mask_rate == 0.1:
-                    args.fix_seed = 9974213
-                elif mask_rate == 0.2:
-                    args.fix_seed = 199714213
-                elif mask_rate == 0.3:
-                    args.fix_seed = 199742136
-                elif mask_rate == 0.4:
-                    args.fix_seed = 426
-                elif mask_rate == 0.5:
                     args.fix_seed = 19974213
+                elif mask_rate == 0.2 or mask_rate == 0.4 or mask_rate == 0.5:
+                    args.fix_seed = 42
+                elif mask_rate == 0.3:
+                    args.fix_seed = 421
             if args.mask_method == 'mcar':
-                if mask_rate == 0.1 or mask_rate == 0.5:
+                if mask_rate == 0.1:
                     args.fix_seed = 199714213
                 elif mask_rate == 0.2:
                     args.fix_seed = 974213
-                elif mask_rate == 0.3:
-                    args.fix_seed = 421
-                elif mask_rate == 0.4:
-                    args.fix_seed = 9974213
-            if args.mask_method == 'mar':   # obs_rate = 1.0
-                if mask_rate == 0.1:
-                    args.fix_seed = 421
-                elif mask_rate == 0.2 or mask_rate == 0.4:
-                    args.fix_seed = 9974213
                 elif mask_rate == 0.3 or mask_rate == 0.5:
-                    args.fix_seed = 974213
+                    args.fix_seed = 19974213
+                elif mask_rate == 0.4:
+                    args.fix_seed = 421
+            if args.mask_method == 'mar':
+                if mask_rate == 0.1:
+                    args.fix_seed = 19974213
+                elif mask_rate == 0.2:
+                    args.fix_seed = 9974213
+                elif mask_rate == 0.3 or mask_rate == 0.4 or mask_rate == 0.5:
+                    args.fix_seed = 421
 
             # args.fix_seed = seed
             random.seed(args.fix_seed)
@@ -134,16 +130,16 @@ if __name__ == '__main__':
             np.random.seed(args.fix_seed)
             args.mask_rate = mask_rate
 
-            args.model_id = '2'
+            args.model_id = '4'
             args.model = model
             # 1 MSE Ture fix  2 MAE Ture fix  3 MAE False fix  4 MAE False  adaptive
-            args.loss_method = "fix"  # missing  fix  adaptive
-            args.output_ori = False
             args.loss = 'MAE'
+            args.output_ori = False
+            args.loss_method = "adaptive"  # missing  fix  adaptive
 
             args.task_name = 'imputation'
             args.mask_target_only = False
-            args.input_inter = False
+            args.input_inter = True
             args = model_hyparameter_setup(args)
             args.is_training = 1
 

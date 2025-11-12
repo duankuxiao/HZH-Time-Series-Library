@@ -843,7 +843,6 @@ def mask_custom(X_ori, mask_rate=0.1,method='mcar',f_dim=4,seed=4213,always_obs=
         # grind the dataset with randomly drop observations pattern   每个特征量随机在同一时间缺失
         # X_with_mask_data = rdo(X_ori, p=mask_rate)
         X_with_mask_data = generate_rdo_mask(X_ori, row_drop_rate=mask_rate, f_dim=f_dim, seed=seed, tail_targets_only=targets_only)
-
     else:
         raise ValueError('method must be mcar or mar or rdo or seq or block_missing')
     mask = (np.isnan(X_with_mask_data) ^ np.isnan(X_ori)) ^ 1

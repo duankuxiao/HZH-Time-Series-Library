@@ -113,7 +113,6 @@ class Exp_Imputation(Exp_Basic):
         self.model.eval()
         with torch.no_grad():
             for i, (inp, inp_inter, batch_x_mark, mask, x_ori) in enumerate(vali_loader):
-                f_dim = self.args.c_out
                 # inp_withmask, mask, inp = mask_custom(batch_x, mask_rate=self.args.mask_rate, method=self.args.mask_method,f_dim=f_dim,seed=self.args.fix_seed,targets_only=self.args.mask_target_only)
 
                 batch_x_mark = batch_x_mark.float().to(self.device)
@@ -190,9 +189,6 @@ class Exp_Imputation(Exp_Basic):
                 batch_x_mark = batch_x_mark.float()
 
                 # imputation input
-                f_dim = self.args.c_out
-                # inp_withmask, mask, inp = mask_custom(batch_x, mask_rate=self.args.mask_rate,always_obs=4, method=self.args.mask_method, f_dim=f_dim, seed=self.args.fix_seed,targets_only=self.args.mask_target_only)
-
                 x_ori = x_ori.float().to(self.device)
                 batch_x_mark = batch_x_mark.to(self.device)
                 mask = mask.int().to(self.device)
@@ -334,10 +330,6 @@ class Exp_Imputation(Exp_Basic):
 
         with torch.no_grad():
             for i, (inp, inp_inter, batch_x_mark, mask, x_ori) in enumerate(test_loader):
-
-                f_dim = self.args.c_out
-                # inp_withmask, mask, inp = mask_custom(batch_x, mask_rate=self.args.mask_rate, method=self.args.mask_method, f_dim=f_dim, seed=self.args.fix_seed,targets_only=self.args.mask_target_only)
-
                 batch_x_mark = batch_x_mark.float().to(self.device)
                 mask = mask.int().to(self.device)
 

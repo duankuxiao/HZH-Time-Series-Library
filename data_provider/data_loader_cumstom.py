@@ -179,10 +179,13 @@ class Dataset_cumstom(Dataset):
             data_stamp = data_stamp.transpose(1, 0)
         if self.task_name == 'imputation':
             data_ori = data
-            self.data_withmask, self.mask, data = mask_custom(torch.Tensor(data).unsqueeze(dim=0), mask_rate=self.configs.mask_rate, method=self.configs.mask_method, f_dim=self.c_out, seed=self.configs.fix_seed,targets_only=self.configs.mask_target_only)
+            data_withmask, mask, data = mask_custom(torch.Tensor(data), mask_rate=self.configs.mask_rate, method=self.configs.mask_method, f_dim=self.c_out, seed=self.configs.fix_seed,targets_only=self.configs.mask_target_only)
             self.data_ori = data_ori[border1:border2, :len(self.feature_cols)]
-            self.data_withmask, self.mask, data = self.data_withmask.squeeze(dim=0).numpy(), self.mask.squeeze(dim=0).numpy(), data.squeeze(dim=0).numpy()
-            self.data_inter = interpolate_nan_matrix(self.data_withmask)
+            data_withmask, mask, data = data_withmask.squeeze(dim=0).numpy(), mask.squeeze(dim=0).numpy(), data.squeeze(dim=0).numpy()
+            data_inter = interpolate_nan_matrix(data_withmask, method='polynomial', axis=0, order=2)
+            self.data_withmask = data_withmask[border1:border2, :]
+            self.mask = mask[border1:border2, :]
+            self.data_inter = data_inter[border1:border2, :]
         if self.features == 'S':
             self.data_x = data[border1:border2, -1:]
             self.data_y = data[border1:border2, -1:]
