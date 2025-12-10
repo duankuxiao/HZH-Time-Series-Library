@@ -29,19 +29,19 @@ def model_hyparameter_setup(args):
 
     if args.model == 'LLMformer':
         args.train_epochs = 30
-        args.batch_size = 10
+        args.batch_size = 24
         if args.task_name == 'imputation':
             args.use_norm = True
             args.learning_rate = 0.001
         else:
             args.learning_rate = 0.001
         args.patience = 6
-        args.llm_model = 'GPT2'
+        args.llm_model = 'BERT'  #GPT2
         args.d_model = 16
         args.d_ff = 64
         args.e_layers = 2
-        args.d_layers = 3
-        args.llm_layers = 6
+        args.d_layers = 2  # 3
+        args.llm_layers = 2  # 6
 
     if 'RNN' in args.model:
         args.use_norm = False

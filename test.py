@@ -1,3 +1,7 @@
+import random
+
+import numpy as np
+
 from utils.tools import load_config,save_config
 import os
 import torch
@@ -44,23 +48,25 @@ def get_setting(args, ii):
 
 def transfer_test(args, path):
     if args.task_name == 'interval_forecast':
-        from exp.exp_interval_forecasting import Exp_Forecast
+        from exp.exp_interval_forecasting import Exp_Forecast as Exp_
     elif args.task_name == 'imputation':
-        from exp.exp_imputation import Exp_Imputation as Exp_Forecast
+        from exp.exp_imputation import Exp_Imputation as Exp_
     else:
-        from exp.exp_forecasting import Exp_Forecast
+        from exp.exp_forecasting import Exp_Forecast as Exp_
 
     ii = 0
     setting = get_setting(args,ii)
 
-    exp = Exp_Forecast(args)  # set experiments
+    exp = Exp_(args)  # set experiments
     print('>>>>>>>testing : {}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<'.format(setting))
     if args.task_name == 'imputation':
-        pred_res,_, metrics_df = exp.test(setting, test=1, path=path)
+        pred_res,imputation_metrics, metrics_df = exp.test(setting, test=1, path=path)
+        torch.cuda.empty_cache()
+        return pred_res,imputation_metrics,metrics_df
     else:
         pred_res, metrics_df = exp.test(setting, test=1, path=path)
-    torch.cuda.empty_cache()
-    return pred_res,metrics_df
+        torch.cuda.empty_cache()
+        return pred_res,metrics_df
 
 
 def get_direct_subfolders(root_folder):
@@ -135,6 +141,83 @@ def extreme_weather_test(root_path, pattern='shift'):
         final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
         final_metrics_df.to_csv(os.path.join(root_path, 'pf_{}_all_models_comparison.csv'.format(args.model_id)))
 
+def imputation_mask_rate(root_path,):
+    subfolders = get_direct_subfolders(root_path)
+    all_results = []
+    imputation_results = []
+    for path in subfolders:
+        args = load_config(os.path.join(path, 'checkpoints', 'configs.pkl'))
+        for mask_rate in [0.1, 0.2, 0.3, 0.4, 0.5,0.6,0.7]:
+            args.mask_rate = mask_rate
+            args.mask_method = 'mar'
+            # args.mask_target_only = True
+
+            if args.mask_method == 'rdo':
+                if mask_rate == 0.1:
+                    args.fix_seed = 19974213
+                elif mask_rate == 0.2 or mask_rate == 0.4 or mask_rate == 0.5:
+                    args.fix_seed = 42
+                elif mask_rate == 0.3:
+                    args.fix_seed = 421
+                elif mask_rate == 0.6:
+                    args.fix_seed = 199714213
+                elif mask_rate == 0.7:
+                    args.fix_seed = 9974213
+                elif mask_rate == 0.8:
+                    args.fix_seed = 974213
+                elif mask_rate == 0.9:
+                    args.fix_seed = 421
+            if args.mask_method == 'mcar':
+                if mask_rate == 0.1:
+                    args.fix_seed = 199714213
+                elif mask_rate == 0.2:
+                    args.fix_seed = 974213
+                elif mask_rate == 0.3 or mask_rate == 0.5:
+                    args.fix_seed = 19974213
+                elif mask_rate == 0.4:
+                    args.fix_seed = 421
+                elif mask_rate == 0.6:
+                    args.fix_seed = 9974213
+                elif mask_rate == 0.7:
+                    args.fix_seed = 199714213
+                elif mask_rate == 0.8:
+                    args.fix_seed = 974213
+                elif mask_rate == 0.9:
+                    args.fix_seed = 1997715213
+            if args.mask_method == 'mar':
+                if mask_rate == 0.1:
+                    args.fix_seed = 19974213
+                elif mask_rate == 0.2:
+                    args.fix_seed = 9974213
+                elif mask_rate == 0.3 or mask_rate == 0.4 or mask_rate == 0.5:
+                    args.fix_seed = 421
+                elif mask_rate == 0.6 or mask_rate == 0.9:
+                    args.fix_seed = 421
+                elif mask_rate == 0.7:
+                    args.fix_seed = 974213
+                elif mask_rate == 0.8:
+                    args.fix_seed = 9974213
+
+            # args.fix_seed = seed
+            # args.mask_method = 'mcar'
+
+            random.seed(args.fix_seed)
+            torch.manual_seed(args.fix_seed)
+            np.random.seed(args.fix_seed)
+            print(args)
+
+            pred_res,metrics_df, imputation_metrics = transfer_test(args, path)
+            metrics_df.insert(0, 'model', args.model)
+            metrics_df.insert(1, 'mask_rate', mask_rate)
+            imputation_metrics.insert(0, 'model', args.model)
+            imputation_metrics.insert(0, 'mask_rate', mask_rate)
+
+            all_results.append(metrics_df.iloc[-1:])
+            imputation_results.append(imputation_metrics.iloc[-1:])
+            final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
+            final_metrics_df.to_csv(os.path.join(root_path, '{}_metrics.csv'.format(args.model_id)))
+            imputation_metrics_df = pd.concat(imputation_results, axis=0, ignore_index=False)
+            imputation_metrics_df.to_csv(os.path.join(root_path, '{}_imputation_metrics.csv'.format(args.model_id)))
 
 if __name__ == '__main__':
     # root_path = r"D:\results\pf_ver2\zero-shot\kansai"  # 替换为实际路径
@@ -143,8 +226,8 @@ if __name__ == '__main__':
 
     # root_path = r'D:\results\pf_ver2\Robustness\extreme_clean'  # extreme extreme_clean  shift
     # extreme_weather_test(root_path,pattern='extreme_clean')
-    path = r'D:\Time-LLM-main\results\test_LLMformer_hvac_ftM_sl24_ll0_pl0_sd29_td3_dm32_df64_nh8_el2_dl4_ma25_factor3_dropout0.1_lossMAE_fix_mr0.3_GPT2_llmd768_llmf12_tk5_prompt_scale'
-    args = load_config(os.path.join(path, 'checkpoints', 'configs.pkl'))
-    transfer_test(args, path)
-
+    path = r'D:\results\imputation\zero-shot\mar_obs=0.25'
+    # args = load_config(os.path.join(path, 'checkpoints', 'configs.pkl'))
+    # transfer_test(args, path)
+    imputation_mask_rate(path)
 

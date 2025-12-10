@@ -838,11 +838,11 @@ def mask_custom(X_ori, mask_rate=0.1,method='mcar',f_dim=4,seed=4213,always_obs=
     elif method == 'mar':
         # grind the dataset with MAR pattern  部分特征量随机在不同的时间缺失
         # X_with_mask_data = mar_logistic(X_ori[:, 0, :], obs_rate=mask_rate, missing_rate=mask_rate)
-        X_with_mask_data = generate_mar_mask(X_ori,obs_rate=1.0,missing_rate=mask_rate,f_dim=f_dim,seed=seed,always_obs=always_obs)
+        X_with_mask_data = generate_mar_mask(X_ori,obs_rate=0.25,missing_rate=mask_rate,f_dim=f_dim,seed=seed,always_obs=always_obs)
     elif method == 'rdo':
         # grind the dataset with randomly drop observations pattern   每个特征量随机在同一时间缺失
         # X_with_mask_data = rdo(X_ori, p=mask_rate)
-        X_with_mask_data = generate_rdo_mask(X_ori, row_drop_rate=mask_rate, f_dim=f_dim, seed=seed, tail_targets_only=targets_only)
+        X_with_mask_data = generate_rdo_mask(X_ori, row_drop_rate=mask_rate, f_dim=f_dim, seed=seed, tail_targets_only=targets_only,)
     else:
         raise ValueError('method must be mcar or mar or rdo or seq or block_missing')
     mask = (np.isnan(X_with_mask_data) ^ np.isnan(X_ori)) ^ 1

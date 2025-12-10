@@ -20,7 +20,7 @@ def generate_mar_mask(
     obs_rate: float = 0.5,     # 中间列中按比例选择“也做 MAR 的列”；其余中间列将“永久观测”
     missing_rate=0.2,              # 目标缺失率：标量或长度==目标列数的向量
     seed: int = 4213,
-    max_iter: int = 30,
+    max_iter: int = 40,
     eps: float = 1e-8,
 ):
     """
