@@ -99,6 +99,7 @@ checkpoints/
 # Temporary files
 *.tmp
 *.temp
-/dataset/electricity/tohoku/20_1q.txt
-/dataset/electricity/tohoku/
+
 /dataset/
+/models/backup_AttLLM.py
+/.claude/settings.local.json
