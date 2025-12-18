@@ -1,0 +1,104 @@
+# LLM weights and model files
+LLM/
+
+# Experiment results
+results/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environment
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Dataset files (large data files)
+dataset/**/*.csv
+dataset/**/*.zip
+dataset/**/*.xlsx
+dataset/**/*.json
+dataset/**/*.pkl
+dataset/**/*.npy
+dataset/**/*.npz
+!dataset/prompt_bank/**
+
+# Data provider temporary files
+data_provider/*.csv
+data_provider/*.png
+data_provider/*.xlsx
+
+# Checkpoints
+checkpoints/
+*.pth
+*.pt
+*.ckpt
+
+# Temporary files
+*.tmp
+*.temp
+/dataset/electricity/tohoku/20_1q.txt
+/dataset/electricity/tohoku/
+/dataset/
