@@ -78,7 +78,7 @@ def main(args):
 
 
 def xgboost(args):
-    from utils.hyparameter_setup import model_hyparameter_setup
+    from utils.setup_imputation import model_hyparameter_setup
     from exp.exp_imputation import Exp_Imputation
 
     args = model_hyparameter_setup(args)
@@ -93,7 +93,7 @@ if __name__ == '__main__':
     # from configs.electricity_configs import args as default_args
     from configs.HVAC_configs import args as default_args
     from copy import deepcopy
-    from utils.hyparameter_setup import model_hyparameter_setup
+    from utils.setup_imputation import model_hyparameter_setup
 
     all_results_imputation = []
     all_results = []

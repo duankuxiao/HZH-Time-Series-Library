@@ -85,7 +85,7 @@ def main(args):
 
 def test():
     from configs.electricity_configs import args as default_args
-    from utils.hyparameter_setup import model_hyparameter_setup
+    from utils.setup_imputation import model_hyparameter_setup
     from copy import deepcopy
     from exp.exp_interval_forecasting import Exp_Forecast
 
@@ -108,7 +108,7 @@ def test():
 if __name__ == '__main__':
     # test()
 
-    from utils.hyparameter_setup import model_hyparameter_setup
+    from utils.setup_imputation import model_hyparameter_setup
     from configs.electricity_configs import args as default_args
     # from configs.solar_radiation_configs import args as default_args
     from copy import deepcopy
