@@ -2,7 +2,7 @@
   <img src="figures/logo.png" alt="TimeLLM Logo" width="200"/>
 </p>
 
-<h1 align="center">TimeLLM 时间序列深度学习库</h1>
+<h1 align="center">时间序列深度学习库</h1>
 
 <p align="center">
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.8+-blue.svg" alt="Python Version"></a>
