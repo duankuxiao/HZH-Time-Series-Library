@@ -35,7 +35,7 @@
 
 ## 项目简介
 
-TimeLLM 是一个基于 PyTorch 的时间序列深度学习研究库，集成了多种先进的深度学习模型，包括传统的 Transformer 架构和最新的大语言模型（LLM）增强方法。本库旨在为研究人员和工程师提供一个统一、灵活、易用的时间序列分析平台。
+这是一个基于 PyTorch 的时间序列深度学习研究库，集成了多种先进的深度学习模型，包括传统的 Transformer 架构和最新的大语言模型（LLM）增强方法。本库旨在为研究人员和工程师提供一个统一、灵活、易用的时间序列分析平台。
 
 ### 核心优势
 
@@ -184,7 +184,6 @@ python few_shot_training.py
 | 模型 | 基础 LLM | 描述 |
 |------|----------|------|
 | **TimeLLM** | BERT/GPT2/LLAMA | 时间序列 + 预训练语言模型 |
-| **TimeLLMX** | BERT/GPT2 | TimeLLM 增强版本 |
 | **LLMformer** | BERT/GPT2 | LLM + Transformer 融合 |
 | **AttLLM** | BERT/GPT2 | 注意力增强的 LLM 方法 |
 | **AutoTimes** | BERT/GPT2 | 自动架构搜索 |
@@ -338,14 +337,10 @@ train_epochs = 10
 本项目参考和借鉴了以下优秀开源项目：
 
 - [Time-Series-Library](https://github.com/thuml/Time-Series-Library)
-- [TimeLLM](https://github.com/KimMeen/Time-LLM)
-- [PatchTST](https://github.com/yuqinie98/PatchTST)
+
 
 ---
 
-## License
-
-本项目采用 MIT License 开源协议。
 
 ---
 
