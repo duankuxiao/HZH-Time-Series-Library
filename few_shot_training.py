@@ -1,13 +1,9 @@
 from utils.tools import load_config,save_config
-import os
 import torch
 import os
 from exp.exp_few_shot import Exp_FewShot
 from utils.print_args import print_args
-from utils.tools import load_content
-import random
-import numpy as np
-from pred_results import res_evaluation
+
 
 def few_shot_training(args,shot_num,path):
     args.use_gpu = True if torch.cuda.is_available() and args.use_gpu else False

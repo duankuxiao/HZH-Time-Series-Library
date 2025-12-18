@@ -81,27 +81,23 @@ def main(args):
 if __name__ == '__main__':
     from utils.hyparam_setup_forele import model_hyparameter_setup
     from configs.electricity_configs import args as default_args
+    # from configs.solar_radiation_confi gs import args as default_args
+    # from configs.operational_configs import args as default_args
+    # from configs.HVAC_configs import args as default_args
     from copy import deepcopy
 
     all_results = []
 
-    # for model in ['RNN', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'TimeLLM', 'TimeLLMformer']:
-    for model in ['RNN', 'Transformer', 'DLinear', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST']:
+    for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLM', 'TimeLLMformer']:
+
         args = deepcopy(default_args)
         # args.model_id = 'zero-shot-{}'.format(data)
         args.model_id = 'texas'
 
-        args.model = model  # [Autoformer, TimeLLM, TimeLLMX, TimeLLMformer, TimesNet, DLinear, Informer, Transformer, TimeMixer, iTransformer, TransformerForecast, RNN, PatchTST,]
+        args.model = model
         args.is_training = 1
         args.accelerate = False
         args.use_prompt = True
-
-        # args.feature_cols = ['Electricity','Renewable_energy', 'Nuclear', 'Coal', 'Hydro', 'Geothermal', 'Biomass','Solar', 'Solar_curtailment', 'Wind', 'Wind_ccurtailment','Water_pumping',
-        #                      'Interconnection', 'Temperature', 'Relative_humidity', 'Precipitation', 'Dew_point', 'Vapor_pressure', 'Wind_speed', 'Sunshine_duration',
-        #                       'Global_horizontal_irradiance']
-        # args.feature_cols = ['Electricity', 'Renewable_energy','Coal','Temperature', 'Relative_humidity', 'Wind_speed', 'Sunshine_duration',
-        #                     'Global_horizontal_irradiance' ]
-        # args.target = ['Electricity', 'Renewable_energy', 'Coal']
 
         args = model_hyparameter_setup(args)
         _, res_metrics_df = main(args)
