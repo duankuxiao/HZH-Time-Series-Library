@@ -239,7 +239,7 @@ class Dataset_classification(Dataset):
         return len(self.data)
 
     def __read_data__(self):
-        npz = np.load(r"D:\Time-LLM-main\dataset\classification\{}".format(self.data_path))
+        npz = np.load(r"D:\HZH-Time-Series-Library\dataset\classification\{}".format(self.data_path))
         if self.set_type == 'train':
             self.data = npz["train_data"]
             self.labels = npz["train_labels"]

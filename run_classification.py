@@ -31,7 +31,7 @@ def get_setting(args, ii):
         if args.use_prompt:
             setting += '_prompt'
     if 'RNN' in args.model:
-        setting += '_{}_rnnd{}_rnnf{}'.format(args.rnn_model, args.rnn_dim, args.rnn_layers, )
+        setting += '_{}'.format(args.rnn_model)
 
     if args.percent != 100:
         setting = 'few-shot{}_'.format(args.percent) + setting
@@ -76,35 +76,40 @@ if __name__ == '__main__':
 
     all_results = []
     for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer','PatchTST', 'TimesNet']:
-    # for model in ['Autoformer']:
+        for d_model in [64, 128, 256, 512]:
+        # for learning_rate in [0.0001,0.001, 0.01, 0.1]:
+        # for e_layers in [1,2,4,6]:
+        # for model in ['Autoformer']:
 
-        args = deepcopy(default_args)
-        fix_seed = 1234
-        args.fix_seed = fix_seed
-        random.seed(fix_seed)
-        torch.manual_seed(fix_seed)
-        np.random.seed(fix_seed)
-        args.is_training = 0
+            args = deepcopy(default_args)
+            fix_seed = 1234
+            args.fix_seed = fix_seed
+            random.seed(fix_seed)
+            torch.manual_seed(fix_seed)
+            np.random.seed(fix_seed)
+            args.is_training = 1
 
-        args.model_id = 'train80'
-        args.model = model
-        args.task_name = 'classification'
-        args.pred_len = 0
-        args.label_len = 0
+            args.model_id = 'train80'
+            args.model = model
+            args.task_name = 'classification'
+            args.pred_len = 0
+            args.label_len = 0
 
-        args.data_path = 'dataset_splits_train80_test20.npz'  # dataset_splits_train40_test60
-        args = model_hyparameter_setup(args)
-        args.seq_len = 6
-        args.enc_in = 16
-        # args.patience = 2
-        args.train_epochs = 50
+            args.data_path = 'dataset_splits_train80_test20.npz'  # dataset_splits_train40_test60
+            args = model_hyparameter_setup(args)
+            args.d_model = d_model
+            args.seq_len = 6
+            args.enc_in = 16
+            # args.patience = 2
+            args.train_epochs = 50
 
-        metrics_df,_ = main(args)
-        metrics_df.insert(0, 'model', model)
+            metrics_df,_ = main(args)
+            metrics_df.insert(0, 'model', model)
+            metrics_df.insert(1, 'd_model', d_model)
 
-        all_results.append(metrics_df.iloc[-1:])
+            all_results.append(metrics_df.iloc[-1:])
 
-        final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
-        # final_metrics_df.to_csv('./results/{}_all_models_comparison.csv'.format(args.model_id))
+            final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
+            final_metrics_df.to_csv('./results/{}_{}_all_models_comparison.csv'.format(args.model_id,d_model))
 
 
