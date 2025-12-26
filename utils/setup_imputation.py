@@ -3,7 +3,7 @@ from utils.tools import load_content
 import torch
 
 
-def model_hyparameter_setup(args):
+def model_hyparameter_setup(args,d_mode=None,e_layers=None):
     args.use_norm = True
 
     # default
@@ -13,16 +13,16 @@ def model_hyparameter_setup(args):
         args.train_epochs = 50 if args.task_name == 'imputation' else 100
     else:
         args.learning_rate = 0.0001
-    args.d_model = 512
-    args.d_ff = 2048
-    args.e_layers = 4
+    args.d_model = 512 if d_mode is None else d_mode
+    args.d_ff = int(4 * args.d_model)
+    args.e_layers = 4 if e_layers is None else e_layers
     args.d_layers = 1
     args.factor = 3
     args.moving_avg = 25
     if args.task_name == 'classification':
-        args.e_layers = 4
-        args.d_model = 256  # 128 default
-        args.d_ff = 512  # 256 default
+        args.e_layers = 4 if e_layers is None else e_layers
+        args.d_model = 256 if d_mode is None else d_mode  # 128 default
+        args.d_ff = int(2 * args.d_model)  # 256 default
         args.top_k = 3
         args.patch_len = 2
         args.stride = 1
@@ -45,8 +45,8 @@ def model_hyparameter_setup(args):
 
     if 'RNN' in args.model:
         args.use_norm = False
-        args.d_model = 256
-        args.e_layers = 2
+        args.d_model = 256 if d_mode is None else d_mode
+        args.e_layers = 2 if e_layers is None else e_layers
 
     if args.model == 'Transformer':
         args.use_norm = False
@@ -57,8 +57,8 @@ def model_hyparameter_setup(args):
             args.d_model = 256
             args.d_ff = 512
         if args.task_name == 'classification':
-            args.d_model = 128
-            args.d_ff = 256
+            args.d_model = 128 if d_mode is None else d_mode
+            args.d_ff = int(args.d_model * 2)
 
     if args.model == 'DLinear':
         args.use_norm = False
@@ -69,8 +69,12 @@ def model_hyparameter_setup(args):
         args.factor = 5
         args.d_layers = 2  # default 2  imputatiaon 1
         if args.task_name == 'imputation':
-            args.d_model = 128
-            args.d_ff = 128
+            args.d_model = 128 if d_mode is None else d_mode
+            args.d_ff = int(args.d_model)
+        if args.task_name == 'classification':
+            args.d_model = 256 if d_mode is None else d_mode
+            args.d_ff = int(args.d_model * 2)
+            args.e_layers = 4 if e_layers is None else e_layers
 
     if args.model == 'Autoformer':
         args.e_layers = 2
@@ -78,24 +82,24 @@ def model_hyparameter_setup(args):
             args.d_model = 512
             args.d_ff = 2048
         if args.task_name == 'classification':
-            args.d_model = 512
-            args.d_ff = 2048
-            args.e_layers = 4
+            args.d_model = 512 if d_mode is None else d_mode
+            args.d_ff = int(args.d_model * 4)
+            args.e_layers = 4 if e_layers is None else e_layers
 
         args.use_norm = False
 
     if args.model == 'iTransformer':  # default
         args.train_epochs = 20
-        args.e_layers = 3
+        args.e_layers = 3 if e_layers is None else e_layers
         args.d_model = 512
         args.d_ff = 512
         if args.task_name == 'imputation':
             # args.use_norm = False
-            args.d_model = 512
-            args.d_ff = 512
+            args.d_model = 512 if d_mode is None else d_mode
+            args.d_ff = int(args.d_model)
         if args.task_name == 'classification':
-            args.d_model = 256
-            args.d_ff = 512
+            args.d_model = 256 if d_mode is None else d_mode
+            args.d_ff = int(args.d_model)
 
     if args.model == 'TimeLLM':
         args.llm_model = 'GPT2'
@@ -113,36 +117,36 @@ def model_hyparameter_setup(args):
     if args.model == 'PatchTST':
         args.train_epochs = 20
         args.use_norm = True
-        args.d_model = 128
-        args.d_ff = 256
-        args.e_layers = 2
+        args.d_model = 128 if d_mode is None else d_mode
+        args.d_ff = int(args.d_model * 2)
+        args.e_layers = 2 if e_layers is None else e_layers
         args.n_heads = 8
         if args.task_name == 'imputation':
-            args.d_model = 512
-            args.d_ff = 512
-            args.e_layers = 4
+            args.d_model = 512 if d_mode is None else d_mode
+            args.d_ff = int(args.d_model)
+            args.e_layers = 4 if e_layers is None else e_layers
         elif args.task_name == 'classification':
-            args.e_layers = 4
-            args.d_model = 512
-            args.d_ff = 512
+            args.e_layers = 4 if e_layers is None else e_layers
+            args.d_model = 512 if d_mode is None else d_mode
+            args.d_ff = int(args.d_model)
 
     if args.model == 'TimesNet':
-        args.e_layers = 2
+        args.e_layers = 2 if e_layers is None else e_layers
         args.use_norm = True
         args.train_epochs = 10
         if args.task_name == 'imputation':
-            args.d_model = 64  # min{max[2**log(seq_dim),32],512} for forecast   min{max[2**log(seq_dim),64],128} for imputation
-            args.d_ff = 64
+            args.d_model = 64 if d_mode is None else d_mode  # min{max[2**log(seq_dim),32],512} for forecast   min{max[2**log(seq_dim),64],128} for imputation
+            args.d_ff = int(args.d_model)
             args.top_k = 3  # 5 for forecast   3 for imputation, classification, anomaly detection
         elif args.task_name == 'classification':
-            args.d_model = 256
-            args.d_ff = 256
-            args.e_layers = 4
+            args.d_model = 256 if d_mode is None else d_mode
+            args.d_ff = int(args.d_model)
+            args.e_layers = 4 if e_layers is None else e_layers
             args.top_k = 3
             args.num_kernels = 4
         else:
-            args.d_model = 32  # min{max[2**log(seq_dim),32],512} for forecast   min{max[2**log(seq_dim),64],128} for imputation
-            args.d_ff = 32
+            args.d_model = 32 if d_mode is None else d_mode  # min{max[2**log(seq_dim),32],512} for forecast   min{max[2**log(seq_dim),64],128} for imputation
+            args.d_ff = int(args.d_model)
             args.top_k = 5  # 5 for forecast   3 for imputation, classification, anomaly detection
 
     if args.model == 'SAITS':
