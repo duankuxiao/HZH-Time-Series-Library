@@ -78,9 +78,9 @@ if __name__ == '__main__':
     for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer','PatchTST', 'TimesNet']:
     # for model in ['RNN']:
 
-        # for d_model in [64, 128, 256, 512]:
+        for d_model in [128, 256, 512, 1024]:
         # for learning_rate in [0.0001,0.001, 0.01, 0.1]:
-        for e_layers in [1,2,4,6]:
+        # for e_layers in [1,2,4,6]:
         # for model in ['Autoformer']:
 
             args = deepcopy(default_args)
@@ -91,15 +91,14 @@ if __name__ == '__main__':
             np.random.seed(fix_seed)
             args.is_training = 1
 
-            args.model_id = 'rnn'  #'train80'
+            args.model_id = 'train80'  #'train80'
             args.model = model
             args.task_name = 'classification'
             args.pred_len = 0
             args.label_len = 0
 
             args.data_path = 'dataset_splits_train80_test20.npz'  # dataset_splits_train40_test60
-            args = model_hyparameter_setup(args)
-            args.e_layers = e_layers
+            args = model_hyparameter_setup(args,d_mode=d_model)
             args.seq_len = 6
             args.enc_in = 16
             # args.patience = 2
@@ -107,11 +106,11 @@ if __name__ == '__main__':
 
             metrics_df,_ = main(args)
             metrics_df.insert(0, 'model', model)
-            metrics_df.insert(1, 'e_layers', e_layers)
+            metrics_df.insert(1, 'd_model', d_model)
 
             all_results.append(metrics_df.iloc[-1:])
 
             final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
-            final_metrics_df.to_csv('./results/{}_{}_all_models_comparison.csv'.format(args.model_id,e_layers))
+            final_metrics_df.to_csv('./results/{}_{}_all_models_comparison.csv'.format(args.model_id,d_model))
 
 

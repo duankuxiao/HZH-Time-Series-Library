@@ -4,9 +4,9 @@ from tqdm import tqdm
 
 from data_provider.data_factory import data_provider
 from exp.exp_basic import Exp_Basic
-from utils.interval_forecasting_tools import negative_binomial_loss, MAPE, gaussian_sample, negative_binomial_sample, GaussianLikelihoodLoss
+from utils.interval_forecasting_tools import negative_binomial_loss, gaussian_sample, negative_binomial_sample, GaussianLikelihoodLoss
 from utils.tools import EarlyStopping, adjust_learning_rate, visual
-from utils.metrics import metric, results_probability_forecast_evaluation
+from utils.metrics import results_probability_forecast_evaluation,results_evaluation
 import torch
 import torch.nn as nn
 from torch import optim
@@ -15,8 +15,7 @@ import time
 import warnings
 import numpy as np
 from utils.dtw_metric import dtw, accelerated_dtw
-from utils.augmentation import run_augmentation, run_augmentation_single
-from utils.tools import results_evaluation, save_config
+from utils.tools import save_config
 from torch.optim import lr_scheduler
 
 warnings.filterwarnings('ignore')

@@ -7,10 +7,15 @@ def model_hyparameter_setup(args,d_mode=None,e_layers=None):
     args.use_norm = True
 
     # default
-    if args.task_name == 'imputation' or args.task_name == 'classification':
+    if args.task_name == 'imputation':
         args.learning_rate = 0.001
         args.patience = 5
-        args.train_epochs = 50 if args.task_name == 'imputation' else 100
+        args.train_epochs = 50
+    elif args.task_name == 'classification':
+        args.learning_rate = 0.01
+        args.patience = 5
+        args.train_epochs = 50
+
     else:
         args.learning_rate = 0.0001
     args.d_model = 512 if d_mode is None else d_mode

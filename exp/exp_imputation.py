@@ -6,7 +6,7 @@ from xgboost import XGBRegressor
 from data_provider.data_factory import data_provider
 from exp.exp_basic import Exp_Basic
 from utils.tools import EarlyStopping, adjust_learning_rate, visual
-from utils.metrics import metric
+from utils.metrics import results_evaluation
 import torch
 import torch.nn as nn
 from torch import optim
@@ -15,9 +15,7 @@ import time
 import warnings
 import numpy as np
 from utils.dtw_metric import dtw, accelerated_dtw
-from utils.augmentation import run_augmentation, run_augmentation_single
-from utils.tools import results_evaluation, save_config
-from utils.masking import mask_custom
+from utils.tools import save_config
 from utils.metrics_imputation import calc_mae, calc_mse, results_evaluation_imputation, interpolate_nan_matrix, interpolate_time_series
 
 from torch.optim import lr_scheduler
