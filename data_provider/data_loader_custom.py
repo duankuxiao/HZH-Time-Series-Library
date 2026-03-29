@@ -15,7 +15,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
-class Dataset_cumstom(Dataset):
+class Dataset_Custom(Dataset):
     def __init__(self,configs, root_path, flag='train', size=None,
                  features='S', data_path='PV_power.csv',
                  target=['PV'], scale=True, timeenc=0, freq='h', percent=100,seasonal_patterns=None):
@@ -110,14 +110,17 @@ class Dataset_cumstom(Dataset):
             cols.remove('date')
 
         if self.features == 'M' and self.target is None:
-            self.target = self.feature_cols
+            self.target = list(self.feature_cols.copy())
         if self.target is not None:
             for s in self.target:
                 if s in cols:
                     cols.remove(s)
-        df_raw = df_raw[['date'] + cols + self.target]
-        df_source_domain = df_source_domain[['date'] + cols + self.target]
-
+        if cols is not None:
+            df_raw = df_raw[['date'] + list(cols) + ([self.target] if isinstance(self.target, str) else self.target)]
+            df_source_domain = df_source_domain[['date'] + list(cols) + ([self.target] if isinstance(self.target, str) else self.target)]
+        else:
+            df_raw = df_raw[['date'] + ([self.target] if isinstance(self.target, str) else self.target)]
+            df_source_domain = df_source_domain[['date']+ ([self.target] if isinstance(self.target, str) else self.target)]
         num_vali = len(df_raw) - self.num_train - self.num_test
         if 'forecast' in self.task_name:
             border1s = [0, self.num_train - self.seq_len, len(df_raw) - self.num_test - self.seq_len]

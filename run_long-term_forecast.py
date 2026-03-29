@@ -40,8 +40,6 @@ def get_setting(args,ii):
         setting += '_{}_llmd{}_llmf{}_tk{}'.format(args.llm_model, args.llm_dim, args.llm_layers, args.top_k)
         if args.use_prompt:
             setting += '_prompt'
-    if 'RNN' in args.model:
-        setting += '_{}_rnnd{}_rnnf{}'.format(args.rnn_model, args.rnn_dim, args.rnn_layers, )
 
     if args.use_forecast:
         setting += '_forecast'
@@ -80,19 +78,20 @@ def main(args):
 
 if __name__ == '__main__':
     from utils.setup_imputation import model_hyparameter_setup
-    from configs.electricity_configs import args as default_args
-    # from configs.solar_radiation_confi gs import args as default_args
+    # from configs.electricity_configs import args as default_args
+    # from configs.solar_radiation_configs import args as default_args
     # from configs.operational_configs import args as default_args
     # from configs.HVAC_configs import args as default_args
+    from configs.ECL import args as default_args
     from copy import deepcopy
 
     all_results = []
 
-    for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST', 'TimeLLM', 'TimeLLMformer']:
+    for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST','TimeLLM']:
 
         args = deepcopy(default_args)
         # args.model_id = 'zero-shot-{}'.format(data)
-        args.model_id = 'texas'
+        args.model_id = 'ECL'
 
         args.model = model
         args.is_training = 1
@@ -104,6 +103,6 @@ if __name__ == '__main__':
         res_metrics_df.insert(0, 'model', model)
         all_results.append(res_metrics_df)
         final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
-        final_metrics_df.to_csv('./results/ele_texas_all_models_comparison.csv')
+        final_metrics_df.to_csv('./results/ECL_all_models_comparison.csv')
 
 

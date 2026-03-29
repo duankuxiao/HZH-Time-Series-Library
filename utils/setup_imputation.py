@@ -192,7 +192,8 @@ def model_hyparameter_setup(args,d_mode=None,e_layers=None):
     if args.feature_cols is not None:
         args.enc_in = len(args.feature_cols)
         args.dec_in = len(args.feature_cols)
-    args.c_out = len(args.target)
+    if args.target is not None:
+        args.c_out = len(args.target)
 
     if args.features == 'S':
         args.enc_in = 1

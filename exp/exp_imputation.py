@@ -22,16 +22,16 @@ from torch.optim import lr_scheduler
 
 warnings.filterwarnings('ignore')
 
+
 class Exp_Imputation(Exp_Basic):
     def __init__(self, args):
         super(Exp_Imputation, self).__init__(args)
         self.loss_method = args.loss_method
         self.loss = args.loss
         if self.args.loss_method == "adaptive":
-            self.log_sigma_missing = nn.Parameter(torch.zeros(1))
-            self.log_sigma_missing_2 = nn.Parameter(torch.zeros(1))
-            self.log_sigma_ori = nn.Parameter(torch.zeros(1))
-
+            self.lamda = nn.Parameter(torch.zeros(1))
+            # self.log_vars = nn.Parameter(torch.zeros(2))
+            # self.temperature = 2.0  # 温度越高，分布越平缓（越接近 0.5/0.5）
 
     def _build_model(self):
         model = self.model_dict[self.args.model].Model(self.args).float()
@@ -45,12 +45,24 @@ class Exp_Imputation(Exp_Basic):
         return data_set, data_loader
 
     def _select_optimizer(self):
-        param_list = list(self.model.parameters())
         if self.loss_method == "adaptive":
-            # 将不确定性参数也加入到优化器中
-            param_list += [self.log_sigma_missing]
-        model_optim = optim.Adam(param_list, lr=self.args.learning_rate)
-        return model_optim
+            # 关键：手动移到 GPU
+            self.lamda.data = self.lamda.data.to(self.device)
+            # self.log_vars.data = self.log_vars.data.to(self.device)
+
+            # 重新包装以确保安全（可选，视 PyTorch 版本而定，通常 .to() 对 Parameter 是 inplace 的或者需要重新赋值）
+            # 最稳妥的方式是将 lamda 定义为 model 的一部分，或者如下操作：
+
+        if self.loss_method == "adaptive":
+            optimizer = optim.Adam([
+                {'params': self.model.parameters()},
+                {'params': [self.lamda], 'lr': self.args.learning_rate * 1}  # 给 lamda 更大的步长
+                # {'params': [self.log_vars], 'lr': self.args.learning_rate * 1}  # 给 lamda 更大的步长
+
+            ], lr=self.args.learning_rate)
+        else:
+            optimizer = optim.Adam(self.model.parameters(), lr=self.args.learning_rate)
+        return optimizer
 
     def _select_criterion(self):
         if self.loss == 'MSE':
@@ -74,22 +86,33 @@ class Exp_Imputation(Exp_Basic):
     def _loss_function(self, criterion, outputs, true, mask):
         mask_ = mask ^ 1
         if self.args.output_ori is False:
-            # if isinstance(outputs, tuple):
-            #     missing_loss = criterion(outputs[0], true, mask_)
-            #     missing_loss_2 = criterion(outputs[1], true, mask_)
-            #     ori_loss = criterion(outputs[1], true, mask)
-            #     if self.loss_method == "fix":
-            #         loss = 1/2 * (missing_loss + missing_loss_2) + ori_loss
-            #     elif self.loss_method == "adaptive":
-            #         loss = ori_loss + 2 / self.args.mask_rate * (missing_loss_2 + missing_loss)
-            # else:
             missing_loss = criterion(outputs, true, mask_)
             ori_loss = criterion(outputs, true, mask)
             if self.loss_method == "fix":
                 loss = ori_loss + missing_loss
             elif self.loss_method == "adaptive":
-                loss = ori_loss + 2 / self.args.mask_rate * missing_loss
-                # loss = self.log_sigma_missing.to(true.device) * ori_loss + (1-self.log_sigma_missing.to(true.device)) * missing_loss
+                # 1
+                # loss = ori_loss + 2 / self.args.mask_rate * missing_loss
+                w_ori = 1
+                w_missing = 10 * torch.sigmoid(self.lamda)
+                loss = ori_loss + w_missing * missing_loss
+                # loss = ori_loss + 1 / weight * missing_loss
+
+                # 2
+                # w_ori = torch.exp(-self.log_vars[0])
+                # w_missing = torch.exp(-self.log_vars[1])
+                # # 计算带权重的 Loss + 正则惩罚项
+                # # loss = exp(-s1) * L1 + s1 + exp(-s2) * L2 + s2
+                # loss = w_ori * ori_loss + self.log_vars[0] + w_missing * missing_loss + self.log_vars[1]
+
+                # 3
+                # weights = torch.softmax(self.log_vars / self.temperature, dim=0)
+                # w_ori = weights[0]
+                # w_missing = weights[1]
+                # loss = w_ori * ori_loss + w_missing * missing_loss
+
+                return loss, w_ori * ori_loss, w_missing * missing_loss
+
             elif self.loss_method == "ori":
                 loss = criterion(outputs, true)
         else:
@@ -108,6 +131,8 @@ class Exp_Imputation(Exp_Basic):
 
     def vali(self, vali_data, vali_loader, criterion):
         total_loss = []
+        if self.loss_method == "adaptive":
+            ori_loss, missing_loss = [], []
         self.model.eval()
         with torch.no_grad():
             for i, (inp, inp_inter, mark, mask, x_ori) in enumerate(vali_loader):
@@ -122,7 +147,7 @@ class Exp_Imputation(Exp_Basic):
                     outputs = self.model(inp_inter, mark, None, None, None, mask=mask)
                 else:
                     inp = inp.float().to(self.device)
-                    outputs = self.model(inp, mark, None, None, None,mask=mask)
+                    outputs = self.model(inp, mark, None, None, None, mask=mask)
 
                 if isinstance(outputs, tuple):
                     outputs = tuple(
@@ -137,12 +162,21 @@ class Exp_Imputation(Exp_Basic):
                 mask = mask[:, :self.args.seq_len, -self.f_dim:]
 
                 mask = mask.detach().cpu()
-                loss = self._loss_function(criterion, outputs, x_ori, mask)
+                if self.loss_method == "adaptive":
+                    loss, ori, missing = self._loss_function(criterion, outputs, x_ori, mask)
+                    ori_loss.append(ori.item())
+                    missing_loss.append(missing.item())
+
+                else:
+                    loss = self._loss_function(criterion, outputs, x_ori, mask)
 
                 total_loss.append(loss.item())
         total_loss = np.average(total_loss)
         self.model.train()
-        return total_loss
+        if self.loss_method == "adaptive":
+            return total_loss, np.average(ori_loss), np.average(missing_loss)
+        else:
+            return total_loss
 
     def train(self, setting):
         train_data, train_loader = self._get_data(flag='train')
@@ -160,7 +194,7 @@ class Exp_Imputation(Exp_Basic):
         time_start = time.time()
 
         train_steps = len(train_loader)
-        early_stopping = EarlyStopping(patience=self.args.patience, verbose=True,accelerator=self.accelerator)
+        early_stopping = EarlyStopping(patience=self.args.patience, verbose=True, accelerator=self.accelerator)
 
         model_optim = self._select_optimizer()
         criterion = self._select_criterion()
@@ -168,16 +202,19 @@ class Exp_Imputation(Exp_Basic):
 
         if self.args.use_amp:
             scaler = torch.cuda.amp.GradScaler()
-        if self.args.accelerate:
-            self.model,train_loader,vali_loader, model_optim,scheduler = self.accelerator.prepare(self.model,train_loader,vali_loader,model_optim,scheduler)
-            self.accelerator.print(f"Process {self.accelerator.process_index} is using device {self.accelerator.device}")
 
         # Initialize a dictionary to store loss values
         loss_records = {"epoch": [], "time": [], "train_loss": [], "vali_loss": []}
+        if self.loss_method == "adaptive":
+            # loss_records = {"epoch": [], "time": [], "train_loss": [], "vali_loss": [],"lamda":[]}
+            loss_records = {"epoch": [], "time": [], "train_loss": [],  "train_ori_loss": [], "train_missing_loss": [], "vali_loss": [],"vali_ori_loss": [],
+                            "vali_missing_loss": [], "w_ori": [], "w_missing": []}
 
         for epoch in range(self.args.train_epochs):
             iter_count = 0
             train_loss = []
+            if self.loss_method == "adaptive":
+                ori_loss, missing_loss = [], []
 
             self.model.train()
             epoch_time = time.time()
@@ -208,7 +245,14 @@ class Exp_Imputation(Exp_Basic):
                     outputs = outputs[:, :self.args.seq_len, -self.f_dim:]
                 x_ori = x_ori[:, :self.args.seq_len, -self.f_dim:]
                 mask = mask[:, :self.args.seq_len, -self.f_dim:]
-                loss = self._loss_function(criterion, outputs, x_ori, mask)
+                if self.loss_method == "adaptive":
+                    loss, ori, missing = self._loss_function(criterion, outputs, x_ori, mask)
+                    ori_loss.append(ori.item())
+                    missing_loss.append(missing.item())
+
+                else:
+                    loss = self._loss_function(criterion, outputs, x_ori, mask)
+
                 train_loss.append(loss.item())
 
                 if self.args.accelerate:
@@ -225,7 +269,7 @@ class Exp_Imputation(Exp_Basic):
                         if speed > 1e-3:
                             print('\tspeed: {:.4f}s/iter; left time: {:.2f}min'.format(speed, left_time / 60))
                         else:
-                            print('\tspeed: {:.4f}ms/iter; left time: {:.2f}min'.format(speed*1000, left_time / 60))
+                            print('\tspeed: {:.4f}ms/iter; left time: {:.2f}min'.format(speed * 1000, left_time / 60))
 
                         iter_count = 0
                         time_now = time.time()
@@ -242,17 +286,41 @@ class Exp_Imputation(Exp_Basic):
                         model_optim.step()
 
                 if self.args.lradj == 'TST':
-                    adjust_learning_rate(model_optim, scheduler, epoch + 1, self.args, printout=False,accelerator=self.accelerator)
+                    adjust_learning_rate(model_optim, scheduler, epoch + 1, self.args, printout=False, accelerator=self.accelerator)
                     scheduler.step()
 
             train_loss = np.average(train_loss)
-            vali_loss = self.vali(vali_data, vali_loader,criterion)
+            if self.loss_method == 'adaptive':
+                ori_loss, missing_loss = np.average(ori_loss), np.average(missing_loss)
+                vali_loss, vali_ori_loss, vali_missing_loss = self.vali(vali_data, vali_loader, criterion)
+            else:
+                vali_loss = self.vali(vali_data, vali_loader, criterion)
 
             # Record loss values
             loss_records["epoch"].append(epoch + 1)
-            loss_records["time"].append(round((time.time() - time_start)/60,4))
+            loss_records["time"].append(round((time.time() - time_start) / 60, 4))
             loss_records["train_loss"].append(train_loss)
             loss_records["vali_loss"].append(vali_loss)
+            if self.loss_method == 'adaptive':
+                # 1
+                w_ori = 1
+                w_missing = 10 * torch.sigmoid(self.lamda).cpu().detach().numpy()[0]
+
+                # 2
+                # w_ori = torch.exp(-self.log_vars[0]).cpu().detach().numpy()
+                # w_missing = torch.exp(-self.log_vars[1]).cpu().detach().numpy()
+
+                # 3
+                # weights = torch.softmax(self.log_vars / self.temperature, dim=0)
+                # w_ori = weights[0].cpu().detach().numpy()
+                # w_missing = weights[1].cpu().detach().numpy()
+
+                loss_records["train_ori_loss"].append(ori_loss)
+                loss_records["train_missing_loss"].append(missing_loss)
+                loss_records["vali_ori_loss"].append(vali_ori_loss)
+                loss_records["vali_missing_loss"].append(vali_missing_loss)
+                loss_records["w_ori"].append(w_ori)
+                loss_records["w_missing"].append(w_missing)
 
             # test_loss = self.vali(test_data, test_loader, criterion)
             cost_time = round((time.time() - epoch_time) / 60, 2)
@@ -265,7 +333,7 @@ class Exp_Imputation(Exp_Basic):
                 break
 
             left_time = 1 + (self.args.patience - early_stopping.counter) * cost_time
-            print("  Left time: {} min".format(round(left_time,2)))
+            print("  Left time: {} min".format(round(left_time, 2)))
 
             if self.args.lradj != 'TST':
                 if self.args.lradj == 'COS':
@@ -298,7 +366,7 @@ class Exp_Imputation(Exp_Basic):
         print(report)
         peak_alloc = torch.cuda.max_memory_allocated(self.device)
         used_bytes = torch.cuda.memory_allocated(self.device)
-        with open(os.path.join(folder_path,"memory_summary_{}_{}.txt".format(round(peak_alloc*1024/(10**9),1),round(speed*1000,2))), "w") as f:
+        with open(os.path.join(folder_path, "memory_summary_{}_{}.txt".format(round(peak_alloc * 1024 / (10 ** 9), 1), round(speed * 1000, 2))), "w") as f:
             f.write(report)
         print("Saved CUDA memory summary to cuda_memory_summary.txt")
         return self.model
@@ -342,7 +410,7 @@ class Exp_Imputation(Exp_Basic):
                     self.accelerator.wait_for_everyone()
                     output = self.accelerator.gather_for_metrics(output)
 
-                mask = mask[:,:self.args.seq_len, -self.f_dim:]
+                mask = mask[:, :self.args.seq_len, -self.f_dim:]
                 if isinstance(output, tuple):
                     output = output[-1][:, :self.args.seq_len, -self.f_dim:]
                 else:
@@ -354,7 +422,7 @@ class Exp_Imputation(Exp_Basic):
                 mask = mask.detach().cpu().numpy()
 
                 true = true.detach().cpu().numpy()
-                imputation = mask * true + (1 - mask) * imputation
+                # imputation = mask * true + (1 - mask) * imputation
 
                 if test_data.scale and self.args.inverse:
                     shape = imputation.shape
@@ -386,7 +454,7 @@ class Exp_Imputation(Exp_Basic):
             dtw = -999
         trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
 
-        [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(imputation_trues.flatten(), imputations.flatten())
+        [mse, rmse, nrmse, mae, mape, rae, r2, corr] = results_evaluation(imputation_trues.flatten(), imputations.flatten())
         print('mae:{}, r2:{}, dtw:{}'.format(mae, r2, dtw))
         f = open(os.path.join('./results', "result_imputation.txt"), 'a')
         f.write(setting + "  \n")
@@ -394,15 +462,14 @@ class Exp_Imputation(Exp_Basic):
         f.write('\n')
         f.write('\n')
         f.close()
-        np.save(os.path.join(folder_path, 'metrics_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), np.array([mae, mse, rmse, r2, corr]))
-        np.save(os.path.join(folder_path, 'imputations_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), imputations)
-        np.save(os.path.join(folder_path, 'imputation_trues_{}_{}.npy'.format(self.args.data,self.args.data_path[:-4])), imputation_trues)
+        np.save(os.path.join(folder_path, 'metrics_{}_{}.npy'.format(self.args.data, self.args.data_path[:-4])), np.array([mae, mse, rmse, r2, corr]))
+        np.save(os.path.join(folder_path, 'imputations_{}_{}.npy'.format(self.args.data, self.args.data_path[:-4])), imputations)
+        np.save(os.path.join(folder_path, 'imputation_trues_{}_{}.npy'.format(self.args.data, self.args.data_path[:-4])), imputation_trues)
 
-        res_df, metrics_df, imputation_metrics_df = self.res_evaluation_multi_target(imputations,imputation_trues, masks, trainable_params, folder_path)
+        res_df, metrics_df, imputation_metrics_df = self.res_evaluation_multi_target(imputations, imputation_trues, masks, trainable_params, folder_path)
         return res_df, metrics_df, imputation_metrics_df
 
-
-    def res_evaluation_multi_target(self,imputations, trues, mask, trainable_params, path):
+    def res_evaluation_multi_target(self, imputations, trues, mask, trainable_params, path):
         stride = self.args.seq_len
         X_withnan = np.where(mask == 0, np.nan, trues)
         true = trues[::stride, :, :].reshape(-1, len(self.args.target))
@@ -420,10 +487,10 @@ class Exp_Imputation(Exp_Basic):
         res_df = pd.DataFrame(np.hstack(data_parts), columns=columns)
 
         # Initialize metrics dictionaries
-        metrics = {key: [] for key in ["trainable_params","mse", "rmse", "nrmse", "mae", "mape", "rae", "r2", "corr","mse_inter", "rmse_inter", "nrmse_inter", "mae_inter",
+        metrics = {key: [] for key in ["trainable_params", "mse", "rmse", "nrmse", "mae", "mape", "rae", "r2", "corr", "mse_inter", "rmse_inter", "nrmse_inter", "mae_inter",
                                        "mape_inter", "rae_inter", "r2_inter", "corr_inter"]}
-        imputation_metrics = {key: [] for key in ["trainable_params", "mse_imputation", "rmse_imputation", "mae_imputation","mape_imputation", "mre_imputation",
-                                                  "mse_imputation_inter", "rmse_imputation_inter", "mae_imputation_inter","mape_imputation_inter","mre_imputation_inter"]}
+        imputation_metrics = {key: [] for key in ["trainable_params", "mse_imputation", "rmse_imputation", "mae_imputation", "mape_imputation", "mre_imputation",
+                                                  "mse_imputation_inter", "rmse_imputation_inter", "mae_imputation_inter", "mape_imputation_inter", "mre_imputation_inter"]}
 
         # Calculate metrics for each target
         for idx, target in enumerate(self.args.target):
@@ -573,20 +640,20 @@ class Exp_Imputation(Exp_Basic):
         X_withnan = np.where(mask == 0, np.nan, true)
 
         # Create DataFrame for true and predicted values
-        columns = [f"{i}_{col}" for i in self.args.target for col in ["ori", "pred","x_withnan"]]
+        columns = [f"{i}_{col}" for i in self.args.target for col in ["ori", "pred", "x_withnan"]]
         data_blocks = [true, imputations, X_withnan]
         data_parts = [np.hstack([block[:, i].reshape(-1, 1) for block in data_blocks]) for i in range(len(self.args.target))]
         res_df = pd.DataFrame(np.hstack(data_parts), columns=columns)
 
         # Initialize metrics dictionaries
-        metrics = {key: [] for key in [ "mse", "rmse", "nrmse", "mae", "mape", "rae", "r2", "corr"]}
+        metrics = {key: [] for key in ["mse", "rmse", "nrmse", "mae", "mape", "rae", "r2", "corr"]}
         imputation_metrics = {key: [] for key in ["mse_imputation", "rmse_imputation", "mae_imputation", "mape_imputation", "mre_imputation"]}
         mask_int = mask.astype(int)  # 转成整数 0/1
         mask = mask_int ^ 1  # 0↔1 取反
 
         # Calculate metrics for each target
         for idx, target in enumerate(self.args.target):
-            true_i, imputation_i,  mask_i = (true[:, idx], imputations[:, idx], mask[:, idx])
+            true_i, imputation_i, mask_i = (true[:, idx], imputations[:, idx], mask[:, idx])
             imputation_i = np.where(true_i <= 0.0001, 0, imputation_i)
             # true_i = np.where(true_i <= 0.0001, 0, true_i)
 
@@ -628,13 +695,13 @@ class Exp_Imputation(Exp_Basic):
 
         return res_df, metrics_df, imputation_metrics_df
 
-    def _show_plot(self,i,y_withnan,y_true,y_imputation,y_inter,path=None):
-        x_range = np.arange(self.args.num_train -self.args.seq_len*7, self.args.num_train)
-        y_true_plot = y_true[-self.args.seq_len*7:]
-        plt.figure(i+1, figsize=(20, 5))
+    def _show_plot(self, i, y_withnan, y_true, y_imputation, y_inter, path=None):
+        x_range = np.arange(self.args.num_train - self.args.seq_len * 7, self.args.num_train)
+        y_true_plot = y_true[-self.args.seq_len * 7:]
+        plt.figure(i + 1, figsize=(20, 5))
         plt.plot(x_range, y_true_plot, "r-", label="True values")
 
-        y_withnan_plot = y_withnan[-self.args.seq_len*7:]
+        y_withnan_plot = y_withnan[-self.args.seq_len * 7:]
         plt.plot(x_range, y_withnan_plot, "k-", label="With nan values")
 
         y_imputation_plot = y_imputation[-self.args.seq_len * 7:]
@@ -643,11 +710,11 @@ class Exp_Imputation(Exp_Basic):
         y_inter_plot = y_inter[-self.args.seq_len * 7:]
         plt.plot(x_range, y_inter_plot, "b--", label="Interpolate values")
         ymin, ymax = plt.ylim()
-        plt.vlines(self.args.num_train - self.args.seq_len*7, ymin, ymax, color="blue", linestyles="dashed", linewidth=2)
+        plt.vlines(self.args.num_train - self.args.seq_len * 7, ymin, ymax, color="blue", linestyles="dashed", linewidth=2)
         plt.ylim(ymin, ymax)
         plt.legend(loc="upper left")
         plt.title('Prediction')
         plt.xlabel("Periods")
         plt.ylabel("Y")
-        plt.savefig(os.path.join(path,'{}.png'.format(i)))
+        plt.savefig(os.path.join(path, '{}.png'.format(i)))
         plt.close()

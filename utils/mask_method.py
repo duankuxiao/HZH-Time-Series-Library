@@ -356,3 +356,129 @@ def generate_rdo_mask(
         "achieved_row_drop_rate": float((keep_row == 0).float().mean().cpu()),
     }
     return X_miss
+
+@torch.no_grad()
+def generate_mnar_mask(
+    X: torch.Tensor,                  # [B,T,D] 或 [T,D]
+    missing_rate=0.2,                 # 标量 (0,1) 或长度==被造缺列数的向量
+    tail_targets_only: bool = False,  # True: 仅对最后 f_dim 列造缺
+    f_dim: int | None = None,         # tail_targets_only=True 时必须提供
+    selected_cols: list[int] | None = None,  # 指定列优先（若给定则覆盖 tail_targets_only/f_dim）
+    mechanism: str = "high",          # "high" | "low" | "both" | "random_sign"
+    strength: float = 1.0,            # MNAR 强度（越大，缺失与取值相关性越强）
+    seed: int = 42,
+    max_iter: int = 40,
+    eps: float = 1e-8,
+    return_mask_info: bool = False,   # True: 返回 (X_miss, mask, info)；False: 仅返回 X_miss（与现有函数一致）
+):
+    """
+    MNAR：缺失概率依赖“自身取值”。
+      - mechanism="high" : 值越大越容易缺失
+      - mechanism="low"  : 值越小越容易缺失
+      - mechanism="both" : 绝对值越大越容易缺失（两端极值更易缺失）
+      - mechanism="random_sign": 每列随机决定“高值缺失”或“低值缺失”
+
+    通过对每列截距 alpha 做二分搜索，保证 mean(sigmoid(score + alpha)) == missing_rate（逐列匹配）。
+    """
+    assert X.ndim in (2, 3), "X 必须是 [B,T,D] 或 [T,D]"
+    if X.ndim == 2:
+        X = X.unsqueeze(0)
+
+    device = X.device
+    B, T, D = X.shape
+    N = B * T
+
+    X2d = X.reshape(N, D).float()
+    if not torch.isfinite(X2d).all():
+        raise ValueError("X 含 NaN/Inf，请先清洗。")
+
+    # ------- 选择要造缺的列 -------
+    if selected_cols is not None:
+        sel_idx = torch.as_tensor(selected_cols, device=device, dtype=torch.long).unique().sort().values
+        if sel_idx.numel() > 0:
+            assert torch.all((0 <= sel_idx) & (sel_idx < D)), "selected_cols 中存在越界索引"
+    else:
+        if tail_targets_only:
+            assert f_dim is not None and 1 <= f_dim <= D, "tail_targets_only=True 时请提供有效 f_dim"
+            sel_idx = torch.arange(D - f_dim, D, device=device)
+        else:
+            sel_idx = torch.arange(0, D, device=device)
+
+    if sel_idx.numel() == 0:
+        raise ValueError("未选出任何需要造缺的列。")
+
+    C = sel_idx.numel()
+    gen = _make_generator(device, seed)
+
+    # ------- 统一 missing_rate 为长度 C 的向量 -------
+    if isinstance(missing_rate, (list, tuple)):
+        mr = torch.tensor(missing_rate, dtype=torch.float32, device=device)
+    elif isinstance(missing_rate, torch.Tensor):
+        mr = missing_rate.to(device=device, dtype=torch.float32)
+    else:
+        mr = torch.full((C,), float(missing_rate), device=device, dtype=torch.float32)
+
+    if mr.numel() != C:
+        raise ValueError(f"missing_rate 长度应为 {C}（被造缺列数），当前 {mr.numel()}")
+    if not torch.all((mr > 0.0) & (mr < 1.0)):
+        raise ValueError("missing_rate 需全部在 (0,1) 内。")
+
+    # ------- 标准化 -------
+    mu = X2d.mean(dim=0)
+    sd = X2d.std(dim=0)
+    sd = torch.where(sd < eps, torch.ones_like(sd), sd)
+    Xz = (X2d - mu) / sd
+
+    Z = Xz[:, sel_idx]  # [N, C]
+
+    # ------- 构造 MNAR 打分 score（依赖自身取值）-------
+    if mechanism == "high":
+        score = strength * Z
+    elif mechanism == "low":
+        score = -strength * Z
+    elif mechanism == "both":
+        score = strength * Z.abs()
+    elif mechanism == "random_sign":
+        sgn = torch.randint(low=0, high=2, size=(C,), generator=gen, device=device).float()
+        sgn = torch.where(sgn > 0, torch.ones_like(sgn), -torch.ones_like(sgn))  # ±1
+        score = strength * (Z * sgn.view(1, C))
+    else:
+        raise ValueError("mechanism 只能是 'high' | 'low' | 'both' | 'random_sign'")
+
+    # ------- 二分搜索截距 alpha：使 mean(sigmoid(score + alpha)) = mr -------
+    lo = torch.full((C,), -20.0, device=device)
+    hi = torch.full((C,),  20.0, device=device)
+    for _ in range(max_iter):
+        mid = (lo + hi) / 2.0
+        p = torch.sigmoid(score + mid)     # [N, C]
+        m = p.mean(dim=0)                  # [C]
+        hi = torch.where(m > mr, mid, hi)
+        lo = torch.where(m <= mr, mid, lo)
+
+    alpha = (lo + hi) / 2.0
+    miss_prob = torch.sigmoid(score + alpha)  # [N, C]
+
+    # ------- 采样缺失并组装 mask -------
+    U = torch.rand((N, C), device=device, generator=gen)
+    miss = (U < miss_prob).float()       # 1=缺失
+    mask_sel = 1.0 - miss                # 1=观测, 0=缺失
+
+    mask2d = torch.ones((N, D), device=device)
+    mask2d[:, sel_idx] = mask_sel
+    mask = mask2d.view(B, T, D)
+
+    X_miss = X.clone()
+    X_miss[mask == 0] = float("nan")
+
+    info = {
+        "mode": "mnar",
+        "mechanism": mechanism,
+        "strength": float(strength),
+        "selected_cols": sel_idx.tolist(),
+        "achieved_missing_rate_overall": float((mask == 0).float().mean().cpu()),
+        "achieved_missing_rate_selected": float((mask[:, :, sel_idx] == 0).float().mean().cpu()),
+    }
+
+    if return_mask_info:
+        return X_miss, mask, info
+    return X_miss

@@ -11,9 +11,12 @@ data = data[['Total_Chilled_Water_Flowrate', 'Process_Chilled_Water_Flowrate', '
                        'Cooling_Water_Pump_Total_Power', 'Primary_Chilled_Water_Pump_Total_Power', 'Temperature', 'Dewpoint',
                      'Chilled_Water_Pump_Efficiency', 'Chilled_Water_Bypass_Temperature',
                      'Chilled_Water_Return_Temperature', 'Chilled_Water_Supply_Temperature','System_COP',
-                      'Total_Power','Total_Chiller_Power','System_Energy_Efficiency','Total_Cooling_Capacity']]
+                      'Total_Power','Total_Chiller_Power','System_Energy_Efficiency','Total_Cooling_Capacity',
+'Process_Chilled_Water_Pressure_Difference', 'Process_Chilled_Water_Supply_Pressure', 'Process_Chilled_Water_Supply_Temperature','Chilled_Water_Bypass_Temperature',
+'AC_Chilled_Water_Supply_Temperature',  'AC_Chilled_Water_Bypass_Valve_Opening', 'Cooling_Water_Bypass_Valve_Opening', 'AC_Chilled_Water_Supply_Pressure', 'AC_Chilled_Water_Pressure_Difference',
+ 'Chilled_Water_Return_Pressure',  'Chilled_Water_Temperature_Difference', 'Chilled_Water_Distribution_Coefficient', 'Humidity','Process_Chilled_Water_Bypass_Valve_Opening',]]
 # data = data[[ 'Chilled_Water_Supply_Pressure', 'Chilled_Water_Return_Pressure','Process_Chilled_Water_Supply_Pressure','Chilled_Water_Pressure_Difference', 'Process_Chilled_Water_Pressure_Difference','Temperature', 'Dewpoint', 'Humidity','Total_Cooling_Capacity','Total_Power', 'System_COP', 'System_Energy_Efficiency']]
-output_file = 'hvac_2'
+output_file = 'hvac'
 heatmap(data,output_file)
 
 
