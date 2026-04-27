@@ -46,7 +46,7 @@ def results_evaluation(y_test_seq, y_pred_seq):
 def calc_mape_without_outliers(
     y_pred: np.ndarray,
     y_true: np.ndarray,
-    threshold: float = 2.0,
+    threshold: float = 10.0,
     eps: float = 1e-8
 ) -> float:
     """

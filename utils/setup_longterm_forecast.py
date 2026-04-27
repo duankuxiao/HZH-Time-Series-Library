@@ -4,20 +4,21 @@ import torch
 
 
 def model_hyparameter_setup(args):
+    args.task_name = 'long_term_forecast'
     args.d_model = 512
     args.d_ff = 2048
     args.e_layers = 2
     args.d_layers = 1
-    if args.model == 'TimeLLMformer' or args.model == 'AttLLM':
+    if args.model == 'LLMformer' or args.model == 'AttLLM':
         args.learning_rate = 0.01  # 0.001 for imputation 0.0001 for forecast(0.01 for LLM model)  for electricity
         # args.learning_rate = 0.001  # 0.001 for imputation 0.0001 for forecast(0.01 for LLM model)
 
-        args.patience = 6
+        args.patience = 10
         args.lradj = 'PEMS'
-        args.llm_model = 'LLAMA3b'  # defalut GPT2  LLAMA1b  LLAMA3b
+        args.llm_model = 'GPT2'  # defalut GPT2  LLAMA1b  LLAMA3b
         args.d_model = 32
         args.d_ff = args.d_model * 2
-        args.e_layers = 1
+        args.e_layers = 4
         args.d_layers = 4
         args.llm_layers = 6
 
@@ -33,11 +34,11 @@ def model_hyparameter_setup(args):
     if args.model == 'Transformer':
         args.d_model = 64
         args.d_ff = 256
-        args.e_layers = 2  # default 4
-        args.d_layers = 1  # default 2
+        args.e_layers = 4  # default 4
+        args.d_layers = 2  # default 2
 
     if args.model == 'DLinear':
-        args.learning_rate = 0.001  # 0.0001 for forecast   0.001 for imputation
+        args.learning_rate = 0.0001  # 0.0001 for forecast   0.001 for imputation
         args.moving_avg = 25   # default 25
 
     if args.model == 'Informer':
@@ -46,7 +47,7 @@ def model_hyparameter_setup(args):
         args.d_ff = 2048
         args.e_layers = 4  # default 4
         args.d_layers = 2  # default 2
-        args.learning_rate = 0.001  # 0.0001 for forecast   0.001 for imputation
+        args.learning_rate = 0.0001  # 0.0001 for forecast   0.001 for imputation
 
 
     if args.model == 'Autoformer':  # default
@@ -55,14 +56,14 @@ def model_hyparameter_setup(args):
         args.learning_rate = 0.0011
         args.factor = 3
 
-        # args.e_layers = 4
-        # args.d_model = 256  # default
-        # args.d_ff = 1024  # default
+        args.e_layers = 4
+        args.d_model = 256  # default
+        args.d_ff = 1024  # default
 
         # args.dropout = 0.1
-        args.d_model = 512
-        args.d_ff = 2048
-        args.e_layers = 2
+        # args.d_model = 512
+        # args.d_ff = 2048
+        # args.e_layers = 2
         args.d_layers = 1
 
     if args.model == 'iTransformer':

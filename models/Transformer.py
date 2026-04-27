@@ -123,9 +123,9 @@ class Model(nn.Module):
         if self.use_norm:
             # De-Normalization from Non-stationary Transformer
             # if self.task_name == 'long_term_forecast' or self.task_name == 'short_term_forecast':
-            #     # dec_out = self.linear_projection(dec_out.permute(0, 2, 1)).permute(0, 2, 1)
-            #     dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
-            #     dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+                # dec_out = self.linear_projection(dec_out.permute(0, 2, 1)).permute(0, 2, 1)
+                # dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
+                # dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len, 1))
             # else:
             dec_out = dec_out * (stdev[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))
             dec_out = dec_out + (means[:, 0, -self.c_out:].unsqueeze(1).repeat(1, self.pred_len + self.seq_len, 1))

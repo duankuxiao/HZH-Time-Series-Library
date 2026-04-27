@@ -412,6 +412,8 @@ class Exp_Forecast(Exp_Basic):
         pred_res = pd.DataFrame({'pred': pred_output.flatten(), 'true': true_output.flatten()})
         pred_res.loc[pred_res['true'] < 1e-3, 'true'] = 0
         pred_res.loc[pred_res['true'] < 1e-3, 'pred'] = 0
+        pred_res.loc[pred_res['pred'] < 0, 'pred'] = 0
+
 
         [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(pred_res['true'].values, pred_res['pred'].values)
 
@@ -424,25 +426,29 @@ class Exp_Forecast(Exp_Basic):
 
     def res_evaluation_multi_target(self,true,pred,trainable_params,path):
         stride = self.args.pred_len
-        true = true[::stride,:,:].reshape(-1,len(self.args.target))
-        pred = pred[::stride,:,:].reshape(-1,len(self.args.target))
+        true = true[::stride,:,:].reshape(-1,self.args.c_out)
+        pred = pred[::stride,:,:].reshape(-1,self.args.c_out)
         columns_list = []
-        for i in self.args.target:
+        if self.args.target is not None:
+            target_columns = self.args.target
+        else:
+            target_columns = range(self.args.c_out)
+        for i in target_columns:
             columns_list.append('{}_true'.format(i))
             columns_list.append('{}_pred'.format(i))
         res_df = pd.DataFrame(columns=columns_list)
         mse_list, rmse_list, mae_list, r2_list, corr_list,mape_list = [], [], [], [], [], []
         nrmse_list,rae_list = [],[]
-        for i in self.args.target:
-            res_df['{}_pred'.format(i)] = pred[:, self.args.target.index(i)]
-            res_df['{}_true'.format(i)] = true[:, self.args.target.index(i)]
+        for i in target_columns:
+            res_df['{}_pred'.format(i)] = pred[:, target_columns.index(i)]
+            res_df['{}_true'.format(i)] = true[:, target_columns.index(i)]
             res_df.loc[res_df['{}_true'.format(i)] < 1e-3, '{}_true'.format(i)] = 0
             res_df.loc[res_df['{}_true'.format(i)] < 1e-3, '{}_pred'.format(i)] = 0
             res_df.loc[res_df['{}_pred'.format(i)] < 1e-3, '{}_pred'.format(i)] = 0
 
-            self._show_plot(i,y_true=true[:, self.args.target.index(i)],y_pred=pred[:, self.args.target.index(i)],path=path)
+            # self._show_plot(i,y_true=true[:, target_columns.index(i)],y_pred=pred[:, target_columns.index(i)],path=path)
 
-            [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(true[:, self.args.target.index(i)], pred[:, self.args.target.index(i)])
+            [mse, rmse,nrmse, mae,mape,rae, r2,corr] = results_evaluation(true[:, target_columns.index(i)], pred[:, target_columns.index(i)])
             print('{} mse:{}, rmse:{} mae:{} r2:{} corr:{}'.format(i, mse, rmse, mae, r2, corr))
             np.save(os.path.join(path, 'metrics_{}.npy'.format(i)), np.array([mse, rmse, mae, r2, corr]))
 
@@ -456,7 +462,7 @@ class Exp_Forecast(Exp_Basic):
             corr_list.append(corr)
 
         res_metrics_df = pd.DataFrame(columns=['trainable_params','mse', 'rmse','nrmse', 'mae','mape','rae', 'r2','corr'],
-                                      index=[i for i in self.args.target])
+                                      index=[i for i in target_columns])
         res_metrics_df['trainable_params'] = trainable_params
         res_metrics_df['mse'] = mse_list
         res_metrics_df['rmse'] = rmse_list

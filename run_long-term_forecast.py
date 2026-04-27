@@ -77,32 +77,36 @@ def main(args):
 
 
 if __name__ == '__main__':
-    from utils.setup_imputation import model_hyparameter_setup
-    # from configs.electricity_configs import args as default_args
+    from utils.setup_longterm_forecast import model_hyparameter_setup
+    # from configs.electricity_configs import args as default_args2
     # from configs.solar_radiation_configs import args as default_args
     # from configs.operational_configs import args as default_args
     # from configs.HVAC_configs import args as default_args
-    from configs.ECL import args as default_args
+    # from configs.ECL import args as default_args
+    from configs.pv_configs import args as default_args
     from copy import deepcopy
 
     all_results = []
 
-    for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST','TimeLLM']:
+    for model in ['RNN', 'DLinear', 'Transformer', 'Informer', 'Autoformer', 'iTransformer', 'TimesNet', 'PatchTST','LLMformer']:
+    # for model in ['LLMformer']:
 
         args = deepcopy(default_args)
         # args.model_id = 'zero-shot-{}'.format(data)
-        args.model_id = 'ECL'
+        args.model_id = 'PVforecast'
 
         args.model = model
         args.is_training = 1
         args.accelerate = False
         args.use_prompt = True
+        args.use_forecast = True
 
         args = model_hyparameter_setup(args)
         _, res_metrics_df = main(args)
         res_metrics_df.insert(0, 'model', model)
-        all_results.append(res_metrics_df)
+        all_results.append(res_metrics_df.iloc[-1:])
         final_metrics_df = pd.concat(all_results, axis=0, ignore_index=False)
-        final_metrics_df.to_csv('./results/ECL_all_models_comparison.csv')
+        final_metrics_df.to_csv('./results/{}_all_models_comparison.csv'.format(args.model_id))
+
 
 

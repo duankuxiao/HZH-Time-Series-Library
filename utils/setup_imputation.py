@@ -34,7 +34,7 @@ def model_hyparameter_setup(args,d_mode=None,e_layers=None):
 
     if args.model == 'LLMformer':
         args.train_epochs = 30
-        args.batch_size = 24
+        args.batch_size = 8
         if args.task_name == 'imputation':
             args.use_norm = True
             args.learning_rate = 0.001

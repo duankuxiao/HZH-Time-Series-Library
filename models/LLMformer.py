@@ -680,7 +680,7 @@ class Model(nn.Module):
             self.encoder_other = nn.LSTM(configs.enc_in, configs.rnn_dim, num_layers=configs.rnn_layers, batch_first=True)
 
         elif self.encoder_other_model == 'Transformer':
-            self.enc_embedding = DataEmbedding(configs.enc_in - configs.c_out, transformer_d_model, configs.embed, configs.freq, configs.dropout)
+            self.enc_embedding = DataEmbedding(configs.enc_in, transformer_d_model, configs.embed, configs.freq, configs.dropout)
 
             self.encoder_other = Encoder(
                 [
@@ -768,7 +768,7 @@ class Model(nn.Module):
 
         enc_out_target = self.LLM_encoder(x_enc_target)
         if self.encoder_other_model == 'Transformer':
-            enc_in = self.enc_embedding(x_enc, x_mark_enc)
+            enc_in = self.enc_embedding(x_enc, x_mark_dec) if self.use_forecast else self.enc_embedding(x_enc, x_mark_enc)
             enc_out, attns = self.encoder_other(enc_in)
             # enc_out = self.encoder_linear_projection(enc_out.permute(0,2,1)).permute(0,2,1)
         elif self.encoder_other_model == 'LSTM':
