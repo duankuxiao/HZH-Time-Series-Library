@@ -13,7 +13,7 @@ args.num_test = 8760
 args.seq_len = 72
 args.pred_len = 72
 args.label_len = 72
-args.forecast_dim = 2
+args.forecast_dim = 10
 args.features_cols = None
 # ['Temperature','Relative_humidity','Sun','Wind_speed','Dew_point','Precipitation','Global_horizontal_irradiance','Sunshine_duration','PV']
 args.enc_in = 11

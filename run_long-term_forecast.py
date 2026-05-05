@@ -92,8 +92,7 @@ if __name__ == '__main__':
     # for model in ['LLMformer']:
 
         args = deepcopy(default_args)
-        # args.model_id = 'zero-shot-{}'.format(data)
-        args.model_id = 'PVforecast'
+        args.model_id = 'PVforecast10'
 
         args.model = model
         args.is_training = 1
